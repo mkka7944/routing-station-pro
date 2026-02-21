@@ -15,6 +15,7 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         /* Force Scrollbar Visibility */
         .custom-scrollbar::-webkit-scrollbar {
@@ -4294,8 +4295,8 @@
                                 style="font-weight:700; font-size:13px; color:#1e293b; letter-spacing: -0.2px;">Routing
                                 Station PRO</span>
                             <div id="sync-server-badge" class="sync-status-badge"
-                                style="margin-left:8px; background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0;">
-                                <span style="font-size:8px;">OFFLINE</span>
+                                style="margin-left:8px; background:#fefce8; color:#ca8a04; border-color:#fde68a;">
+                                <span style="font-size:8px;">⏳ SYNC...</span>
                             </div>
                         </div>
                         <div style="display:flex; gap:4px;">
@@ -4987,6 +4988,11 @@
             window.GEO_LAYERS = {};
             window.ROLES = {};
             window.USER = null;
+
+            // Supabase Config
+            const SUPABASE_URL = "https://ipegpbgcektdtbnfvhvc.supabase.co";
+            const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwZWdwYmdjZWt0ZHRibmZ2aHZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwOTYzNjMsImV4cCI6MjA4MDY3MjM2M30.FHe6qYLmqvvTjRbKQQqHWNpsDbCBCeT9hPMgnAyE2bE";
+            window._supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
             // Simple JWT Decoder
             function parseJwt(token) {
@@ -8747,12 +8753,21 @@
 
                 async loadRoutes(filename = null, isInitial = false) {
                     try {
-                        const url = filename ? `http://localhost:8001/get-route?filename=${filename}` : 'http://localhost:8001/routes.json';
-                        const response = await fetch(url + '?t=' + Date.now());
-                        if (!response.ok) return;
-                        const data = await response.json();
-                        this._applyRoutes(data);
-                        if (!isInitial && App.showToast) App.showToast("Routes synced.");
+                        const { data, error } = await window._supabase
+                            .from('saved_routes')
+                            .select('*')
+                            .order('created_at', { ascending: false });
+
+                        if (error) throw error;
+
+                        const formattedData = data.map(item => ({
+                            ...item.route_data,
+                            id: item.id,
+                            name: item.route_name || item.route_data.name
+                        }));
+
+                        this._applyRoutes(formattedData);
+                        if (!isInitial && App.showToast) App.showToast("Cloud routes synced.");
                     } catch (e) {
                         console.warn("LoadRoutes error:", e);
                         if (isInitial && window.RAW_ROUTES) this._applyRoutes(window.RAW_ROUTES);
@@ -8773,11 +8788,24 @@
                     console.groupEnd();
                 },
 
-                checkServerHealth() {
+                async checkServerHealth() {
                     const badge = document.getElementById('sync-server-badge');
-                    fetch('http://localhost:8001/routes.json?health=' + Date.now(), { method: 'HEAD' })
-                        .then(() => { if (badge) badge.style.color = '#16a34a'; })
-                        .catch(() => { if (badge) badge.style.color = '#dc2626'; });
+                    if (!badge) return;
+                    try {
+                        const { error } = await window._supabase
+                            .from('saved_routes')
+                            .select('id', { count: 'exact', head: true });
+                        if (error) throw error;
+                        badge.innerHTML = '<span style="font-size:8px;">☁ CLOUD</span>';
+                        badge.style.background = '#ecfdf5';
+                        badge.style.color = '#10b981';
+                        badge.style.borderColor = '#a7f3d0';
+                    } catch (e) {
+                        badge.innerHTML = '<span style="font-size:8px;">⚠ NO CLOUD</span>';
+                        badge.style.background = '#fef2f2';
+                        badge.style.color = '#ef4444';
+                        badge.style.borderColor = '#fecaca';
+                    }
                 },
 
                 toggleUI() {
@@ -8889,6 +8917,7 @@
                     this.batchRoutePolygons = [];
                     this.resetCurrentRoute();
                     this.editingRouteIdx = idx;
+                    this.editingRouteId = r.id; // Store Supabase ID for updates
                     this.editingRouteName = r.name || `Route ${idx + 1}`;
                     this.capturedIDs = r.sequence.map(p => String(p.surveyId || p.id));
                     this.sequence = r.sequence.map(p => ({ id: String(p.surveyId || p.id), lat: p.lat, lng: p.lng, name: p.name }));
@@ -8936,27 +8965,22 @@
 
                 async deleteRouteServer(idx) {
                     const r = State.savedRoutes[idx];
-                    if (!r || !confirm(`Delete "${r.name}" permanently from server?`)) return;
+                    if (!r || !confirm(`Delete "${r.name}" permanently from Cloud?`)) return;
 
-                    console.log("Deleting route:", r.filename);
                     try {
-                        const response = await fetch('http://localhost:8001/delete-route', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ filename: r.filename })
-                        });
-                        if (response.ok) {
-                            State.savedRoutes.splice(idx, 1);
-                            this.renderRouteManager();
-                            if (App.showToast) App.showToast("Route deleted from server.");
-                        } else {
-                            const errText = await response.text();
-                            console.error("Delete failed:", errText);
-                            if (App.showToast) App.showToast("Server failed to delete route: " + errText);
-                        }
+                        const { error } = await window._supabase
+                            .from('saved_routes')
+                            .delete()
+                            .eq('id', r.id);
+
+                        if (error) throw error;
+
+                        State.savedRoutes.splice(idx, 1);
+                        this.renderRouteManager();
+                        if (App.showToast) App.showToast("Route deleted from Cloud.");
                     } catch (e) {
-                        console.error("Fetch error during delete:", e);
-                        if (App.showToast) App.showToast("Cannot connect to sync server.");
+                        console.error("Supabase error during delete:", e);
+                        if (App.showToast) App.showToast("Failed to delete from Cloud.");
                     }
                 },
 
@@ -9830,21 +9854,34 @@
 
                     if (!forceDownload) {
                         try {
-                            if (isEditing && this.editingRouteName !== finalName.trim()) {
-                                try {
-                                    await fetch('http://localhost:8001/save-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: this.editingRouteName + ".json", content: null, delete: true }) });
-                                } catch (e) { /* ignore */ }
+                            const payload = {
+                                route_name: routeObj.name,
+                                route_data: routeObj,
+                                created_by: window.USER ? window.USER.email : 'anonymous'
+                            };
+
+                            let result;
+                            if (isEditing && this.editingRouteId) {
+                                result = await window._supabase
+                                    .from('saved_routes')
+                                    .update(payload)
+                                    .eq('id', this.editingRouteId);
+                            } else {
+                                result = await window._supabase
+                                    .from('saved_routes')
+                                    .insert([payload]);
                             }
-                            const res = await fetch('http://localhost:8001/save-route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: routeObj.name + ".json", content: routeObj }) });
-                            if (res.ok) {
-                                if (App.showToast) App.showToast(isEditing ? "Route updated." : "Route synced to server.");
-                                savedToServer = true;
-                                this.editingRouteIdx = null;
-                                this.editingRouteName = null;
-                                this.loadRoutes();
-                            }
+
+                            if (result.error) throw result.error;
+
+                            if (App.showToast) App.showToast(isEditing ? "Route updated in Cloud." : "Route saved to Cloud.");
+                            savedToServer = true;
+                            this.editingRouteIdx = null;
+                            this.editingRouteName = null;
+                            this.editingRouteId = null;
+                            this.loadRoutes();
                         } catch (e) {
-                            console.warn("Sync failed, fallback to local:", e);
+                            console.warn("Cloud sync failed, fallback to local:", e);
                         }
                     }
 
