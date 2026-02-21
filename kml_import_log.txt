@@ -1,0 +1,38 @@
+KML Import Log - 2026-02-20 16:32:23.693036
+Scanning: F:\qoder\billing-system\01_Local_Engine\scripts\..\inputs\klm_files
+--------------------------------------------------
+EMPTY: BHALWAL | Dumpsite_Bhalwal
+OK: BHALWAL | Rural UC TB (15 shapes)
+OK: BHALWAL | Tehsil Bhalwal Boundary (1 shapes)
+OK: BHALWAL | Urban_UC_TB (24 shapes)
+OK: BHALWAL | Zones Bhalwal (3 shapes)
+OK: BHALWAL | Zone_1_Tb (24 shapes)
+OK: BHALWAL | Zone_2_TB (7 shapes)
+OK: BHALWAL | Zone_3_TB (8 shapes)
+OK: KHUSHAB | Rural UC TK (21 shapes)
+OK: KHUSHAB | Tehsil Khushab Boundary (1 shapes)
+OK: KHUSHAB | Urban_Wards_TK (109 shapes)
+EMPTY: KHUSHAB | Workshop Khushab
+OK: KHUSHAB | Zones TK (4 shapes)
+OK: KHUSHAB | Zone_1_TK (30 shapes)
+OK: KHUSHAB | Zone_2_TK (89 shapes)
+OK: KHUSHAB | Zone_3_TK (5 shapes)
+OK: KHUSHAB | Zone_4_TK (6 shapes)
+OK: SARGODHA | Cantonment (2 shapes)
+SPLITTING: SARGODHA | Mc Map into individual MC layers
+OK: SARGODHA | Mc Map (Created 24 sub-layers)
+OK: SARGODHA | Rural_UC_TS (50 shapes)
+EMPTY: SARGODHA | Sargodha_PDW_Points
+OK: SARGODHA | Tehsil_Sargodha (1 shapes)
+OK: SARGODHA | Urban_Wards_TS (22 shapes)
+OK: SARGODHA | Zones TS (7 shapes)
+OK: SARGODHA | Zone_1_TS (11 shapes)
+OK: SARGODHA | Zone_2_TS (11 shapes)
+OK: SARGODHA | Zone_3_TS (10 shapes)
+OK: SARGODHA | Zone_4_TS (9 shapes)
+OK: SARGODHA | Zone_5_TS (10 shapes)
+OK: SARGODHA | Zone_6_TS (10 shapes)
+OK: SARGODHA | Zone_7_TS (13 shapes)
+--------------------------------------------------
+Total Files Scanned: 31
+Total Layers Loaded: 28
