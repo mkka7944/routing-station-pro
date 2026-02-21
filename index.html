@@ -8828,14 +8828,19 @@
                 },
 
                 clearMapDisplay() {
+                    // Clear persistent display layer
+                    if (this._displayLayer) { State.map.removeLayer(this._displayLayer); this._displayLayer = null; }
+                    this.activeDisplayRoutes = [];
+                    // Also clear editor state
                     this.isBatchMode = false;
                     this.batchRouteSequences = [];
                     this.batchRoutePolygons = [];
-                    this.activeDisplayRoutes = [];
                     this.sequence = [];
                     this.capturedIDs = [];
                     if (this.sequenceLayer) { this.sequenceLayer.clearLayers(); }
                     if (this.routeLayer) { State.map.removeLayer(this.routeLayer); this.routeLayer = null; }
+                    // Uncheck all display checkboxes
+                    document.querySelectorAll('.display-selector').forEach(cb => cb.checked = false);
                     this.renderRoute();
                     if (App.showToast) App.showToast('Map cleared.');
                 },
@@ -8932,35 +8937,62 @@
 
                 batchLoadDisplay() {
                     const selected = Array.from(document.querySelectorAll('.display-selector:checked'));
+
+                    // Clear previous display layer
+                    if (this._displayLayer) { State.map.removeLayer(this._displayLayer); this._displayLayer = null; }
+                    this.activeDisplayRoutes = [];
+
                     if (selected.length === 0) {
-                        this.clearActiveRoute();
-                        if (App.showToast) App.showToast("Map cleared.");
+                        // Update info bar
+                        const info = document.getElementById('active-routes-info');
+                        if (info) info.style.display = 'none';
+                        if (App.showToast) App.showToast("Display routes cleared.");
                         return;
                     }
 
-                    // Enter batch mode
-                    this.isBatchMode = true;
-                    this.sequence = [];
-                    this.capturedIDs = [];
-                    this.batchRouteSequences = [];
-                    this.batchRoutePolygons = [];
-                    this.activeDisplayRoutes = [];
+                    // Build persistent display layer (independent of editor)
+                    this._displayLayer = L.layerGroup().addTo(State.map);
+                    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
 
-                    selected.forEach(cb => {
+                    selected.forEach((cb, rIdx) => {
                         const idx = parseInt(cb.value);
                         const r = State.savedRoutes[idx];
-                        if (r && r.sequence) {
-                            this.activeDisplayRoutes.push(r.name || `Route ${idx + 1}`);
-                            this.batchRouteSequences.push(r.sequence.map(p => ({
-                                id: String(p.surveyId || p.id), lat: p.lat, lng: p.lng, name: p.name
-                            })));
-                            if (r.polygon) this.batchRoutePolygons.push(r.polygon);
+                        if (!r || !r.sequence) return;
+
+                        this.activeDisplayRoutes.push(r.name || `Route ${idx + 1}`);
+                        const color = colors[rIdx % colors.length];
+                        const pts = [];
+
+                        r.sequence.forEach((p, sIdx) => {
+                            const lat = p.lat, lng = p.lng;
+                            pts.push([lat, lng]);
+                            const m = L.marker([lat, lng], {
+                                icon: L.divIcon({
+                                    className: 'route-marker-square',
+                                    html: `<span style="color:${color};font-weight:900;">${sIdx + 1}</span>`
+                                }),
+                                pane: 'routingMarkerPane'
+                            }).addTo(this._displayLayer);
+                            m.bindTooltip(`#${p.surveyId || p.id}`, { permanent: false, direction: 'top', offset: [0, -10] });
+                            m.on('click', (e) => {
+                                L.DomEvent.stopPropagation(e);
+                                this.highlightMarker(String(p.surveyId || p.id), lat, lng);
+                            });
+                        });
+
+                        if (pts.length > 1) {
+                            L.polyline(pts, { color: color, weight: 3, opacity: 0.7, dashArray: '6,4' }).addTo(this._displayLayer);
+                        }
+                        if (r.polygon) {
+                            L.polygon(r.polygon, { color: '#94a3b8', fillOpacity: 0.08, weight: 1.5, dashArray: '5,5', interactive: false }).addTo(this._displayLayer);
                         }
                     });
 
-                    this.switchTab('editor');
-                    this.renderRoute();
-                    if (App.showToast) App.showToast(`Displaying ${selected.length} routes.`);
+                    // Update info bar
+                    const info = document.getElementById('active-routes-info');
+                    if (info && this.activeTab === 'editor') info.style.display = this.activeDisplayRoutes.length > 0 ? 'flex' : 'none';
+
+                    if (App.showToast) App.showToast(`Displaying ${selected.length} routes (background).`);
                 },
 
                 async deleteRouteServer(idx) {
