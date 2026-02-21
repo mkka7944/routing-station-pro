@@ -8756,7 +8756,7 @@
                         const { data, error } = await window._supabase
                             .from('saved_routes')
                             .select('*')
-                            .order('created_at', { ascending: false });
+                            .order('created_at', { ascending: true });
 
                         if (error) throw error;
 
