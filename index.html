@@ -1346,6 +1346,11 @@
             transform: translateX(20px);
         }
 
+
+        .mobile-only {
+            display: none !important;
+        }
+
         @media (max-width: 768px) {
             #sidebar {
                 position: fixed;
@@ -1374,7 +1379,7 @@
             }
 
             .mobile-only {
-                display: block;
+                display: block !important;
             }
 
             .mobile-sidebar-toggle {
@@ -2087,7 +2092,6 @@
 
         .route-marker-square {
             background-color: rgba(59, 130, 246, 0.85);
-            /* Semi-transparent */
             color: white;
             border: 1px solid rgba(255, 255, 255, 0.8);
             border-radius: 3px;
@@ -2100,6 +2104,9 @@
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
             text-align: center;
             line-height: 1;
+            min-width: 14px;
+            min-height: 13px;
+            padding: 1px 2px;
         }
 
         .route-marker-square.is-start {
@@ -2447,7 +2454,10 @@
             font-weight: 700;
             font-size: 11px;
             color: #1e293b;
-            line-height: 1.1;
+            line-height: 1.2;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
         }
 
         .v6-card-sub {
@@ -3934,7 +3944,7 @@
 
         <div id="sidebar-scroll" style="flex:1; overflow-y:auto; overflow-x: hidden; padding-bottom: 20px;">
             <div class="filters" style="padding: 8px var(--spacer) 80px var(--spacer);">
-                <div class="filter-group" style="margin-bottom: 16px;">
+                <div class="filter-group admin-only" style="margin-bottom: 16px;">
                     <div class="panel-header-premium" onclick="SpatialRouter.toggleUI()"
                         style="background: white; border: 1.5px solid #e2e8f0;">
                         <span class="material-icons-round" style="color:var(--primary); font-size:20px;">route</span>
@@ -4271,17 +4281,47 @@
                     <button class="float-btn" onclick="QRScanner.open()" title="Scan QR Code">
                         <span class="material-icons-round" style="color:#6366f1">qr_code_scanner</span>
                     </button>
-                    <button class="float-btn" onclick="Sidebar.toggle()" title="Menu">
-                        <span class="material-icons-round">menu</span>
+                    <button class="float-btn" onclick="MapRotation.toggle()" title="Rotate Map" id="btn-rotate-map">
+                        <span class="material-icons-round" style="color:#8b5cf6">rotate_right</span>
                     </button>
                 </div>
+                <button class="float-btn mobile-only" onclick="Sidebar.toggle()" title="Menu">
+                    <span class="material-icons-round">menu</span>
+                </button>
                 <button id="toggle-ctrls-btn" class="float-btn primary" onclick="UIInteractions.toggleExtraCtrls()"
                     title="Collapse Toolbar" style="margin-top: 8px;">
                     <span class="material-icons-round">expand_more</span>
                 </button>
             </div>
 
-            <!-- Routing Station Pro Overlay -->
+            <!-- Map Rotation HUD -->
+            <div id="map-rotation-hud"
+                style="display:none; position:fixed; bottom:80px; left:50%; transform:translateX(-50%); z-index:20000; background:rgba(15,23,42,0.9); backdrop-filter:blur(8px); border-radius:12px; padding:8px 12px; display:none; align-items:center; gap:10px; box-shadow:0 4px 16px rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1);">
+                <button onclick="MapRotation.step(-15)" title="-15°"
+                    style="background:none; border:none; color:white; cursor:pointer; padding:4px;">
+                    <span class="material-icons-round" style="font-size:20px;">rotate_left</span>
+                </button>
+                <span id="rotation-angle-display"
+                    style="color:white; font-weight:700; font-size:12px; min-width:40px; text-align:center;">0°</span>
+                <button onclick="MapRotation.step(15)" title="+15°"
+                    style="background:none; border:none; color:white; cursor:pointer; padding:4px;">
+                    <span class="material-icons-round" style="font-size:20px;">rotate_right</span>
+                </button>
+                <div style="width:1px; height:20px; background:rgba(255,255,255,0.2);"></div>
+                <button onclick="MapRotation.toggleLock()" id="btn-rotation-lock" title="Lock Rotation"
+                    style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:4px;">
+                    <span class="material-icons-round" style="font-size:18px;">lock_open</span>
+                </button>
+                <button onclick="MapRotation.reset()" title="Reset to 0°"
+                    style="background:none; border:none; color:#ef4444; cursor:pointer; padding:4px;">
+                    <span class="material-icons-round" style="font-size:18px;">restart_alt</span>
+                </button>
+                <button onclick="MapRotation.toggle()" title="Close"
+                    style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:4px;">
+                    <span class="material-icons-round" style="font-size:18px;">close</span>
+                </button>
+            </div>
+
             <div id="routing-station-overlay" style="display:none; flex-direction:column;">
                 <!-- Header Handle -->
                 <div id="routing-header" style="flex:0 0 auto;">
@@ -4989,6 +5029,9 @@
             window.ROLES = {};
             window.USER = null;
 
+            // Global Billing Tracker
+            const ACTIVE_BILLING_MONTH = 'feb2026';
+
             // Supabase Config
             const SUPABASE_URL = "https://ipegpbgcektdtbnfvhvc.supabase.co";
             const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwZWdwYmdjZWt0ZHRibmZ2aHZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwOTYzNjMsImV4cCI6MjA4MDY3MjM2M30.FHe6qYLmqvvTjRbKQQqHWNpsDbCBCeT9hPMgnAyE2bE";
@@ -5214,6 +5257,7 @@
                 savedRoutes: [{ "name": "MC-19_Route_1", "sequence": [{ "surveyId": "3345938", "lat": 32.0706314, "lng": 72.6524629, "name": "Arshad" }, { "surveyId": "3345941", "lat": 32.0706588, "lng": 72.6524359, "name": "M Abubakar" }, { "surveyId": "3345943", "lat": 32.0706871, "lng": 72.6526133, "name": "Sheikh M Akbar" }, { "surveyId": "3345946", "lat": 32.0707709, "lng": 72.6527936, "name": "M yameen" }, { "surveyId": "3346145", "lat": 32.0707591, "lng": 72.652665, "name": "Qasim" }, { "surveyId": "3346146", "lat": 32.0707407, "lng": 72.6526073, "name": "M Rasheed" }, { "surveyId": "3346147", "lat": 32.0706885, "lng": 72.6527502, "name": "Ahsan" }, { "surveyId": "3347388", "lat": 32.0712426, "lng": 72.6521187, "name": "Waheed" }, { "surveyId": "3347390", "lat": 32.070902, "lng": 72.6522857, "name": "Sah" }, { "surveyId": "3347391", "lat": 32.0714374, "lng": 72.6518701, "name": "Nasreen akhtar" }, { "surveyId": "3347925", "lat": 32.0709523, "lng": 72.6523858, "name": "M Imtiaz" }, { "surveyId": "3347926", "lat": 32.070931, "lng": 72.6523771, "name": "Baga" }, { "surveyId": "3347927", "lat": 32.0708823, "lng": 72.652295, "name": "Mistry Sattar" }, { "surveyId": "3347928", "lat": 32.0708908, "lng": 72.6521914, "name": "Shan Ali" }, { "surveyId": "3347929", "lat": 32.070852, "lng": 72.6522248, "name": "Asghar Ali" }, { "surveyId": "3347930", "lat": 32.0707314, "lng": 72.6521734, "name": "Tasawar" }], "polygon": [[32.07130958163572, 72.65154007997145], [32.07157778007802, 72.65193168248763], [32.070732270455245, 72.65291873540511], [32.07041406588422, 72.65253249730696], [32.07063226342366, 72.65195850457778]], "timestamp": "20/02/2026, 3:01:45 pm" }, { "name": "MC-19_Route_2", "sequence": [{ "surveyId": "3345948", "lat": 32.0708217, "lng": 72.6529338, "name": "Zulfiqar Ali" }, { "surveyId": "3345950", "lat": 32.0708326, "lng": 72.6529122, "name": "Abdul Shakoor" }, { "surveyId": "3345952", "lat": 32.0707276, "lng": 72.6529898, "name": "Shaffique" }, { "surveyId": "3345955", "lat": 32.0706651, "lng": 72.6532228, "name": "M Wahid" }, { "surveyId": "3346136", "lat": 32.0711363, "lng": 72.6531919, "name": "Aftab" }, { "surveyId": "3346137", "lat": 32.0710434, "lng": 72.6530042, "name": "Abid" }, { "surveyId": "3346140", "lat": 32.071018, "lng": 72.6529961, "name": "Asghar" }, { "surveyId": "3346143", "lat": 32.0710614, "lng": 72.653048, "name": "Rana munwar Hussain" }, { "surveyId": "3346144", "lat": 32.0710706, "lng": 72.6530304, "name": "Haji mushraf" }, { "surveyId": "3346148", "lat": 32.0707924, "lng": 72.6530061, "name": "M istkhar" }, { "surveyId": "3346149", "lat": 32.0707217, "lng": 72.6531081, "name": "Waqas" }, { "surveyId": "3346150", "lat": 32.0706768, "lng": 72.6531669, "name": "Zulfqar Ahmed" }, { "surveyId": "3346954", "lat": 32.0712937, "lng": 72.6528286, "name": "Yameen" }, { "surveyId": "3346955", "lat": 32.0710842, "lng": 72.6531524, "name": "Naveed" }, { "surveyId": "3346965", "lat": 32.0712747, "lng": 72.6527331, "name": "Shokat" }, { "surveyId": "3346966", "lat": 32.0710949, "lng": 72.6531694, "name": "Shabeer Ahmed" }, { "surveyId": "3346967", "lat": 32.0710839, "lng": 72.6531812, "name": "M Rafi" }, { "surveyId": "3346968", "lat": 32.0710315, "lng": 72.6532019, "name": "Shoaib" }, { "surveyId": "3346969", "lat": 32.0710008, "lng": 72.6532462, "name": "Tanveer" }, { "surveyId": "3346970", "lat": 32.0710233, "lng": 72.6532339, "name": "Amir" }, { "surveyId": "3347385", "lat": 32.0714542, "lng": 72.6529067, "name": "Irfan Ali" }, { "surveyId": "3347386", "lat": 32.071338, "lng": 72.6528576, "name": "Liaqat" }, { "surveyId": "3347387", "lat": 32.0709329, "lng": 72.6528621, "name": "Zeeshan" }, { "surveyId": "3347923", "lat": 32.0711197, "lng": 72.6526234, "name": "Afzal" }, { "surveyId": "3347924", "lat": 32.0715094, "lng": 72.6526736, "name": "Ghulam Rasool" }], "polygon": [[32.07134594757229, 72.6523232850038], [32.07052771050099, 72.65312794770827], [32.0706595380795, 72.65348736371627], [32.071491411174, 72.65297774400344], [32.0715959629948, 72.65242520894637]], "timestamp": "20/02/2026, 3:02:05 pm" }, { "name": "MC-19_Route_3", "sequence": [{ "surveyId": "3346128", "lat": 32.0713441, "lng": 72.6532456, "name": "Zahid" }, { "surveyId": "3346131", "lat": 32.0712453, "lng": 72.653227, "name": "M Wakeel" }, { "surveyId": "3346133", "lat": 32.0712055, "lng": 72.6532254, "name": "Kashif Maqbool" }, { "surveyId": "3346138", "lat": 32.0712401, "lng": 72.6532235, "name": "Abdul jabar Khan" }, { "surveyId": "3346141", "lat": 32.0712231, "lng": 72.6532037, "name": "M Ali Tahir" }, { "surveyId": "3346956", "lat": 32.0709764, "lng": 72.6533562, "name": "Rafique" }, { "surveyId": "3346957", "lat": 32.0709529, "lng": 72.6533823, "name": "Saleem" }, { "surveyId": "3346958", "lat": 32.0709407, "lng": 72.653399, "name": "Shahid" }, { "surveyId": "3346959", "lat": 32.0709262, "lng": 72.6534361, "name": "Zahid" }, { "surveyId": "3346960", "lat": 32.0709293, "lng": 72.6534176, "name": "M Boota" }, { "surveyId": "3346961", "lat": 32.0708789, "lng": 72.6535245, "name": "Ramzan" }, { "surveyId": "3346962", "lat": 32.070829, "lng": 72.6534968, "name": "M Akbar" }, { "surveyId": "3346963", "lat": 32.0707511, "lng": 72.6536805, "name": "Mazhar Hayat" }, { "surveyId": "3346964", "lat": 32.0707467, "lng": 72.6537327, "name": "Adeel" }, { "surveyId": "3346971", "lat": 32.0709046, "lng": 72.6534403, "name": "Ameer" }, { "surveyId": "3346972", "lat": 32.070807, "lng": 72.6534535, "name": "Arslan" }, { "surveyId": "3346973", "lat": 32.0708941, "lng": 72.6534105, "name": "Billa" }, { "surveyId": "3346974", "lat": 32.0708138, "lng": 72.6536204, "name": "Ali" }, { "surveyId": "3347381", "lat": 32.0716864, "lng": 72.6530125, "name": "M Iqbal" }, { "surveyId": "3347382", "lat": 32.0716999, "lng": 72.6530217, "name": "Haji Nawaz" }, { "surveyId": "3347383", "lat": 32.0716924, "lng": 72.6530124, "name": "Tayyab" }, { "surveyId": "3347384", "lat": 32.0716974, "lng": 72.653017, "name": "Rana Sajjad" }, { "surveyId": "3347916", "lat": 32.0716446, "lng": 72.6532294, "name": "Mukhtar" }, { "surveyId": "3347917", "lat": 32.0716235, "lng": 72.6532072, "name": "Kashif Nazeer" }, { "surveyId": "3347918", "lat": 32.0716037, "lng": 72.6531947, "name": "Mumtaz Tiwana" }, { "surveyId": "3347919", "lat": 32.0716443, "lng": 72.6529991, "name": "M Anwar" }, { "surveyId": "3347920", "lat": 32.071636, "lng": 72.6530552, "name": "Amjad Hussain" }, { "surveyId": "3347921", "lat": 32.0715979, "lng": 72.6530526, "name": "Shafqat Ali" }, { "surveyId": "3347922", "lat": 32.0715818, "lng": 72.6529173, "name": "Ata Muhammad" }], "polygon": [[32.07159141726595, 72.65274170961013], [32.07130958163572, 72.65314940538039], [32.07068681272717, 72.65349809255233], [32.07067317540434, 72.65388433065047], [32.07126866993976, 72.65334252442946], [32.07147777397117, 72.6532406004869], [32.071741426198756, 72.65328351583113], [32.07182324914928, 72.6529348286592]], "timestamp": "20/02/2026, 3:02:24 pm" }, { "name": "MC-19_Route_4", "sequence": [{ "surveyId": "3347915", "lat": 32.0719222, "lng": 72.6534634, "name": "Manzoor" }, { "surveyId": "3347380", "lat": 32.0720408, "lng": 72.6533898, "name": "M akhtar" }, { "surveyId": "3347979", "lat": 32.0719171, "lng": 72.6538394, "name": "Ali raza" }, { "surveyId": "3347909", "lat": 32.0718281, "lng": 72.653867, "name": "Amanat Ali" }, { "surveyId": "3347912", "lat": 32.0718661, "lng": 72.6538575, "name": "M Saeed" }, { "surveyId": "3347976", "lat": 32.0718572, "lng": 72.6538541, "name": "M Ali" }, { "surveyId": "3347914", "lat": 32.0718705, "lng": 72.6538535, "name": "Yaseen" }, { "surveyId": "3347977", "lat": 32.07186, "lng": 72.6538543, "name": "Umair Ali" }], "polygon": [[32.07195184998718, 72.65323698520662], [32.0721700438571, 72.65339791774751], [32.07187457286672, 72.65410065650941], [32.07170638126115, 72.65360176563264]], "timestamp": "20/02/2026, 3:28:00 pm" }, { "name": "MC-19_Route_5", "sequence": [{ "surveyId": "3347906", "lat": 32.0714196, "lng": 72.6540522, "name": "Mueez" }, { "surveyId": "3347907", "lat": 32.0713706, "lng": 72.6540763, "name": "Malik Naveed ul Hassan" }, { "surveyId": "3347970", "lat": 32.0714228, "lng": 72.6542199, "name": "Sheikh tswar" }, { "surveyId": "3347908", "lat": 32.0715047, "lng": 72.6541814, "name": "M aflaq" }, { "surveyId": "3347971", "lat": 32.0715472, "lng": 72.6542099, "name": "Malik gohar Abbas" }, { "surveyId": "3347960", "lat": 32.0715115, "lng": 72.6543546, "name": "Naveed" }, { "surveyId": "3347969", "lat": 32.0715248, "lng": 72.6543518, "name": "Zahid" }, { "surveyId": "3347965", "lat": 32.0714969, "lng": 72.6543902, "name": "Usman" }, { "surveyId": "3347964", "lat": 32.0714664, "lng": 72.6543783, "name": "Usman bhatti" }], "polygon": [[32.071565463731815, 72.65400946140291], [32.0717154727072, 72.65444934368135], [32.071401817296156, 72.65444934368135], [32.07121998757971, 72.65399336814882]], "timestamp": "20/02/2026, 3:28:26 pm" }],
                 hideStandardTooltips: false,
                 filtered: [],
+                masterFiltered: [], // Tracks sidebar filters independently of active route narrowing
                 availableSurveyors: [],
                 surveyorFilter: [],
                 markers: L.layerGroup(),
@@ -5929,6 +5973,7 @@
                     }
 
                     State.filtered = result;
+                    State.masterFiltered = [...result]; // Sync master filter pool
                     State.availableSurveyors = Array.from(availableSurvSet).sort();
 
                     if (!isInitial) State.currentIdx = 0;
@@ -6296,6 +6341,9 @@
                                 <div onclick="ListView.sort('status-not-billed')" style="padding:12px 16px; font-size:12px; font-weight:600; cursor:pointer;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='none'">Status (Not Billed First)</div>
                             </div>
                         </div>
+                        <button onclick="ListView.markDelivered('${r[0]}')" id="btn-delivery-${r[0]}" title="Mark Delivered" style="background:#fef3c7; color:#d97706; border:1px solid #fde68a; border-radius:6px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s;">
+                            <span class="material-icons-round" style="font-size:18px;">local_shipping</span>
+                        </button>
                         <button onclick="BillVerifier.open('${r[15]}')" title="Verify PSID" style="background:#dcfce7; color:#166534; border:1px solid #bbf7d0; border-radius:6px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer;">
                             <span class="material-icons-round" style="font-size:18px;">verified_user</span>
                         </button>
@@ -6383,8 +6431,119 @@
                     setTimeout(() => {
                         DriveSync.init();
                         DriveSync.fetchMetadata(r[0]);
+                        ListView.checkDeliveryStatus(r[0]);
                     }, 10);
                 },
+
+                async checkDeliveryStatus(sid) {
+                    const btn = document.getElementById(`btn-delivery-${sid}`);
+                    if (!btn) return;
+                    try {
+                        const colName = `delivery_${ACTIVE_BILLING_MONTH}`;
+                        const { data, error } = await window._supabase
+                            .from('saved_routes')
+                            .select(`${colName}`)
+                            .contains('route_data', { sequence: [{ surveyId: sid }] })
+                            .limit(1)
+                            .maybeSingle();
+
+                        // Fallback check if sequence uses id instead of surveyId
+                        let finalData = data;
+                        if (!finalData || error) {
+                            const fallback = await window._supabase
+                                .from('saved_routes')
+                                .select(`${colName}`)
+                                .contains('route_data', { sequence: [{ id: sid }] })
+                                .limit(1)
+                                .maybeSingle();
+                            finalData = fallback.data;
+                        }
+
+                        if (finalData && finalData[colName] && finalData[colName][sid] === 'delivered') {
+                            btn.style.background = '#dcfce7';
+                            btn.style.color = '#166534';
+                            btn.style.borderColor = '#bbf7d0';
+                            btn.title = "Delivered";
+                            btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">check_circle</span>`;
+                        }
+                    } catch (e) {
+                        console.warn("Delivery check missed:", e);
+                    }
+                },
+
+                async markDelivered(sid) {
+                    const btn = document.getElementById(`btn-delivery-${sid}`);
+                    if (!btn) return;
+
+                    btn.innerHTML = `<span class="material-icons-round" style="font-size:18px; animation:spin 1s linear infinite;">autorenew</span>`;
+
+                    try {
+                        const colName = `delivery_${ACTIVE_BILLING_MONTH}`;
+
+                        // 1. Find which route contains this SID
+                        const { data: routeSearch, error: searchErr } = await window._supabase
+                            .from('saved_routes')
+                            .select(`id, ${colName}`)
+                            .contains('route_data', { sequence: [{ surveyId: sid }] })
+                            .limit(1)
+                            .maybeSingle();
+
+                        let targetRoute = routeSearch;
+
+                        // Fallback id check
+                        if (!targetRoute) {
+                            const idFallback = await window._supabase
+                                .from('saved_routes')
+                                .select(`id, ${colName}`)
+                                .contains('route_data', { sequence: [{ id: sid }] })
+                                .limit(1)
+                                .maybeSingle();
+                            targetRoute = idFallback.data;
+                        }
+
+                        if (!targetRoute) {
+                            throw new Error("Survey ID not found in any cloud routes.");
+                        }
+
+                        // 2. Prepare updated delivery JSON
+                        const currentDelivery = targetRoute[colName] || {};
+                        const isCurrentlyDelivered = currentDelivery[sid] === 'delivered';
+                        const newStatus = isCurrentlyDelivered ? 'pending' : 'delivered';
+
+                        const updatedDelivery = { ...currentDelivery, [sid]: newStatus };
+
+                        // 3. Update Supabase
+                        const { error: updErr } = await window._supabase
+                            .from('saved_routes')
+                            .update({ [colName]: updatedDelivery })
+                            .eq('id', targetRoute.id);
+
+                        if (updErr) throw updErr;
+
+                        // 4. Update UI
+                        if (newStatus === 'delivered') {
+                            btn.style.background = '#dcfce7';
+                            btn.style.color = '#166534';
+                            btn.style.borderColor = '#bbf7d0';
+                            btn.title = "Delivered";
+                            btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">check_circle</span>`;
+                            if (App.showToast) App.showToast("Marked as Delivered ✅");
+                        } else {
+                            btn.style.background = '#fef3c7';
+                            btn.style.color = '#d97706';
+                            btn.style.borderColor = '#fde68a';
+                            btn.title = "Mark Delivered";
+                            btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">local_shipping</span>`;
+                            if (App.showToast) App.showToast("Delivery status reset 🔄");
+                        }
+
+                    } catch (e) {
+                        console.error("Delivery status update failed:", e);
+                        if (App.showToast) App.showToast("Failed to update delivery status.");
+                        btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">local_shipping</span>`;
+                    }
+                },
+
                 next() { if (State.currentIdx < State.filtered.length - 1) { State.currentIdx++; this.render(); } },
                 prev() { if (State.currentIdx > 0) { State.currentIdx--; this.render(); } },
 
@@ -8641,6 +8800,25 @@
                 activeDisplayRoutes: [], // Array of route names currently on map
                 batchRouteSequences: [], // NEW: Store separate sequences for batch display rendering
                 batchRoutePolygons: [], // NEW: Store separate polygons for batch display
+                collapsedGroups: new Set(), // Tracks which MC groups are collapsed in the list
+
+                cleanMCName(name) {
+                    if (!name) return 'Unknown Area';
+                    let cleaned = String(name)
+                        .replace(/Municipal Committee/gi, 'MC')
+                        .replace(/Union Council/gi, 'UC')
+                        .replace(/\s*(Bhalwal|Sargodha|Mianwali|Khushab|Tehsil)\s*/gi, '')
+                        .trim();
+                    // Remove leading dashes or special characters often left by split/replace
+                    return cleaned.replace(/^[-\s]+/, '');
+                },
+
+                toggleMCGroup(group) {
+                    if (this.collapsedGroups.has(group)) this.collapsedGroups.delete(group);
+                    else this.collapsedGroups.add(group);
+                    this.renderRouteManager();
+                    this.renderSavedList();
+                },
 
                 saveSnapshot() {
                     this.undoStack.push({
@@ -8876,33 +9054,67 @@
                         list.innerHTML = '<div style="padding:20px; text-align:center; color:#94a3b8;">No saved routes found.</div>';
                         return;
                     }
-                    State.savedRoutes.forEach((route, idx) => {
+
+                    // Pre-process and sort routes by Area
+                    const isMapReady = window.SID_MAP instanceof Map;
+                    const routesWithMeta = State.savedRoutes.map((route, originalIdx) => {
+                        let area = 'Unknown Area';
+                        if (route.sequence && route.sequence.length > 0) {
+                            const sid = String(route.sequence[0].surveyId || route.sequence[0].id);
+                            const row = isMapReady ? window.SID_MAP.get(sid) : null;
+                            if (row && row[12]) area = this.cleanMCName(row[12]);
+                        }
+                        return { originalIdx, route, area };
+                    });
+
+                    routesWithMeta.sort((a, b) => a.area.localeCompare(b.area));
+
+                    let lastArea = null;
+
+                    routesWithMeta.forEach(({ originalIdx, route, area }) => {
+                        if (area !== lastArea) {
+                            const isCollapsed = this.collapsedGroups.has(area);
+                            const header = document.createElement('div');
+                            header.style.cssText = 'padding:6px 8px; font-weight:800; font-size:11px; text-transform:uppercase; color:var(--primary); background:#f1f5f9; border-radius:6px; margin: 8px 0 4px 0; letter-spacing: 0.5px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;';
+                            header.onclick = () => this.toggleMCGroup(area);
+                            header.innerHTML = `<span>${area}</span> <span class="material-icons-round" style="font-size:14px;">${isCollapsed ? 'expand_more' : 'expand_less'}</span>`;
+                            list.appendChild(header);
+                            lastArea = area;
+                        }
+
+                        if (this.collapsedGroups.has(area)) return;
+
+                        const isActive = (this.editingRouteIdx === originalIdx) || (this._sidebarDisplayIdx === originalIdx);
+                        const activeStyle = isActive ? 'background: #eff6ff; border-left: 3px solid #3b82f6;' : '';
+
                         const item = document.createElement('div');
                         item.className = 'v6-card';
-                        item.style.padding = '8px';
+                        item.style.cssText = `padding: 8px; ${activeStyle}`;
                         item.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:8px;" onclick="event.stopPropagation()">
+                    <div style="display:flex; align-items:center; gap:6px; width:100%;" onclick="event.stopPropagation()">
                         <!-- Export Select -->
-                        <div style="display:flex; flex-direction:column; align-items:center; gap:2px;" title="Select for Export" onclick="event.stopPropagation()">
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:2px; flex-shrink:0;" title="Select for Export" onclick="event.stopPropagation()">
                             <span class="material-icons-round" style="font-size:12px; color:#94a3b8;">file_download</span>
-                            <input type="checkbox" class="route-selector" value="${idx}" onclick="event.stopPropagation()" />
-                        </div>
-                        <div class="v6-badge" style="flex:0 0 24px;">${idx + 1}</div>
-                        <div class="v6-card-body" style="min-width: 0; padding:0 4px;" onclick="event.stopPropagation()">
-                            <div class="v6-card-title" style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${route.name || 'Untitled Route'}">${route.name || 'Untitled Route'}</div>
-                            <div class="v6-card-sub" style="font-size: 9px;">${route.sequence ? route.sequence.length : 0} pts | ${route.timestamp || ''}</div>
+                            <input type="checkbox" class="route-selector" value="${originalIdx}" onclick="event.stopPropagation()" />
                         </div>
                         <!-- Display Select -->
-                        <div style="display:flex; flex-direction:column; align-items:center; gap:2px;" title="Select for Map Display" onclick="event.stopPropagation()">
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:2px; flex-shrink:0;" title="Select for Map Display" onclick="event.stopPropagation()">
                             <span class="material-icons-round" style="font-size:12px; color:#16a34a;">visibility</span>
-                            <input type="checkbox" class="display-selector" value="${idx}" onclick="event.stopPropagation()" />
+                            <input type="checkbox" class="display-selector" value="${originalIdx}" onclick="event.stopPropagation()" />
                         </div>
-                        <button onclick="event.stopPropagation(); SpatialRouter.loadRoute(${idx})" class="v6-action-btn" style="color:var(--primary)" title="Load this single route">
-                            <span class="material-icons-round" style="font-size:18px;">file_open</span>
-                        </button>
-                        <button onclick="event.stopPropagation(); SpatialRouter.deleteRouteServer(${idx})" class="v6-action-btn" style="color:#ef4444" title="Delete Permanent">
-                            <span class="material-icons-round" style="font-size:18px;">delete</span>
-                        </button>
+                        <div class="v6-badge" style="flex:0 0 24px; ${isActive ? 'background:#3b82f6; color:white;' : ''}">${originalIdx + 1}</div>
+                        <div class="v6-card-body" style="flex:1; min-width:0; padding:0 4px;" onclick="event.stopPropagation()">
+                            <div class="v6-card-title" style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${isActive ? 'color:#1e40af;' : ''}" title="${route.name || 'Untitled Route'}">${route.name || 'Untitled Route'}</div>
+                            <div class="v6-card-sub" style="font-size: 9px;">${route.sequence ? route.sequence.length : 0} pts | ${route.timestamp || ''}</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px; margin-left:auto; flex-shrink:0;">
+                            <button onclick="event.stopPropagation(); SpatialRouter.loadRoute(${originalIdx})" class="v6-action-btn" style="color:var(--primary)" title="Load this single route">
+                                <span class="material-icons-round" style="font-size:18px;">file_open</span>
+                            </button>
+                            <button onclick="event.stopPropagation(); SpatialRouter.deleteRouteServer(${originalIdx})" class="v6-action-btn" style="color:#ef4444" title="Delete Permanent">
+                                <span class="material-icons-round" style="font-size:18px;">delete</span>
+                            </button>
+                        </div>
                     </div>
                 `;
                         list.appendChild(item);
@@ -8933,6 +9145,19 @@
                     this.setEditMode(true); // Enable map marker connection for this loaded route
                     this.renderRoute();
                     if (App.showToast) App.showToast(`Editing: ${this.editingRouteName}`);
+
+                    // Route highlighting & global UI updates
+                    this.updateWatermark(this.editingRouteName);
+                    this.toggleClearRouteButton(true);
+                    this.renderRouteManager();
+
+                    // Sync MapNavigator
+                    const seqOrder = new Map(r.sequence.map((p, i) => [String(p.surveyId || p.id), i]));
+                    State.filtered = (window.RAW_DATA || [])
+                        .filter(row => seqOrder.has(String(row[0])))
+                        .sort((rowA, rowB) => seqOrder.get(String(rowA[0])) - seqOrder.get(String(rowB[0])));
+                    State.currentIdx = 0;
+                    if (window.MapNavigator) MapNavigator.updateUI();
                 },
 
                 batchLoadDisplay() {
@@ -8997,7 +9222,9 @@
 
                 async deleteRouteServer(idx) {
                     const r = State.savedRoutes[idx];
-                    if (!r || !confirm(`Delete "${r.name}" permanently from Cloud?`)) return;
+                    if (!r) return;
+                    const warningMsg = `⚠️ WARNING: You are about to PERMANENTLY delete the route "${r.name}" from the cloud.\n\nThis action CANNOT BE UNDONE.\n\nAre you absolutely sure you want to delete this route?`;
+                    if (!confirm(warningMsg)) return;
 
                     try {
                         const { error } = await window._supabase
@@ -9021,17 +9248,39 @@
                     const selected = Array.from(document.querySelectorAll('.route-selector:checked')).map(cb => parseInt(cb.value));
                     if (selected.length === 0) { if (App.showToast) App.showToast("No routes selected."); return; }
 
-                    let csv = "Global Seq,Route Seq,Route Name,Survey ID,Name,Lat,Lng\n";
-                    let globalSeq = 1;
+                    const isMapReady = window.SID_MAP instanceof Map;
+                    let allPoints = [];
 
                     selected.forEach(idx => {
                         const r = State.savedRoutes[idx];
                         if (r && r.sequence) {
                             r.sequence.forEach((p, i) => {
-                                csv += `${globalSeq},${i + 1},"${r.name || 'Untitled'}","${p.surveyId || p.id}","${p.name}",${p.lat},${p.lng}\n`;
-                                globalSeq++;
+                                let area = '';
+                                const sid = String(p.surveyId || p.id);
+                                const row = isMapReady ? window.SID_MAP.get(sid) : null;
+                                if (row && row[12]) area = this.cleanMCName(row[12]);
+
+                                allPoints.push({
+                                    area: area || 'Unknown Area',
+                                    routeSeq: i + 1,
+                                    routeName: r.name || 'Untitled',
+                                    sid: sid,
+                                    name: p.name || '',
+                                    lat: p.lat,
+                                    lng: p.lng
+                                });
                             });
                         }
+                    });
+
+                    // Sort completely by Area
+                    allPoints.sort((a, b) => a.area.localeCompare(b.area));
+
+                    let csv = "Global Seq,Route Seq,Route Name,Survey ID,Name,MC/Area,Lat,Lng\n";
+                    let globalSeq = 1;
+                    allPoints.forEach(pt => {
+                        csv += `${globalSeq},${pt.routeSeq},"${pt.routeName}","${pt.sid}","${pt.name}","${pt.area}",${pt.lat},${pt.lng}\n`;
+                        globalSeq++;
                     });
 
                     const blob = new Blob([csv], { type: 'text/csv' });
@@ -9172,7 +9421,7 @@
                 },
 
                 harvest(polyPts = null) {
-                    const searchPool = State.filtered || [];
+                    const searchPool = State.masterFiltered || State.filtered || [];
                     const pts = polyPts || this.points;
                     if (!pts || pts.length < 3) return [];
 
@@ -9340,33 +9589,23 @@
                 },
 
                 resetCurrentRoute() {
-                    if (this.sequence.length > 0 || this.capturedIDs.length > 0) {
-                        if (this.activePolygon) {
-                            this.saveStateToPolygon(this.activePolygon);
-                            this.activePolygon.setStyle({ color: '#94a3b8', weight: 1.5 });
-                            this.activePolygon = null;
-                        }
-                    }
-
-                    this.saveSnapshot();
-                    this.isBatchMode = false;
-                    this.editingRouteIdx = null;
-                    this.editingRouteName = null;
                     this.sequence = [];
                     this.capturedIDs = [];
-                    this.startId = null;
-                    this.endId = null;
+                    this.editingRouteIdx = null;
+                    this.editingRouteId = null;
+                    this.editingRouteName = null;
                     this.activeDisplayRoutes = [];
-                    this.batchRouteSequences = [];
-                    this.batchRoutePolygons = [];
+                    if (this.activePolygon) {
+                        State.map.removeLayer(this.activePolygon);
+                        this.activePolygon = null;
+                    }
+                    this.activePolygonPts = [];
+                    this.setEditMode(false);
                     this.renderRoute();
+                    this.updateWatermark(null);
+                    this.toggleClearRouteButton(false);
+                    this.renderRouteManager();
                     if (App.showToast) App.showToast("Starting new area...");
-                },
-
-                reverseSequence() {
-                    this.saveSnapshot();
-                    this.sequence.reverse();
-                    this.renderRoute();
                 },
 
                 moveInSequence(dir) {
@@ -9386,19 +9625,226 @@
                     const side = document.getElementById('side-route-list');
                     if (!side) return;
                     side.innerHTML = '';
-                    (State.savedRoutes || []).forEach((r, i) => {
+                    if (!State.savedRoutes || !State.savedRoutes.length) {
+                        side.innerHTML = '<div style="text-align:center; padding:12px; color:#94a3b8; font-size:11px;">No saved routes found</div>';
+                        return;
+                    }
+
+                    // Pre-process and sort routes by Area
+                    const isMapReady = window.SID_MAP instanceof Map;
+                    const routesWithMeta = State.savedRoutes.map((route, originalIdx) => {
+                        let area = 'Unknown Area';
+                        if (route.sequence && route.sequence.length > 0) {
+                            const sid = String(route.sequence[0].surveyId || route.sequence[0].id);
+                            const row = isMapReady ? window.SID_MAP.get(sid) : null;
+                            if (row && row[12]) area = this.cleanMCName(row[12]);
+                        }
+                        return { originalIdx, route, area };
+                    });
+
+                    routesWithMeta.sort((a, b) => a.area.localeCompare(b.area));
+
+                    let lastArea = null;
+
+                    routesWithMeta.forEach(({ originalIdx, route, area }) => {
+                        if (area !== lastArea) {
+                            const isCollapsed = this.collapsedGroups.has(area);
+                            const header = document.createElement('div');
+                            header.style.cssText = 'padding:4px 8px; font-weight:800; font-size:11px; text-transform:uppercase; color:var(--primary); background:#f1f5f9; border-radius:6px; margin: 8px 0 4px 0; letter-spacing: 0.5px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;';
+                            header.onclick = (e) => { e.stopPropagation(); this.toggleMCGroup(area); };
+                            header.innerHTML = `<span>${area}</span> <span class="material-icons-round" style="font-size:14px;">${isCollapsed ? 'expand_more' : 'expand_less'}</span>`;
+                            side.appendChild(header);
+                            lastArea = area;
+                        }
+
+                        if (this.collapsedGroups.has(area)) return;
+
+                        const ptCount = route.sequence ? route.sequence.length : 0;
+                        const isActive = (this.editingRouteIdx === originalIdx) || (this._sidebarDisplayIdx === originalIdx);
+                        const activeStyle = isActive ? 'background: #eff6ff; border-left: 3px solid #3b82f6;' : 'background: #fff; border: 1px solid #e2e8f0;';
+
                         const div = document.createElement('div');
-                        div.innerHTML = `<b>${r.name}</b>`;
-                        div.onclick = () => this.load(r);
+                        div.style.cssText = `display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:8px; cursor:pointer; transition:background 0.2s; ${activeStyle}`;
+                        div.onmouseenter = () => div.style.background = isActive ? '#eff6ff' : '#f1f5f9';
+                        div.onmouseleave = () => div.style.background = isActive ? '#eff6ff' : '#fff';
+
+                        div.innerHTML = `
+                            <div style="width:22px; height:22px; background:#eff6ff; color:var(--primary); border-radius:4px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:10px; flex-shrink:0;">${originalIdx + 1}</div>
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-weight:700; font-size:10px; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${route.name || 'Untitled'}">${route.name || 'Untitled'}</div>
+                                <div style="font-size:8px; color:#94a3b8;">${ptCount} pts</div>
+                            </div>
+                            <button onclick="event.stopPropagation(); SpatialRouter.toggleSidebarRouteDisplay(${originalIdx})" title="Show on Map" style="background:none; border:none; cursor:pointer; padding:2px; color:#10b981; flex-shrink:0;">
+                                <span class="material-icons-round" style="font-size:16px;">visibility</span>
+                            </button>
+                            <button onclick="event.stopPropagation(); SpatialRouter.openRouteInListView(${originalIdx})" title="Open in List View" style="background:none; border:none; cursor:pointer; padding:2px; color:#06b6d4; flex-shrink:0;">
+                                <span class="material-icons-round" style="font-size:16px;">view_list</span>
+                            </button>
+                            <button onclick="event.stopPropagation(); SpatialRouter.toggleSidebarRouteDisplay(${originalIdx})" title="Hide Route" style="background:none; border:none; cursor:pointer; padding:2px; color:#ef4444; flex-shrink:0;">
+                                <span class="material-icons-round" style="font-size:16px;">close</span>
+                            </button>
+                        `;
+                        div.onclick = () => {
+                            // Click on card body => show on map and zoom
+                            this.toggleSidebarRouteDisplay(originalIdx);
+                        };
                         side.appendChild(div);
                     });
                 },
 
-                load(route) {
-                    this.clearDrawingOnly();
-                    this.capturedIDs = route.sequence.map(s => s.surveyId);
-                    this.sequence = route.sequence.map(s => ({ id: s.surveyId, lat: s.lat, lng: s.lng, name: s.name }));
-                    this.renderRoute();
+                toggleSidebarRouteDisplay(idx) {
+                    const r = State.savedRoutes[idx];
+                    if (!r || !r.sequence) return;
+
+                    // Toggle: if already displayed, remove; otherwise show
+                    if (this._sidebarDisplayIdx === idx && this._displayLayer) {
+                        State.map.removeLayer(this._displayLayer);
+                        this._displayLayer = null;
+                        this._sidebarDisplayIdx = null;
+                        this.activeDisplayRoutes = [];
+                        if (App.showToast) App.showToast('Route hidden.');
+                        this.updateWatermark(null);
+                        this.toggleClearRouteButton(false);
+                        this.renderRouteManager();
+                        return;
+                    }
+
+                    // Clear old display
+                    if (this._displayLayer) { State.map.removeLayer(this._displayLayer); this._displayLayer = null; }
+
+                    this._displayLayer = L.layerGroup().addTo(State.map);
+                    this._sidebarDisplayIdx = idx;
+                    this.activeDisplayRoutes = [r.name];
+                    const isMapReady = window.SID_MAP instanceof Map;
+                    const pts = [];
+
+                    const deliveryCol = typeof ACTIVE_BILLING_MONTH !== 'undefined' ? `delivery_${ACTIVE_BILLING_MONTH}` : null;
+                    const deliveryData = deliveryCol && r[deliveryCol] ? r[deliveryCol] : {};
+
+                    r.sequence.forEach((p, sIdx) => {
+                        pts.push([p.lat, p.lng]);
+                        const sid = String(p.surveyId || p.id);
+                        const isDelivered = deliveryData[sid] === 'delivered';
+
+                        const m = L.marker([p.lat, p.lng], {
+                            icon: L.divIcon({
+                                className: `route-marker-square ${isDelivered ? 'delivered' : ''}`,
+                                html: sIdx + 1,
+                                htmlStyle: isDelivered ? 'background: #10b981; color: white; border-color: #059669;' : ''
+                            }),
+                            pane: 'routingMarkerPane'
+                        }).addTo(this._displayLayer);
+
+                        // Apply inline style if CSS class is not sufficient
+                        if (isDelivered && m._icon) {
+                            m._icon.style.background = '#10b981';
+                            m._icon.style.color = 'white';
+                            m._icon.style.borderColor = '#059669';
+                        }
+
+                        m.bindTooltip(`#${sid}`, { permanent: false, direction: 'top', offset: [0, -10] });
+                        m.bindPopup(() => this._buildMarkerPopup(sid), { closeButton: false, offset: [0, -5] });
+                        m.on('popupopen', () => m.closeTooltip());
+
+                        // Leaflet divIcon doesn't apply innerHTML style automatically, we must format html string or rely on class.
+                        // Let's ensure the html div itself has the style so Leaflet renders it right away.
+                        const styleStr = isDelivered ? 'background: #10b981; color: white; border-color: #059669; border-width: 2px;' : '';
+                        m.setIcon(L.divIcon({
+                            className: `route-marker-square ${isDelivered ? 'delivered' : ''}`,
+                            html: `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; border-radius:inherit; ${styleStr}">${sIdx + 1}</div>`
+                        }));
+                    });
+
+                    if (pts.length > 1) {
+                        L.polyline(pts, { color: '#3b82f6', weight: 3, opacity: 0.7, dashArray: '6,4' }).addTo(this._displayLayer);
+                    }
+                    if (r.polygon) {
+                        L.polygon(r.polygon, { color: '#94a3b8', fillOpacity: 0.08, weight: 1.5, dashArray: '5,5', interactive: false }).addTo(this._displayLayer);
+                    }
+
+                    // Zoom to route bounds
+                    if (pts.length > 0) {
+                        State.map.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
+                    }
+                    if (App.showToast) App.showToast(`Showing: ${r.name}`);
+
+                    this.updateWatermark(r.name);
+                    this.toggleClearRouteButton(true);
+                    this.renderRouteManager();
+
+                    // Sync MapNavigator
+                    const seqOrder = new Map(r.sequence.map((p, i) => [String(p.surveyId || p.id), i]));
+                    State.filtered = (window.RAW_DATA || [])
+                        .filter(row => seqOrder.has(String(row[0])))
+                        .sort((rowA, rowB) => seqOrder.get(String(rowA[0])) - seqOrder.get(String(rowB[0])));
+                    State.currentIdx = 0;
+                    if (window.MapNavigator) MapNavigator.updateUI();
+                },
+
+                openRouteInListView(idx) {
+                    const r = State.savedRoutes[idx];
+                    if (!r || !r.sequence) return;
+
+                    // Show route on map (always show, not toggle)
+                    if (this._displayLayer) { State.map.removeLayer(this._displayLayer); this._displayLayer = null; }
+                    this._displayLayer = L.layerGroup().addTo(State.map);
+                    this._sidebarDisplayIdx = idx;
+                    this.activeDisplayRoutes = [r.name];
+                    const isMapReady = window.SID_MAP instanceof Map;
+                    const pts = [];
+
+                    const deliveryCol = typeof ACTIVE_BILLING_MONTH !== 'undefined' ? `delivery_${ACTIVE_BILLING_MONTH}` : null;
+                    const deliveryData = deliveryCol && r[deliveryCol] ? r[deliveryCol] : {};
+
+                    r.sequence.forEach((p, sIdx) => {
+                        pts.push([p.lat, p.lng]);
+                        const sid = String(p.surveyId || p.id);
+                        const isDelivered = deliveryData[sid] === 'delivered';
+
+                        const m = L.marker([p.lat, p.lng], {
+                            icon: L.divIcon({
+                                className: `route-marker-square ${isDelivered ? 'delivered' : ''}`,
+                                html: sIdx + 1,
+                                htmlStyle: isDelivered ? 'background: #10b981; color: white; border-color: #059669;' : ''
+                            }),
+                            pane: 'routingMarkerPane'
+                        }).addTo(this._displayLayer);
+
+                        if (isDelivered && m._icon) {
+                            m._icon.style.background = '#10b981';
+                            m._icon.style.color = 'white';
+                            m._icon.style.borderColor = '#059669';
+                        }
+
+                        m.bindTooltip(`#${sid}`, { permanent: false, direction: 'top', offset: [0, -10] });
+                        m.bindPopup(() => this._buildMarkerPopup(sid), { closeButton: false, offset: [0, -5] });
+                        m.on('popupopen', () => m.closeTooltip());
+
+                        const styleStr = isDelivered ? 'background: #10b981; color: white; border-color: #059669; border-width: 2px;' : '';
+                        m.setIcon(L.divIcon({
+                            className: `route-marker-square ${isDelivered ? 'delivered' : ''}`,
+                            html: `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; border-radius:inherit; ${styleStr}">${sIdx + 1}</div>`
+                        }));
+                    });
+
+                    if (pts.length > 1) L.polyline(pts, { color: '#3b82f6', weight: 3, opacity: 0.7, dashArray: '6,4' }).addTo(this._displayLayer);
+                    if (r.polygon) L.polygon(r.polygon, { color: '#94a3b8', fillOpacity: 0.08, weight: 1.5, dashArray: '5,5', interactive: false }).addTo(this._displayLayer);
+
+                    // Build filtered set from RAW_DATA and sort by sequence order BEFORE switching views
+                    const seqOrder = new Map(r.sequence.map((p, i) => [String(p.surveyId || p.id), i]));
+                    State.filtered = (window.RAW_DATA || [])
+                        .filter(row => seqOrder.has(String(row[0])))
+                        .sort((rowA, rowB) => seqOrder.get(String(rowA[0])) - seqOrder.get(String(rowB[0])));
+
+                    // Switch to list view (pass false to skip index reset)
+                    if (window.ViewSwitcher) {
+                        ViewSwitcher.toList(false);
+                        if (App.showToast) App.showToast(`List View: ${r.name} (${seqOrder.size} items)`);
+                    }
+
+                    this.updateWatermark(r.name);
+                    this.toggleClearRouteButton(true);
+                    this.renderRouteManager();
                 },
 
                 renderRoute() {
@@ -9480,9 +9926,7 @@
                         const isStart = seqIdx === 0;
                         const isEnd = seqIdx !== -1 && seqIdx === this.sequence.length - 1;
 
-                        let area = row ? (row[12] || 'Area').replace(/Municipal Committee/gi, 'MC').replace(/Union Council/gi, 'UC') : '';
-                        if (area) area = area.replace(/\s*(Bhalwal|Sargodha|Mianwali|Khushab|Tehsil)\s*/gi, '').trim();
-
+                        let area = row && row[12] ? this.cleanMCName(row[12]) : '';
                         const item = document.createElement('div');
                         item.className = 'v6-card';
                         item.setAttribute('data-sid', sid);
@@ -9549,6 +9993,8 @@
                                     this.highlightListItem(p.id);
                                 });
                                 m.bindTooltip(`#${p.id}`, { permanent: false, direction: 'top', offset: [0, -10] });
+                                m.bindPopup(() => this._buildMarkerPopup(p.id), { closeButton: false, offset: [0, -5] });
+                                m.on('popupopen', () => m.closeTooltip());
                             });
 
                             if (pts.length > 1) {
@@ -9630,6 +10076,30 @@
                         setTimeout(() => target.style.background = 'white', 1500);
                     }
                     this.highlightMarker(sid);
+                },
+
+                _buildMarkerPopup(sid) {
+                    const isMapReady = window.SID_MAP instanceof Map;
+                    const r = isMapReady ? window.SID_MAP.get(String(sid)) : null;
+                    if (!r) return `<div style="font-size:10px; padding:4px;">ID: ${sid}</div>`;
+                    let shortMC = 'MC-?';
+                    if (r[12]) {
+                        const match = r[12].match(/(MC|UC)[- ]?(\d+)/i);
+                        shortMC = match ? `${match[1].toUpperCase()}-${match[2]}` : r[12].split(' ')[0];
+                    }
+                    const dateVal = r[7] && r[7] !== '-' ? r[7] : (r[18] && r[18] !== '-' ? r[18] : 'No Date');
+                    return `
+                        <div class="pop-card compact" style="position:relative; padding: 4px 8px; min-width: 140px; line-height: 1.2;">
+                            <div style="display:flex; justify-content:space-between; font-weight:800; font-size:12px; border-bottom:1px solid #f1f5f9; margin-bottom:4px; padding-bottom:2px;">
+                                <a href="javascript:void(0)" onclick="ListView.jumpFromMap('${r[0]}')" style="color:var(--primary); text-decoration:none;">#${r[0]}</a>
+                                <span style="color:#64748b; font-size:10px; font-weight:400;">${r[6] || '--'}</span>
+                            </div>
+                            <div style="font-size:10px; color:#94a3b8; display:flex; justify-content:space-between; align-items:center;">
+                                <span>${dateVal} | ${r[8] || '--'}</span>
+                                <b style="color:#475569; font-family:monospace;">${shortMC}</b>
+                            </div>
+                        </div>
+                    `;
                 },
 
                 highlightMarker(sid, optLat, optLng) {
@@ -9990,9 +10460,9 @@
                             const seqEntry = seqIdx !== -1 ? this.sequence[seqIdx] : null;
                             const name = row ? decodePII(row[4]) : (seqEntry ? seqEntry.name : '');
                             let area = row ? (row[12] || 'Area').replace(/Municipal Committee/gi, 'MC').replace(/Union Council/gi, 'UC') : '';
-                            if (area) area = area.replace(/\s*(Bhalwal|Sargodha|Mianwali|Khushab|Tehsil)\s*/gi, '').trim();
+                            if (area)
 
-                            card.innerHTML = `
+                                card.innerHTML = `
                                 <div class="v6-badge" style="background:${isStart ? '#10b981' : isEnd ? '#ef4444' : ''}; padding:0; overflow:hidden; width:26px; height:24px;">
                                     <input type="number" min="1" max="${this.sequence.length + 1}" value="${seqIdx === -1 ? '' : seqIdx + 1}" placeholder="-"
                                            style="width:100%; height:100%; border:none; background:transparent; color:${(isStart || isEnd) ? 'white' : 'var(--primary)'}; text-align:center; font-size:10px; font-weight:800; outline:none; padding:0;"
@@ -10031,7 +10501,68 @@
                     }
                 },
 
-                addToSequenceOnly(id) { this.addToSequence(id); }
+                addToSequenceOnly(id) { this.addToSequence(id); },
+
+                updateWatermark(routeName) {
+                    let watermark = document.getElementById('map-route-watermark');
+                    if (!watermark) {
+                        watermark = document.createElement('div');
+                        watermark.id = 'map-route-watermark';
+                        watermark.style.cssText = 'position:absolute; top:20px; left:50%; transform:translateX(-50%); z-index:1000; pointer-events:none; background:rgba(255,255,255,0.85); backdrop-filter:blur(4px); padding:6px 16px; border-radius:30px; font-weight:800; color:#3b82f6; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,0.1); border:1px solid rgba(59,130,246,0.2); display:none; align-items:center; gap:6px; opacity:0; transition:opacity 0.3s ease; text-transform:uppercase; letter-spacing:1px; max-width:85%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+                        const mapEl = document.getElementById('map');
+                        if (mapEl) mapEl.appendChild(watermark);
+                        else document.body.appendChild(watermark);
+                    }
+                    if (routeName) {
+                        watermark.innerHTML = `<span class="material-icons-round" style="font-size:20px;">route</span> ${routeName}`;
+                        watermark.style.display = 'flex';
+                        // Trigger reflow to ensure transition works
+                        void watermark.offsetWidth;
+                        watermark.style.opacity = '1';
+                    } else {
+                        watermark.style.opacity = '0';
+                        setTimeout(() => { if (watermark.style.opacity === '0') watermark.style.display = 'none'; }, 300);
+                    }
+                },
+
+                toggleClearRouteButton(show) {
+                    let btn = document.getElementById('btn-clear-active-route');
+                    const mapContainer = document.getElementById('map-container');
+
+                    if (!btn && mapContainer) {
+                        btn = document.createElement('button');
+                        btn.id = 'btn-clear-active-route';
+                        // Floating style over the map, usually top-center below watermark
+                        btn.style.cssText = 'display:none; position:absolute; top:65px; left:50%; transform:translateX(-50%); z-index:1000; padding:6px 16px; background:#fef2f2; color:#ef4444; border:1px solid #fecaca; border-radius:30px; font-weight:700; font-size:12px; cursor:pointer; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(239, 68, 68, 0.2); backdrop-filter:blur(4px); transition:all 0.2s;';
+                        btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">close</span> Clear Route`;
+
+                        btn.onmouseover = () => { btn.style.background = '#fee2e2'; btn.style.transform = 'translateX(-50%) translateY(-1px)'; };
+                        btn.onmouseout = () => { btn.style.background = '#fef2f2'; btn.style.transform = 'translateX(-50%)'; };
+
+                        btn.onclick = () => {
+                            if (this._displayLayer) {
+                                State.map.removeLayer(this._displayLayer);
+                                this._displayLayer = null;
+                                this._sidebarDisplayIdx = null;
+                                this.activeDisplayRoutes = [];
+                            }
+                            this.resetCurrentRoute(); // Also hides button and watermark
+                            if (App.showToast) App.showToast('Route cleared.');
+                        };
+
+                        mapContainer.appendChild(btn);
+                    }
+
+                    if (btn) {
+                        if (show) {
+                            btn.style.display = 'flex';
+                            // ensure it's above other map controls
+                            btn.style.zIndex = '1000';
+                        } else {
+                            btn.style.display = 'none';
+                        }
+                    }
+                }
             };
 
 
@@ -10086,6 +10617,59 @@
                 }
             };
 
+            // Map Rotation Controller
+            const MapRotation = {
+                angle: 0,
+                locked: false,
+                visible: false,
+
+                toggle() {
+                    this.visible = !this.visible;
+                    const hud = document.getElementById('map-rotation-hud');
+                    if (hud) hud.style.display = this.visible ? 'flex' : 'none';
+                    const btn = document.getElementById('btn-rotate-map');
+                    if (btn) btn.classList.toggle('active', this.visible);
+                },
+
+                step(deg) {
+                    if (this.locked) {
+                        if (App.showToast) App.showToast('Rotation is locked.');
+                        return;
+                    }
+                    this.angle = (this.angle + deg) % 360;
+                    this.apply();
+                },
+
+                reset() {
+                    if (this.locked) {
+                        if (App.showToast) App.showToast('Rotation is locked.');
+                        return;
+                    }
+                    this.angle = 0;
+                    this.apply();
+                },
+
+                toggleLock() {
+                    this.locked = !this.locked;
+                    const btn = document.getElementById('btn-rotation-lock');
+                    if (btn) {
+                        btn.querySelector('span').innerText = this.locked ? 'lock' : 'lock_open';
+                        btn.style.color = this.locked ? '#f59e0b' : '#94a3b8';
+                    }
+                    if (App.showToast) App.showToast(this.locked ? 'Rotation locked.' : 'Rotation unlocked.');
+                },
+
+                apply() {
+                    const mapEl = document.getElementById('map');
+                    if (mapEl) {
+                        mapEl.style.transform = `rotate(${this.angle}deg)`;
+                        mapEl.style.transition = 'transform 0.3s ease';
+                    }
+                    const display = document.getElementById('rotation-angle-display');
+                    if (display) display.innerText = `${this.angle}°`;
+                }
+            };
+
             // Expose Globals explicitly for inline event handlers and external access
             window.State = State;
             window.App = App;
@@ -10104,6 +10688,7 @@
             window.Stats = Stats;
             window.SpatialRouter = SpatialRouter;
             window.MapNavigator = MapNavigator;
+            window.MapRotation = MapRotation;
 
             // Draggable / Resizable UI Helpers
             const UIInteractions = {
