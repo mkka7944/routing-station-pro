@@ -10,16 +10,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    
+    <!-- Scripts (Critical ones first, non-critical deferred) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script>
-        const SUPA_URL = '';
-        const SUPA_KEY = '';
-        window._supabase = (SUPA_URL && SUPA_KEY) ? supabase.createClient(SUPA_URL, SUPA_KEY) : null;
-    </script>
     <style>
         /* Force Scrollbar Visibility */
         .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -2158,7 +2155,7 @@
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 04-Mar 12:29 PM 
+                Updated: 04-Mar 02:43 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. 1228.2220]</span>
             </div>
         </div>
@@ -2418,7 +2415,11 @@
                 <span class="material-icons-round">close</span>
             </button>
             <div class="marker-card-img-container">
-                <img id="marker-card-img" class="marker-card-img" src="https://via.placeholder.com/400x400?text=No+Structure+Image" alt="Structure Image" onerror="this.src='https://via.placeholder.com/400x400?text=Image+Load+Error'" title="Click to view full image gallery">
+                <img id="marker-card-img" class="marker-card-img" 
+                     src="https://placehold.co/400x400?text=No+Structure+Image" 
+                     alt="Structure Image" 
+                     onerror="this.onerror=null; this.src='https://placehold.co/400x400?text=Image+Load+Error'" 
+                     title="Click to view full image gallery">
                 
                 <div class="marker-card-header">
                     <div class="marker-card-header-top">
@@ -3082,7 +3083,6 @@
     </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 
         <script>
@@ -7449,7 +7449,7 @@
             if (portalImg && portalImg.startsWith('http')) {
                 imgEl.src = portalImg;
             } else {
-                imgEl.src = 'https://via.placeholder.com/400x400?text=No+Structure+Image';
+                imgEl.src = 'https://placehold.co/400x400?text=No+Structure+Image';
             }
             
             imgEl.onclick = () => {

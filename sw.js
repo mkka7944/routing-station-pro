@@ -1,6 +1,6 @@
 // Service Worker for Routing Station Pro - Offline Caching
-const CACHE_NAME = 'routing-station-v1';
-const DATA_CACHE = 'routing-data-v1';
+const CACHE_NAME = 'routing-station-v2';
+const DATA_CACHE = 'routing-data-v2';
 
 // Core app shell files
 const APP_SHELL = [
@@ -55,6 +55,15 @@ self.addEventListener('fetch', (event) => {
 
     // Data JSON files: Network-first, fall back to cache
     if (url.pathname.endsWith('.json')) {
+        // Skip caching massive data chunks to prevent browser memory/tab hanging
+        if (url.pathname.includes('data_part') || url.pathname.includes('paid_data') || url.pathname.includes('data.json')) {
+            event.respondWith(fetch(event.request).catch(err => {
+                console.warn('Network error fetching data part:', err);
+                return new Response("[]", { status: 200, headers: { 'Content-Type': 'application/json' } });
+            }));
+            return;
+        }
+
         event.respondWith(
             fetch(event.request).then((response) => {
                 if (response.status === 200 && event.request.method === 'GET') {
