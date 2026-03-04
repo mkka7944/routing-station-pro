@@ -282,32 +282,73 @@
         }
         .guide-box-content { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; align-items: center; }
 
-        /* Settings UI Tweaks */
-        .settings-tab-btn {
-            padding: 8px 14px; border: 1px solid #e2e8f0; background: #f8fafc;
-            color: #64748b; font-weight: 500; border-radius: 20px; font-size: 11px;
-            white-space: nowrap; cursor: pointer; transition: all 0.2s;
-        }
-        .settings-tab-btn.active {
-            background: #eff6ff; color: #2563eb; font-weight: 700; border-color: #bfdbfe;
-        }
+        /* Settings UI Overhaul - Modern Tabs & Histogram */
         .settings-tabs-row {
-            display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; 
-            padding: 10px 16px; background: #fff; border-bottom: 1px solid #f1f5f9;
-            scrollbar-width: none; -ms-overflow-style: none; /* Hide scrollbar for Chrome/Safari */
+            display: flex; flex-wrap: wrap; gap: 8px; 
+            padding: 12px 16px; background: white; border-bottom: 1.5px solid #f1f5f9;
+            position: sticky; top: 0; z-index: 20;
         }
         .settings-tabs-row::-webkit-scrollbar { display: none; }
-        .kml-grid {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+        
+        .settings-tab-btn {
+            padding: 10px 18px; border: none; background: #f8fafc;
+            color: #64748b; font-weight: 700; border-radius: 12px; font-size: 13px;
+            white-space: nowrap; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid #e2e8f0;
         }
-        @media (max-width: 480px) {
-            .kml-grid { grid-template-columns: 1fr; }
+        .settings-tab-btn.active {
+            background: var(--primary); color: white; border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+            transform: translateY(-1px);
         }
-        .settings-footer {
-            position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 16px;
-            background: white; border-top: 1px solid #e2e8f0; display: flex; gap: 10px;
-            border-radius: 0 0 16px 16px; z-index: 10;
+        
+        /* Histogram Styles */
+        .hist-container {
+            margin: 20px 0; padding: 16px; background: white; border: 1.5px solid #f1f5f9;
+            border-radius: 16px; min-height: 180px;
         }
+        .hist-bars {
+            display: flex; align-items: flex-end; gap: 4px; height: 120px;
+            padding-bottom: 8px; border-bottom: 2px solid #f1f5f9;
+        }
+        .hist-bar-wrapper {
+            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px;
+            position: relative;
+        }
+        .hist-bar {
+            width: 100%; min-width: 12px; border-radius: 4px 4px 0 0; 
+            background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+            transition: height 0.5s ease-out, opacity 0.2s; cursor: pointer;
+            position: relative;
+        }
+        .hist-bar:hover { opacity: 0.85; }
+        .hist-bar:hover::after {
+            content: attr(data-val); position: absolute; top: -25px; left: 50%;
+            transform: translateX(-50%); background: #1e293b; color: white;
+            padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;
+        }
+        .hist-label { font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; }
+        
+        /* Dropdown Styles for Settings */
+        .settings-select {
+            width: 100%; padding: 12px 16px; border-radius: 12px; border: 1.5px solid #e2e8f0;
+            background: #f8fafc url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 12px center;
+            background-size: 18px; appearance: none; font-size: 14px; font-weight: 600; color: #1e293b;
+            cursor: pointer; transition: all 0.2s; outline: none;
+        }
+        .settings-select:focus { border-color: var(--primary); background-color: white; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        
+        .verifier-row { cursor: pointer; transition: all 0.2s; }
+        .verifier-row:hover { background: #f8fafc; }
+        .verifier-row.selected { background: #eff6ff !important; border-left: 3px solid var(--primary); }
+        .verifier-row.selected td { color: var(--primary) !important; font-weight: 800 !important; }
+
+        .collection-card {
+            background: white; border: 1px solid #f1f5f9; border-radius: 12px;
+            padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .collection-count { font-weight: 800; color: var(--primary); font-size: 16px; }
+
         .tab-group-label {
             width: 100%; font-size: 10px; font-weight: 800; color: #94a3b8;
             text-transform: uppercase; letter-spacing: 1px; margin: 8px 0 4px 4px;
@@ -1696,6 +1737,70 @@
             overflow-y: auto !important;
         }
 
+        .hist-container {
+            background: white;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 20px;
+        }
+        
+        .hist-bars {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            height: 120px;
+            padding-top: 20px;
+            gap: 8px;
+        }
+
+        .hist-bar-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+
+        .hist-bar {
+            width: 100%;
+            max-width: 32px;
+            background: #cbd5e1;
+            border-radius: 4px 4px 0 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            min-height: 4px;
+        }
+
+        .hist-bar:hover {
+            background: #94a3b8;
+        }
+
+        .hist-bar[data-val]:hover::before {
+            content: attr(data-val);
+            position: absolute;
+            top: -24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            white-space: nowrap;
+            z-index: 10000;
+        }
+
+        .hist-label {
+            font-size: 9px;
+            color: #64748b;
+            font-weight: 700;
+        }
+
         .nav-mini-btn {
             width: 20px;
             height: 20px;
@@ -2053,7 +2158,7 @@
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 03-Mar 02:08 PM 
+                Updated: 04-Mar 12:29 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. 1228.2220]</span>
             </div>
         </div>
@@ -2680,7 +2785,7 @@
                 <span class="material-icons-round rotate" style="font-size:48px; color:var(--primary); margin-bottom:12px;">sync</span>
                 <div style="font-weight:700; color:#64748b;">Loading Verification Portal...</div>
             </div>
-            <iframe id="verify-iframe" src="" style="width:100%; height:100%; border:none;" onload="document.getElementById('verify-loader').style.display='none'"></iframe>
+            <iframe id="verify-iframe" src="about:blank" style="width:100%; height:100%; border:none;" onload="document.getElementById('verify-loader').style.display='none'"></iframe>
         </div>
     </div>
 </div>
@@ -3269,6 +3374,14 @@
         searchLocalOnly: false, // Toggle for searching within current filters
         showTooltips: false, // User Preference for boundary layers
         kmlPane: null,
+        
+        // Verification Panel State
+        verifSelectedVerifier: null,
+        verifSelectedDate: null,
+        verifSelectedDistrict: '',
+        verifSelectedCity: '',
+        verifSelectedArea: '',
+        verificationViewMode: 'list', // list or cities
         
         // Battery Optimization: Dynamic marker limit based on device and selection
         getEffectiveMarkerLimit() {
@@ -4096,13 +4209,8 @@
                         id: r[0]?.toString()
                     });
 
-                    // Bind Tooltip safely (Hover only)
-                    m.bindTooltip(`${r[0]} | ${r[4] || 'Unknown'}<div class="tooltip-arrow"><div class="tooltip-arrow-stem"></div><div class="tooltip-arrow-tip"></div></div>`, { 
-                        permanent: false, 
-                        direction: 'top', 
-                        offset: [0, -10],
-                        className: 'custom-tooltip' 
-                    });
+                    // Bind Tooltip safely
+                    this.bindCustomTooltip(m, `${r[0]} | ${r[4] || 'Unknown'}`);
 
                     // REMOVED bindPopup - Using Image Modal instead
 
@@ -4173,6 +4281,15 @@
             }
         },
 
+        bindCustomTooltip(marker, content) {
+            if (!marker || !content) return;
+            marker.bindTooltip(`${content}<div class="tooltip-arrow"><div class="tooltip-arrow-stem"></div><div class="tooltip-arrow-tip"></div></div>`, {
+                permanent: false,
+                direction: 'top',
+                offset: [0, -10],
+                className: 'custom-tooltip'
+            });
+        }
     };
 
     const ViewSwitcher = {
@@ -5715,7 +5832,8 @@
                                     ${customMeta ? `<div style="margin-top:6px; padding-top:6px; border-top:1px solid #f1f5f9; font-size:11px; color:#2563eb; font-weight:600;">${customMeta}</div>` : ''}
                                 </div>
                              `;
-                             layer.bindTooltip(content, { sticky: true, opacity: 0.95 });
+                             App.bindCustomTooltip(layer, content);
+                             if (layer.getTooltip()) layer.getTooltip().options.sticky = true;
                          }
                      } else {
                          layer.unbindTooltip();
@@ -5800,7 +5918,9 @@
             
             if (!this.activeTab) this.activeTab = '📊 Stats';
             
-            let tabsHtml = `<div class="settings-tabs-row">`;
+            const isVerificationTab = this.activeTab === '📈 Verification';
+            
+            let tabsHtml = `<div class="settings-tabs-row" style="${isVerificationTab ? 'display:none;' : ''}">`;
             tabs.forEach(tab => {
                 const isActive = this.activeTab === tab;
                 tabsHtml += `
@@ -5965,36 +6085,31 @@
                                 <span class="material-icons-round" style="font-size:16px;">clear_all</span> Uncheck Tab
                             </button>
                             <button onclick="LayerManager.clear()" style="flex:1; padding:10px; font-size:11px; color:#ef4444; font-weight:700; background:#fef2f2; border:1px solid #fee2e2; border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
-                                <span class="material-icons-round" style="font-size:16px;">delete_sweep</span> Clear Map
+                                <span class="material-icons-round" style="font-size:16px;">delete_sweep</span> Uncheck All
                             </button>
                         </div>`;
                 }
             }
-            contentHtml += '</div>';
+
+            contentHtml += '</div>'; // End Scroll Area
             
-            // Re-Styled Footer
-            const isKmlTab = tabs.indexOf(this.activeTab) > (window.USER && window.USER.role === 'admin' ? 2 : 1);
-            const footerHtml = isKmlTab ? `
-                <div class="settings-footer">
-                     <button onclick="Settings.close()" style="flex:0.4; padding:12px; border-radius:12px; border:1px solid #e2e8f0; background:white; color:#64748b; font-weight:700; cursor:pointer;">Cancel</button>
-                     <button onclick="LayerManager.applySettings()" class="btn-primary" 
-                        style="flex:1; border-radius:12px; padding:12px; display:flex; justify-content:center; gap:10px; align-items:center; background:#2563eb; color:white; border:none; border-radius:12px; font-weight:700; cursor:pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.2);">
-                        <span class="material-icons-round" style="font-size:20px;">task_alt</span> Apply Changes
-                     </button>
-                </div>` : `
-                <div class="settings-footer" style="padding:12px 24px;">
-                    <div style="font-size:11px; color:#94a3b8; font-weight:600;">v6.2 Build • Robust Core</div>
-                    <button onclick="Settings.close()" style="margin-left:auto; padding:8px 20px; border-radius:20px; border:1px solid #e2e8f0; background:white; font-weight:700; font-size:12px; cursor:pointer;">Close</button>
-                </div>`;
+            // Footer Control (Always sticky bottom)
+            const showApply = !['📊 Stats', '📍 Marker Limit', '📈 Verification'].includes(this.activeTab);
+            contentHtml += `
+                <div class="settings-footer" style="position: sticky; bottom: 0; left: 0; right: 0; padding: 12px 16px; background: white; border-top: 1px solid #e2e8f0; display: flex; gap: 10px; border-radius: 0 0 16px 16px; z-index: 10;">
+                    ${showApply ? `
+                        <button onclick="Settings.close()" class="secondary-btn" style="flex:1; margin:0; justify-content:center; padding:12px; font-size:13px; font-weight:700; border-radius:10px;">Cancel</button>
+                        <button onclick="LayerManager.applySettings()" class="secondary-btn" style="flex:1.5; margin:0; justify-content:center; background:var(--primary); color:white; border:none; padding:12px; font-size:13px; font-weight:800; border-radius:10px; box-shadow:0 4px 12px rgba(37,99,235,0.2);">Apply Changes</button>
+                    ` : `
+                        <button onclick="Settings.close()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; padding:12px; font-size:13px; font-weight:800; border-radius:10px;">Close Settings</button>
+                    `}
+                </div>
+            `;
             
-            container.innerHTML = tabsHtml + contentHtml + footerHtml;
-            
-            // Restore scroll
-            if (lastScroll) {
-                const newScrollEl = container.querySelector('.settings-scroll-area');
-                if (newScrollEl) newScrollEl.scrollTop = lastScroll;
-            }
+            container.innerHTML = tabsHtml + contentHtml;
+            if (scrollEl) container.querySelector('.settings-scroll-area').scrollTop = lastScroll;
         },
+
     };
 
     // Attach Gallery Events
@@ -6183,22 +6298,47 @@
             App.render();
         },
 
-        async fetchGlobalVerifications() {
+        async fetchGlobalVerifications(forceRefresh = false) {
             if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
             
+            // Show loading state if forced refresh
+            if (forceRefresh) {
+                window.ALL_VERIFIED_DATA = null;
+                if (typeof LayerManager !== 'undefined') LayerManager.renderSettingsUI();
+            }
+            
             try {
-                const { data, error } = await window._supabase
-                    .from('verified_houses')
-                    .select('survey_id, verified_by')
-                    .eq('billing_month', window.ACTIVE_BILLING_MONTH);
+                let allData = [];
+                let hasMore = true;
+                let from = 0;
+                let step = 1000;
                 
-                if (error) throw error;
-                window.ALL_VERIFIED_DATA = data || [];
+                while (hasMore) {
+                    const { data, error } = await window._supabase
+                        .from('verified_houses')
+                        .select('survey_id, verified_by, verified_at')
+                        .eq('billing_month', window.ACTIVE_BILLING_MONTH)
+                        .range(from, from + step - 1);
+                    
+                    if (error) throw error;
+                    
+                    if (data && data.length > 0) {
+                        allData = allData.concat(data);
+                        from += step;
+                    }
+                    
+                    if (!data || data.length < step) {
+                        hasMore = false;
+                    }
+                }
+
+                window.ALL_VERIFIED_DATA = allData;
                 console.log(`Fetched ${window.ALL_VERIFIED_DATA.length} verification records.`);
                 if (typeof LayerManager !== 'undefined') LayerManager.renderSettingsUI();
             } catch (e) {
                 console.error("Failed to fetch global verifications:", e);
                 window.ALL_VERIFIED_DATA = []; // Prevent infinite loading
+                if (typeof LayerManager !== 'undefined') LayerManager.renderSettingsUI();
             }
         },
 
@@ -6215,78 +6355,265 @@
                     </div>`;
             }
 
+            // FILTERING LOGIC
+            let filteredData = window.ALL_VERIFIED_DATA || [];
+            
+            // Pre-calculate SID to Location mapping for O(1) lookups
+            const sidToLoc = {};
+            if (typeof RAW_DATA !== 'undefined') {
+                RAW_DATA.forEach(r => { 
+                    sidToLoc[String(r[0])] = { dist: String(r[10]), city: String(r[11]), mc: String(r[12]) }; 
+                });
+            }
+            
+            // 1. Filter by Date (if set)
+            if (State.verifSelectedDate) {
+                filteredData = filteredData.filter(v => v.verified_at.startsWith(State.verifSelectedDate));
+            }
+            // 2. Filter by Verifier (if set)
+            if (State.verifSelectedVerifier) {
+                filteredData = filteredData.filter(v => v.verified_by === State.verifSelectedVerifier);
+            }
+            
+            // 3. Filter by Area (Requires merging with RAW_DATA to know location)
+            if (State.verifSelectedDistrict || State.verifSelectedCity || State.verifSelectedArea) {
+                filteredData = filteredData.filter(v => {
+                    const loc = sidToLoc[String(v.survey_id)];
+                    if (!loc) return false;
+                    
+                    if (State.verifSelectedDistrict && loc.dist !== State.verifSelectedDistrict) return false;
+                    if (State.verifSelectedCity && loc.city !== State.verifSelectedCity) return false;
+                    if (State.verifSelectedArea && loc.mc !== State.verifSelectedArea) return false;
+                    
+                    return true;
+                });
+            }
+
             const verifiedSet = new Set(window.ALL_VERIFIED_DATA.map(v => String(v.survey_id)));
             const totalVerified = verifiedSet.size;
 
-            // Group by MC/UC (Index 12)
-            const mcStats = {}; 
-            RAW_DATA.forEach(r => {
-                const mc = r[12] || 'Unknown Area';
-                if (!mcStats[mc]) mcStats[mc] = { verified: 0, total: 0 };
-                mcStats[mc].total++;
-                if (verifiedSet.has(String(r[0]))) {
-                    mcStats[mc].verified++;
-                }
-            });
-
-            // Group by User
-            const userStats = {}; 
-            window.ALL_VERIFIED_DATA.forEach(v => {
-                const user = v.verified_by || 'Unknown';
-                userStats[user] = (userStats[user] || 0) + 1;
-            });
-
-            const mcRows = Object.entries(mcStats).sort((a,b) => b[1].verified - a[1].verified).map(([name, s]) => {
-                const pct = s.total > 0 ? Math.round((s.verified / s.total) * 100) : 0;
-                return `
-                    <tr style="border-bottom: 1px solid #f1f5f9;">
-                        <td style="padding:12px 0; font-size:11px; font-weight:700; color:#1e293b;">${name}</td>
-                        <td style="padding:12px 0; text-align:right;">
-                            <div style="font-size:12px; font-weight:800; color:var(--primary);">${s.verified.toLocaleString()} <span style="font-size:9px; color:#94a3b8; font-weight:400;">/ ${s.total.toLocaleString()}</span></div>
-                            <div style="font-size:9px; color:#64748b; font-weight:600;">${pct}% Complete</div>
-                        </td>
-                    </tr>`;
-            }).join('');
-
-            const userRows = Object.entries(userStats).sort((a,b) => b[1] - a[1]).map(([user, count]) => `
-                <tr style="border-bottom: 1px solid #f1f5f9;">
-                    <td style="padding:12px 0; font-size:11px; font-weight:600; color:#64748b; font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;">${user}</td>
-                    <td style="padding:12px 0; text-align:right; font-weight:800; color:#16a34a; font-size:13px;">${count.toLocaleString()}</td>
-                </tr>
-            `).join('');
-
-            return `
-                <div style="padding:4px;">
-                    <div style="background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border-radius:20px; padding:24px; color:white; margin-bottom:24px; box-shadow: 0 8px 16px rgba(37,99,235,0.15);">
-                        <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1.5px; opacity:0.8; margin-bottom:6px;">Monthly Verification Score</div>
-                        <div style="font-size:36px; font-weight:900; letter-spacing:-1px;">${totalVerified.toLocaleString()}</div>
-                        <div style="font-size:13px; font-weight:500; margin-top:6px; background:rgba(255,255,255,0.1); display:inline-block; padding:4px 12px; border-radius:30px;">
-                            ${window.ACTIVE_BILLING_MONTH || 'Default Cycle'}
+            // Header Reduction: Single Row Compact Info + Refresh
+            let headerHtml = `
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:#f8fafc; border-radius:12px; margin-bottom:16px; border:1px solid #e2e8f0;">
+                    <button onclick="LayerManager.switchTab('📊 Stats')" style="border:none; background:none; color:#64748b; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                        <span class="material-icons-round" style="font-size:18px;">arrow_back</span>
+                        <span style="font-size:11px; font-weight:800;">EXIT</span>
+                    </button>
+                    <div style="display:flex; gap:16px; align-items:center;">
+                        <div style="text-align:right;">
+                            <div style="font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">TOTAL VERIFIED</div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <div style="font-size:18px; font-weight:900; color:var(--primary); line-height:1;">${totalVerified.toLocaleString()}</div>
+                                <button onclick="Settings.fetchGlobalVerifications(true)" style="background:none; border:none; cursor:pointer; color:var(--primary); padding:0; display:flex;" title="Force Refresh from Server">
+                                    <span class="material-icons-round" style="font-size:16px;">sync</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div style="width:1px; height:24px; background:#e2e8f0;"></div>
+                        <div style="text-align:right;">
+                            <div style="font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">CYCLE</div>
+                            <div style="font-size:14px; font-weight:800; color:#1e293b; line-height:1;">${window.ACTIVE_BILLING_MONTH || 'N/A'}</div>
                         </div>
                     </div>
+                </div>
+            `;
 
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-                        <h4 style="font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; margin:0;">MC/UC Performance</h4>
-                        <span style="font-size:10px; color:#64748b; background:#f1f5f9; padding:2px 8px; border-radius:4px; font-weight:700;">Sorted by Done</span>
+            // Advanced Filtering Controls (Date, District, City, MC/UC)
+            const districts = Object.keys(HIERARCHY || {}).sort();
+            const cities = (State.verifSelectedDistrict && HIERARCHY && HIERARCHY[State.verifSelectedDistrict]) 
+                            ? Object.keys(HIERARCHY[State.verifSelectedDistrict]).sort() : [];
+            const mcs = (State.verifSelectedDistrict && State.verifSelectedCity && HIERARCHY && HIERARCHY[State.verifSelectedDistrict] && HIERARCHY[State.verifSelectedDistrict][State.verifSelectedCity]) 
+                        ? Object.keys(HIERARCHY[State.verifSelectedDistrict][State.verifSelectedCity]).sort() : [];
+            
+            let filtersHtml = `
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:16px; background:#f1f5f9; padding:12px; border-radius:12px;">
+                    <div style="grid-column: 1 / -1;">
+                        <label style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase; margin-bottom:4px; display:block;">Select Date</label>
+                        <input type="date" value="${State.verifSelectedDate || ''}" onchange="State.verifSelectedDate = this.value; LayerManager.renderSettingsUI();" 
+                            style="width:100%; padding:8px; border-radius:8px; border:1px solid #cbd5e1; font-size:12px; outline:none; font-family:inherit; color:#1e293b;">
                     </div>
-                    <div style="background:white; border:1px solid #f1f5f9; border-radius:16px; padding:4px 16px; margin-bottom:28px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-                        <table style="width:100%; border-collapse:collapse;">
-                            <tbody>${mcRows || '<tr><td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">No MC/UC data mapped</td></tr>'}</tbody>
-                        </table>
+                    <div>
+                        <label style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase; margin-bottom:4px; display:block;">District</label>
+                        <select onchange="State.verifSelectedDistrict = this.value; State.verifSelectedCity = ''; State.verifSelectedArea = ''; LayerManager.renderSettingsUI();" 
+                            style="width:100%; padding:8px; border-radius:8px; border:1px solid #cbd5e1; font-size:12px; outline:none; font-family:inherit; color:#1e293b;">
+                            <option value="">All Districts</option>
+                            ${districts.map(d => `<option value="${d}" ${State.verifSelectedDistrict === d ? 'selected' : ''}>${d}</option>`).join('')}
+                        </select>
                     </div>
+                    <div>
+                        <label style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase; margin-bottom:4px; display:block;">City / Division</label>
+                        <select onchange="State.verifSelectedCity = this.value; State.verifSelectedArea = ''; LayerManager.renderSettingsUI();" ${!State.verifSelectedDistrict ? 'disabled' : ''}
+                            style="width:100%; padding:8px; border-radius:8px; border:1px solid #cbd5e1; font-size:12px; outline:none; font-family:inherit; color:#1e293b; opacity: ${!State.verifSelectedDistrict ? '0.5' : '1'};">
+                            <option value="">All Cities</option>
+                            ${cities.map(c => `<option value="${c}" ${State.verifSelectedCity === c ? 'selected' : ''}>${c}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <label style="font-size:9px; font-weight:800; color:#64748b; text-transform:uppercase; margin-bottom:4px; display:block;">Focus Area (MC/UC)</label>
+                        <select onchange="State.verifSelectedArea = this.value; LayerManager.renderSettingsUI();" ${!State.verifSelectedCity ? 'disabled' : ''}
+                            style="width:100%; padding:8px; border-radius:8px; border:1px solid #cbd5e1; font-size:12px; outline:none; font-family:inherit; color:#1e293b; opacity: ${!State.verifSelectedCity ? '0.5' : '1'};">
+                            <option value="">All Areas</option>
+                            ${mcs.map(m => `<option value="${m}" ${State.verifSelectedArea === m ? 'selected' : ''}>${m}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+            `;
 
-                    <h4 style="font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; margin:0 0 12px 0;">Verified by User</h4>
-                    <div style="background:white; border:1px solid #f1f5f9; border-radius:16px; padding:4px 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+            // HISTOGRAM LOGIC (Grouping by Area)
+            const stackBy = State.verifSelectedCity ? 'mc' : 'city';
+            const dailyData = {};
+            
+            filteredData.forEach(v => {
+                const date = new Date(v.verified_at);
+                if (isNaN(date.getTime())) return;
+                const dateKey = date.toISOString().split('T')[0];
+                
+                if (!dailyData[dateKey]) dailyData[dateKey] = { total: 0, areas: {} };
+                dailyData[dateKey].total++;
+                
+                const loc = sidToLoc[String(v.survey_id)] || { city: 'Unknown', mc: 'Unknown' };
+                const areaKey = (stackBy === 'mc' ? loc.mc : loc.city) || 'Unknown';
+                dailyData[dateKey].areas[areaKey] = (dailyData[dateKey].areas[areaKey] || 0) + 1;
+            });
+
+            const sortedDays = Object.keys(dailyData).sort().slice(-7);
+            const maxDaily = Math.max(...Object.values(dailyData).map(d => d.total), 1);
+            
+            let histHtml = `
+                <div class="hist-container">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+                        <div>
+                            <h4 style="font-size:10px; font-weight:800; color:#1e293b; text-transform:uppercase; letter-spacing:0.5px; margin:0;">Daily Delivery Pulse</h4>
+                            <div style="font-size:9px; color:#64748b; margin-top:2px; font-weight:600;">Total per day (Breakdown by ${stackBy === 'mc' ? 'MC/UC' : 'City'})</div>
+                            ${State.verifSelectedVerifier ? `<div style="font-size:9px; color:var(--primary); font-weight:700; margin-top:2px;">Filtered: ${State.verifSelectedVerifier}</div>` : ''}
+                        </div>
+                        <span style="font-size:9px; color:#64748b; font-weight:700;">${State.verifSelectedDate ? 'Selected Date' : 'Last 7 Days'}</span>
+                    </div>
+                    <div class="hist-bars">
+            `;
+            
+            if (sortedDays.length === 0) {
+                histHtml += `<div style="width:100%; text-align:center; font-size:11px; color:#94a3b8; padding:20px 0;">No data for current filters.</div>`;
+            } else {
+                const dayColors = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e'];
+                sortedDays.forEach((day, idx) => {
+                    const dayData = dailyData[day];
+                    const height = Math.round((dayData.total / maxDaily) * 100);
+                    
+                    // Format date as "Mar-04"
+                    const dateObj = new Date(day);
+                    const dayLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).replace(' ', '-');
+                    
+                    const barColor = dayColors[idx % dayColors.length];
+                    
+                    let breakdownStr = Object.entries(dayData.areas)
+                        .sort((a,b) => b[1] - a[1])
+                        .map(([area, count]) => `${area}: ${count}`)
+                        .join('&#10;'); // Line break for title
+
+                    histHtml += `
+                        <div class="hist-bar-wrapper">
+                            <div class="hist-bar" style="height:${height}%; background:${barColor};" data-val="${dayData.total}" title="${breakdownStr}"></div>
+                            <div class="hist-label" style="text-align:center;">${dayLabel}</div>
+                        </div>
+                    `;
+                });
+            }
+            histHtml += `</div></div>`;
+
+            // VIEW TOGGLE (List vs Collections)
+            const aggLabel = (State.verifSelectedCity ? 'MC/UC' : 'City') + ' Collections';
+            let toggleHtml = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin: 20px 0 12px 0;">
+                    <h4 style="font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; margin:0;">Submitter Analytics</h4>
+                    <div style="display:flex; background:#f1f5f9; border-radius:6px; padding:2px;">
+                        <button onclick="State.verificationViewMode = 'list'; LayerManager.renderSettingsUI();" 
+                            style="padding:4px 10px; border:none; border-radius:4px; font-size:10px; font-weight:800; cursor:pointer; 
+                            background:${State.verificationViewMode === 'list' ? 'white' : 'transparent'}; 
+                            color:${State.verificationViewMode === 'list' ? '#1e293b' : '#64748b'};
+                            box-shadow:${State.verificationViewMode === 'list' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'};">Verifiers</button>
+                        <button onclick="State.verificationViewMode = 'collections'; LayerManager.renderSettingsUI();" 
+                            style="padding:4px 10px; border:none; border-radius:4px; font-size:10px; font-weight:800; cursor:pointer; 
+                            background:${State.verificationViewMode === 'collections' ? 'white' : 'transparent'}; 
+                            color:${State.verificationViewMode === 'collections' ? '#1e293b' : '#64748b'};
+                            box-shadow:${State.verificationViewMode === 'collections' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'};">${aggLabel}</button>
+                    </div>
+                </div>
+            `;
+
+            let listContentHtml = '';
+
+            if (State.verificationViewMode === 'list') {
+                // Performance by User (Using Unfiltered Data to allow selection, but showing total count relative to other filters)
+                const userStats = {}; 
+                window.ALL_VERIFIED_DATA.forEach(v => {
+                    // Pre-filter by date if necessary so user totals match the selected date.
+                    if (State.verifSelectedDate && !v.verified_at.startsWith(State.verifSelectedDate)) return;
+                    
+                    const user = v.verified_by || 'Unknown';
+                    userStats[user] = (userStats[user] || 0) + 1;
+                });
+
+                const userRows = Object.entries(userStats).sort((a,b) => b[1] - a[1]).map(([user, count]) => {
+                    const isSelected = State.verifSelectedVerifier === user;
+                    return `
+                    <tr class="verifier-row ${isSelected ? 'selected' : ''}" 
+                        onclick="State.verifSelectedVerifier = '${isSelected ? '' : user}'; LayerManager.renderSettingsUI();">
+                        <td style="padding:12px 8px; font-size:11px; font-weight:600; color:#64748b; font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;">
+                            ${user}
+                        </td>
+                        <td style="padding:12px 8px; text-align:right; font-weight:800; color:#16a34a; font-size:13px;">
+                            ${count.toLocaleString()}
+                        </td>
+                    </tr>
+                    `;
+                }).join('');
+
+                listContentHtml = `
+                    <div style="background:white; border:1px solid #f1f5f9; border-radius:12px; padding:4px 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
                         <table style="width:100%; border-collapse:collapse;">
                             <thead>
                                 <tr style="border-bottom:1px solid #f1f5f9;">
-                                    <th style="text-align:left; padding:12px 0; font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Verifier Email</th>
-                                    <th style="text-align:right; padding:12px 0; font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Count</th>
+                                    <th style="text-align:left; padding:12px 8px; font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Verifier Email <span style="font-weight:400; font-size:9px; text-transform:none;">(Click to filter)</span></th>
+                                    <th style="text-align:right; padding:12px 8px; font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Count</th>
                                 </tr>
                             </thead>
-                            <tbody>${userRows || '<tr><td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">No user records found</td></tr>'}</tbody>
+                            <tbody>${userRows || '<tr><td colspan="2" style="padding:20px; text-align:center; color:#94a3b8;">No records found</td></tr>'}</tbody>
                         </table>
                     </div>
+                `;
+            } else {
+                // Collections View (City or MC/UC)
+                const aggBy = State.verifSelectedCity ? 'mc' : 'city';
+                
+                const stats = {};
+                filteredData.forEach(v => {
+                    const loc = sidToLoc[String(v.survey_id)] || { city: 'Unknown', mc: 'Unknown' };
+                    const key = (aggBy === 'mc' ? loc.mc : loc.city) || 'Unknown';
+                    stats[key] = (stats[key] || 0) + 1;
+                });
+                
+                const cards = Object.entries(stats).sort((a,b) => b[1] - a[1]).map(([key, count]) => `
+                    <div class="collection-card">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="material-icons-round" style="color:#94a3b8; font-size:18px;">${aggBy === 'mc' ? 'map' : 'location_city'}</span>
+                            <span style="font-weight:700; color:#1e293b; font-size:13px;">${key}</span>
+                        </div>
+                        <div class="collection-count">${count.toLocaleString()}</div>
+                    </div>
+                `).join('');
+                
+                listContentHtml = cards || `<div style="text-align:center; padding:20px; color:#94a3b8; font-size:12px;">No area data matching filters.</div>`;
+            }
+
+
+            return `
+                <div style="padding:4px;">
+                    ${headerHtml}
+                    ${filtersHtml}
+                    ${histHtml}
+                    ${toggleHtml}
+                    ${listContentHtml}
                 </div>`;
         },
         incrementMarkerLimit(amount) {
@@ -7173,10 +7500,15 @@
             const btnListView = document.getElementById('btn-modal-list-view');
             if(btnListView) {
                 btnListView.onclick = () => {
-                    const sidIdx = State.filtered.findIndex(r => String(r[0]) === String(sid));
-                    if(sidIdx !== -1) State.currentIdx = sidIdx;
                     this.closeMarkerCard();
-                    if(typeof ViewSwitcher !== 'undefined') ViewSwitcher.toList();
+                    if(window.ListView && ListView.jumpFromMap) {
+                        ListView.jumpFromMap(sid);
+                    } else {
+                        // Fallback logic
+                        const sidIdx = State.filtered.findIndex(r => String(r[0]) === String(sid));
+                        if (sidIdx !== -1) State.currentIdx = sidIdx;
+                        if (typeof ViewSwitcher !== 'undefined') ViewSwitcher.toList();
+                    }
                 };
             }
 
@@ -7788,7 +8120,7 @@
                         }),
                         pane: 'routingMarkerPane'
                     }).addTo(this._displayLayer);
-                    m.bindTooltip(`#${p.surveyId || p.id}`, { permanent: false, direction: 'top', offset: [0, -10] });
+                    App.bindCustomTooltip(m, `#${p.surveyId || p.id}`);
                     m.on('click', (e) => {
                         L.DomEvent.stopPropagation(e);
                         this.highlightMarker(String(p.surveyId || p.id), lat, lng);
@@ -8699,7 +9031,7 @@
                             this.highlightMarker(p.id, p.lat, p.lng);
                             this.highlightListItem(p.id);
                         });
-                        m.bindTooltip(`#${p.id}`, { permanent: false, direction: 'top', offset: [0, -10] });
+                        App.bindCustomTooltip(m, `#${p.id || sid}`);
                         m.bindPopup(() => this._buildMarkerPopup(p.id), { closeButton: false, offset: [0, -5] });
                         m.on('popupopen', () => m.closeTooltip());
                     });
