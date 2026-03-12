@@ -7553,16 +7553,18 @@ details summary::-webkit-details-marker {
         border-right: 1px solid rgba(226, 232, 240, 0.8);
         display: flex;
         flex-direction: column;
-        z-index: 10000; /* Increased to stay above map even on PWA */
+        z-index: 10000;
         box-shadow: 0 0 40px rgba(0, 0, 0, 0.03);
         transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         position: relative;
         overflow: hidden;
+        will-change: transform, width;
 }
 
 #sidebar.collapsed {
         width: var(--sidebar-collapsed-w);
         border-right: none;
+        transform: translateX(-100%);
 }
 
 #sidebar-toggle {
@@ -8837,6 +8839,31 @@ input[type=number] {
                 }
         }
 
+        #routing-station-overlay {
+                top: 10px !important;
+                right: 10px !important;
+                left: 10px !important;
+                bottom: 10px !important;
+                width: auto !important;
+                height: auto !important;
+                max-height: calc(100vh - 20px) !important;
+                margin: 0 !important;
+                z-index: 20000 !important; /* Ensure it stays above sidebar on mobile if needed */
+        }
+
+        /* Adjust toolbar row for better fit on very small screens */
+        .v6-toolbar {
+                padding: 4px !important;
+                gap: 2px !important;
+                justify-content: center !important;
+        }
+
+        .routing-tool-btn {
+                padding: 4px !important;
+                min-width: 32px !important;
+                height: 32px !important;
+        }
+
         @media (max-width: 380px) {
                 .info-label {
                         font-size: 11px !important;
@@ -9141,7 +9168,7 @@ input[type=number] {
 </style>
 </head>
 <body>
-    <!--  handled via script injection -->
+    <!-- <script>window.DEV_MODE = false; window.DATA_CHUNKS_COUNT = 10;</script> handled via script injection -->
     <div id="login-overlay" style="position:fixed; inset:0; background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); z-index:999999; display:flex; align-items:center; justify-content:center; padding:20px; transition: opacity 0.5s ease;">
         <div style="background:white; padding:40px; border-radius:24px; width:100%; max-width:400px; text-align:center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
             <div style="background:linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); width:72px; height:72px; border-radius:20px; display:flex; align-items:center; justify-content:center; margin:0 auto 24px; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);">
@@ -9531,7 +9558,6 @@ input[type=number] {
                 </button>
                 <button class="float-btn" onclick="QRScanner.open()" title="Scan QR Code">
                     <span class="material-icons-round" style="color:#6366f1">qr_code_scanner</span>
-                </button>
                 </button>
             </div>
             <button class="float-btn mobile-only" onclick="Sidebar.toggle()" title="Menu">
@@ -10268,7 +10294,7 @@ input[type=number] {
 
 // Global Data Placeholders
 window.RAW_DATA = [];
-window.DATA_CHUNKS_COUNT = 10;
+window.DATA_CHUNKS_COUNT = window.DATA_CHUNKS_COUNT || 10;
 window.PAID_DATA = [];
 window.HIERARCHY = {};
 window.GEO_LAYERS = {};
@@ -10500,7 +10526,6 @@ async function loadData() {
             r[5] = decodePII(r[5]); // Address
             r[15] = decodePII(r[15]); // PSID
 
-            // PRE-CALCULATE search string for instant lookups
             // Format: ID|PSID|Name|Address|MCUC|Surveyor
             r._search = `${r[0]}|${r[15]}|${r[4]}|${r[5]}|${r[12]}|${r[6]}`.toLowerCase();
 
@@ -11343,8 +11368,15 @@ const App = {
         this.render();
 
         if (!isInitial) {
-            if (window.innerWidth <= 768 && !document.getElementById('list-view-stage')?.classList.contains('active')) {
-                Sidebar.close();
+            if (window.innerWidth <= 768) {
+                // Determine if sidebar is open without triggering reflows unnecessarily
+                const sb = document.getElementById('sidebar');
+                if (sb && sb.classList.contains('open')) {
+                    if (!document.getElementById('list-view-stage')?.classList.contains('active')) {
+                        console.log("[App.apply] Closing sidebar on mobile...");
+                        Sidebar.close();
+                    }
+                }
             }
             if (!document.getElementById('list-view-stage')?.classList.contains('active')) {
                 ViewSwitcher.toMap();
@@ -13916,15 +13948,18 @@ const Sidebar = {
             const btn = document.getElementById('sidebar-toggle');
             
             if (window.innerWidth <= 768) {
+                const isOpening = !sb.classList.contains('open');
                 sb.classList.toggle('open');
-                sb.classList.remove('collapsed');
+                if (isOpening) sb.classList.remove('collapsed');
+                else sb.classList.add('collapsed');
                 
-                // Toggle Info Card visibility
-                const card = document.getElementById('info-card');
-                if(card) {
-                    if(sb.classList.contains('open')) card.classList.add('hidden');
-                    else card.classList.remove('hidden');
-                }
+                // Refresh map size after transition (0.4s in CSS)
+                setTimeout(() => {
+                    if(State.map) {
+                        State.map.invalidateSize({ animate: true });
+                        if (window.innerWidth > 768) this.syncRoutingOverlay();
+                    }
+                }, 500); 
             } else {
                 sb.classList.toggle('collapsed');
                 sb.classList.remove('open');
@@ -13934,7 +13969,6 @@ const Sidebar = {
                 setTimeout(() => {
                     if(State.map) {
                         State.map.invalidateSize({ animate: true });
-                        // Sync routing overlay position
                         this.syncRoutingOverlay();
                     }
                 }, 500); 
@@ -13954,8 +13988,19 @@ const Sidebar = {
         toggleDesktop() { this.toggle(); }, // Compatibility
         close() { 
             const sb = document.getElementById('sidebar');
+            if (!sb) return;
+
+            // Guard: If already closed, don't trigger transitions again
+            if (window.innerWidth <= 768 && !sb.classList.contains('open')) return;
+            if (window.innerWidth > 768 && sb.classList.contains('collapsed')) return;
+
+            console.log("Sidebar: Closing definitively...");
             sb.classList.remove('open'); 
             if (window.innerWidth > 768) sb.classList.add('collapsed');
+            else {
+                // For mobile, we also add collapsed to trigger the -100% transform
+                sb.classList.add('collapsed');
+            }
 
             const card = document.getElementById('info-card');
             if(card) card.classList.remove('hidden');
@@ -16151,7 +16196,9 @@ const SpatialRouter = {
         const routesWithMeta = State.savedRoutes.map((route, originalIdx) => {
             let area = 'Unknown Area';
             if (route.sequence && route.sequence.length > 0) {
-                const sid = String(route.sequence[0].surveyId || route.sequence[0].id);
+                // Normalize ID from route sequence
+                const rawSid = String(route.sequence[0].surveyId || route.sequence[0].id);
+                const sid = rawSid.replace(/\.0$/, '').trim();
                 const row = isMapReady ? window.SID_MAP.get(sid) : null;
                 if (row && row[12]) area = this.cleanMCName(row[12]);
             }
@@ -17316,7 +17363,8 @@ const SpatialRouter = {
 
     _buildMarkerPopup(sid) {
         const isMapReady = window.SID_MAP instanceof Map;
-        const r = isMapReady ? window.SID_MAP.get(String(sid)) : null;
+        const sidStr = String(sid).replace(/\.0$/, '').trim();
+        const r = isMapReady ? window.SID_MAP.get(sidStr) : null;
         if (!r) return `<div style="font-size:10px; padding:4px;">ID: ${sid}</div>`;
         let shortMC = 'MC-?';
         if (r[12]) {
@@ -17683,7 +17731,7 @@ const SpatialRouter = {
             m.off('click');
             m.on('click', (e) => {
                 L.DomEvent.stopPropagation(e);
-                const sidStr = String(sid);
+                const sidStr = String(sid).replace(/\.0$/, '').trim();
                 const currentIdx = this.sequence.findIndex(p => String(p.id) === sidStr);
                 if (currentIdx === -1) this.addToSequence(sidStr);
                 else this.removeFromSequence(sidStr);
@@ -17716,7 +17764,7 @@ const SpatialRouter = {
         if (list) {
             const card = list.querySelector(`[data-sid="${sid}"]`);
             if (card) {
-                const sidStr = String(sid);
+                const sidStr = String(sid).replace(/\.0$/, '').trim();
                 const seqIdx = this.sequence.findIndex(p => String(p.id) === sidStr);
                 const isStart = seqIdx === 0;
                 const isEnd = seqIdx !== -1 && seqIdx === this.sequence.length - 1;
@@ -17750,14 +17798,14 @@ const SpatialRouter = {
 
     removeFromSequence(sid) {
         if (this.isLocked) { if (App.showToast) App.showToast("Sequence is locked."); return; }
-        const sidStr = String(sid);
+        const sidStr = String(sid).replace(/\.0$/, '').trim();
         this.sequence = this.sequence.filter(p => String(p.id) !== sidStr);
         this.updateSpecificRouteItem(sidStr);
     },
 
     addToSequence(sid) {
         if (this.isLocked) { if (App.showToast) App.showToast("Sequence is locked."); return; }
-        const sidStr = String(sid);
+        const sidStr = String(sid).replace(/\.0$/, '').trim();
         if (this.sequence.findIndex(p => String(p.id) === sidStr) !== -1) return;
         const isMapReady = window.SID_MAP instanceof Map;
         const row = isMapReady ? window.SID_MAP.get(sidStr) : null;
