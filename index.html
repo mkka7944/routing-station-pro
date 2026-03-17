@@ -18314,7 +18314,7 @@ window.onload = () => {
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js')
+            navigator.serviceWorker.register('./sw.js?v=8.1')
                 .then(registration => {
                     console.log('SW registered successfully:', registration.scope);
                 })

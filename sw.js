@@ -1,9 +1,18 @@
 const CACHE_NAME = 'rsp-safe-cache-v1';
+const PRECACHE_ASSETS = [
+    './index.html',
+    './manifest.json',
+    './icon-192.png',
+    './icon-512.png'
+];
 
-// Service Worker Registration
+// Service Worker Installation
 self.addEventListener('install', (event) => {
-    // Force the waiting service worker to become the active service worker.
-    self.skipWaiting();
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then(cache => cache.addAll(PRECACHE_ASSETS))
+            .then(() => self.skipWaiting())
+    );
 });
 
 self.addEventListener('activate', (event) => {
