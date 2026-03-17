@@ -16,7 +16,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="RSP">
-    <link rel="apple-touch-icon" href="./favicon.ico">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+    <meta name="theme-color" content="#1e293b">
     
     <!-- Scripts (Critical ones first, non-critical deferred) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -9168,7 +9169,7 @@ input[type=number] {
 </style>
 </head>
 <body>
-    <!-- <script>window.DEV_MODE = false; window.DATA_CHUNKS_COUNT = 10;</script> handled via script injection -->
+    <!-- %dev_mode% handled via script injection -->
     <div id="login-overlay" style="position:fixed; inset:0; background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); z-index:999999; display:flex; align-items:center; justify-content:center; padding:20px; transition: opacity 0.5s ease;">
         <div style="background:white; padding:40px; border-radius:24px; width:100%; max-width:400px; text-align:center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
             <div style="background:linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); width:72px; height:72px; border-radius:20px; display:flex; align-items:center; justify-content:center; margin:0 auto 24px; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);">
@@ -9196,10 +9197,7 @@ input[type=number] {
             
             <div id="auth-status" style="margin-top:24px; font-size:13px; min-height:20px;"></div>
             
-            <div style="margin-top:32px; padding-top:24px; border-top:1px solid #f1f5f9;">
-                <button onclick="Auth.devLogin()" style="background:none; border:none; color:#94a3b8; font-size:11px; font-weight:700; cursor:pointer; text-decoration:underline; opacity:0.6; transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
-                    Developer Bypass (Local Test)
-                </button>
+            <div style="margin-top:32px; padding-top:24px; border-top:1px solid #f1f5f9; display:none;">
             </div>
         </div>
     </div>
@@ -9210,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 10-Mar 03:43 PM 
+                Updated: 17-Mar 03:01 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -9465,7 +9463,7 @@ input[type=number] {
 
                     <div style="display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px solid #f1f5f9;">
                          <div style="font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Cloud Options</div>
-                         <div class="multi-option" onclick="App.handleMultiClick(event, 'f-drive', 'apply')" style="margin:0; padding:12px; background:#ecfdf5; border:1px solid #d1fae5; border-radius:10px; width:100%; box-sizing:border-box;">
+                         <div id="f-drive" class="multi-option" onclick="App.handleMultiClick(event, 'f-drive', 'apply')" style="margin:0; padding:12px; background:#ecfdf5; border:1px solid #d1fae5; border-radius:10px; width:100%; box-sizing:border-box;">
                             <input type="checkbox" id="f-drive-only" onchange="App.handleMultiChange(event, 'f-drive', 'apply')" style="margin-right:10px;">
                             <span style="font-weight:700; color:#065f46; font-size:12px;">Show Drive Images Only</span>
                         </div>
@@ -10462,22 +10460,6 @@ const Auth = {
             document.querySelectorAll('.desc-only').forEach(el => el.style.display = 'none');
         }
         // NOTE: Do NOT auto-open routing panel here — let the user open it via the toolbar button
-    },
-    async devLogin() {
-        console.log("Developer Bypass triggered...");
-        window.USER = {
-            email: "dev@local",
-            role: "admin",
-            name: "Developer",
-            picture: null
-        };
-        const loginOverlay = document.getElementById('login-overlay');
-        if (loginOverlay) {
-            loginOverlay.style.opacity = '0';
-            setTimeout(() => loginOverlay.style.display = 'none', 500);
-        }
-        await loadData();
-        Auth.updateUI();
     }
 };
 
@@ -10503,17 +10485,18 @@ async function loadData() {
             return await res.json();
         };
 
+        const vStr = `?v=${Date.now()}`;
         const chunkCount = window.DATA_CHUNKS_COUNT || 1;
         const dataPromises = [];
         for (let i = 1; i <= chunkCount; i++) {
-            dataPromises.push(fetchJSON(`data_part${i}.json`, `Survey Records (Part ${i}/${chunkCount})`));
+            dataPromises.push(fetchJSON(`data_part${i}.json${vStr}`, `Survey Records (Part ${i}/${chunkCount})`));
         }
 
         const [dataChunks, paidData, hierarchyData, geoLayers] = await Promise.all([
             Promise.all(dataPromises),
-            fetchJSON('paid_data.json', 'Payment Data'),
-            fetchJSON('hierarchy.json', 'Locations'),
-            fetchJSON('geo_layers.json', 'Map Layers')
+            fetchJSON(`paid_data.json${vStr}`, 'Payment Data'),
+            fetchJSON(`hierarchy.json${vStr}`, 'Locations'),
+            fetchJSON(`geo_layers.json${vStr}`, 'Map Layers')
         ]);
 
         const rawData = [].concat(...dataChunks);
@@ -10843,6 +10826,7 @@ const App = {
         State.markers.clearLayers();
         State.filtered = [];
         State.masterFiltered = [];
+        State.originalFiltered = []; // CRITICAL: Stop render() from falling back to cached routing data
 
         const countEl = document.getElementById('stat-count');
         if (countEl) countEl.innerText = "0 / " + (window.RAW_DATA ? RAW_DATA.length : 0);
@@ -10879,8 +10863,8 @@ const App = {
 
     clearDates() {
         this.resetFilters();
-        // Re-apply to show default (Sargodha) view
-        this.apply();
+        // NO AUTO-APPLY: User wants empty map on first attempt
+        this.render(); 
     },
 
     initMap() {
@@ -11076,6 +11060,7 @@ const App = {
     },
 
     toggleAll(id, state) {
+        console.log(`[App.toggleAll] id=${id}, state=${state}`);
         if (id === 'f-quick') {
             Object.keys(State.quickFilters).forEach(key => {
                 State.quickFilters[key] = state;
@@ -11085,7 +11070,8 @@ const App = {
                 const cb = document.getElementById(`q-${key}`);
                 if (cb) {
                     cb.checked = state;
-                    cb.closest('.multi-option').classList.toggle('selected', state);
+                    const opt = cb.closest('.multi-option');
+                    if (opt) opt.classList.toggle('selected', state);
                 }
             });
             this.apply();
@@ -11093,10 +11079,20 @@ const App = {
         }
 
         const container = document.getElementById(id);
+        if (!container) {
+            console.warn(`[App.toggleAll] CRITICAL: Container not found for ID: ${id}. Ensure this ID exists in the HTML.`);
+            return;
+        }
+
         const checkboxes = container.querySelectorAll('input');
+        if (checkboxes.length === 0) {
+            console.warn(`[App.toggleAll] WARNING: No checkboxes found in container: ${id}`);
+        }
+
         checkboxes.forEach(cb => {
             cb.checked = state;
-            cb.closest('.multi-option').classList.toggle('selected', state);
+            const option = cb.closest('.multi-option');
+            if (option) option.classList.toggle('selected', state);
         });
 
         if (id === 'f-dist') this.onDistChange();
@@ -11295,6 +11291,7 @@ const App = {
         if (mcs.length === 0) {
             State.filtered = [];
             State.masterFiltered = [];
+            State.originalFiltered = []; // CRITICAL: Clear routing fallback
             this.updateSidebarStatus();
             this.updateSurveyors();
             this.render();
@@ -11304,6 +11301,25 @@ const App = {
         const categories = [];
         if (State.quickFilters.domestic) categories.push('domestic');
         if (State.quickFilters.commercial) categories.push('commercial');
+
+        // DEBUG: Drive Filter Diagnostics
+        if (driveOnly) {
+            const syncedCount = Object.keys(State.syncedData).length;
+            console.group("Drive Filter Debug");
+            console.log("Drive Only Filter Enabled");
+            console.log(`State.syncedData Keys: ${syncedCount}`);
+            if (RAW_DATA.length > 0) {
+                const testID = String(RAW_DATA[0][0]).trim();
+                console.log(`Sample Comparison ID [${testID}] -> Synced?`, !!State.syncedData[testID]);
+                if (syncedCount > 0) {
+                    console.log("Sample Keys in Registry:", Object.keys(State.syncedData).slice(0, 5));
+                }
+            }
+            if (syncedCount === 0) {
+                console.warn("FILTER WARNING: Show Drive Images is ON but No Synced Data is loaded. All markers will be hidden.");
+            }
+            console.groupEnd();
+        }
 
         // PERFORMANCE: Single-pass filtering (was 8 sequential passes)
         const result = [];
@@ -11333,7 +11349,12 @@ const App = {
             }
 
             // 4. Drive Sync
-            if (driveOnly && !State.syncedData[r[0]]) continue;
+            // 5. Drive Sync Marker Logic
+            if (driveOnly) {
+                const sid = String(r[0]).replace(/\.0$/, '').trim();
+                const isSynced = !!State.syncedData[sid];
+                if (!isSynced) continue;
+            }
 
             // 5. Category
             if (categories.length > 0) {
@@ -11429,6 +11450,13 @@ const App = {
             if (mcs.length > 0) labelHTML = `Total Survey <span style="font-size:9px; font-weight:400; opacity:0.8; display:block;">(${mcs.length === 1 ? mcs[0] : mcs.length + ' Areas'})</span>`;
             else if (tehsils.length > 0) labelHTML = `Total Survey <span style="font-size:9px; font-weight:400; opacity:0.8; display:block;">(${tehsils.length === 1 ? tehsils[0] : tehsils.length + ' Tehsils'})</span>`;
             else if (dists.length > 0) labelHTML = `Total Survey <span style="font-size:9px; font-weight:400; opacity:0.8; display:block;">(${dists.length === 1 ? dists[0] : dists.length + ' Districts'})</span>`;
+            
+            // Add Drive Sync Warning if applicable
+            const driveOnly = document.getElementById('f-drive-only')?.checked;
+            if (driveOnly && Object.keys(State.syncedData).length === 0) {
+                labelHTML += `<div style="color:var(--danger); font-size:9px; margin-top:2px;">⚠️ NO DRIVE SYNC DATA</div>`;
+            }
+            
             labelEl.innerHTML = labelHTML;
         }
 
@@ -12187,10 +12215,13 @@ const ListView = {
 
     jumpToID(id) {
         if (!id) return;
-        const searchId = id.toString().trim();
+        const searchId = id.toString().trim().toLowerCase();
 
-        // Check current list first
-        const idx = State.filtered.findIndex(r => r[0].toString().trim() === searchId);
+        // Check current list first (match either Survey ID or PSID)
+        const idx = State.filtered.findIndex(r => 
+            r[0].toString().trim().toLowerCase() === searchId || 
+            (r[15] && r[15].toString().trim().toLowerCase() === searchId)
+        );
 
         // Always push context before a search jump (even if in same list)
         State.history.push({
@@ -12203,9 +12234,12 @@ const ListView = {
             State.currentIdx = idx;
             this.render();
             const statLabel = document.getElementById('stat-label');
-            if (statLabel) statLabel.innerHTML = `Linked ID Match <a href="javascript:void(0)" onclick="ViewSwitcher.back()" style="color:var(--primary); margin-left:8px; text-decoration:underline; font-size:10px;">[RETURN]</a>`;
+            if (statLabel) statLabel.innerHTML = `Linked Match <a href="javascript:void(0)" onclick="ViewSwitcher.back()" style="color:var(--primary); margin-left:8px; text-decoration:underline; font-size:10px;">[RETURN]</a>`;
         } else {
-            const record = RAW_DATA.find(r => r[0].toString().trim() === searchId);
+            const record = RAW_DATA.find(r => 
+                r[0].toString().trim().toLowerCase() === searchId || 
+                (r[15] && r[15].toString().trim().toLowerCase() === searchId)
+            );
             if (record) {
                 State.filtered = [record];
                 State.currentIdx = 0;
@@ -12215,7 +12249,7 @@ const ListView = {
             } else {
                 // Pop history if search failed so we don't store a "failed jump" state
                 State.history.pop();
-                App.showToast ? App.showToast(`ID #${id} not found.`) : alert(`ID #${id} not found.`);
+                App.showToast ? App.showToast(`ID/PSID #${id} not found.`) : alert(`ID/PSID #${id} not found.`);
             }
         }
         this.toggleClearBtn(searchId);
@@ -13252,19 +13286,66 @@ const DriveSync = {
 
         async fetchAllSyncedData() {
             if (!this.APP_URL) return;
-            console.log("Fetching all synced IDs...");
+            const url = `${this.APP_URL.trim()}?action=get_all_synced_ids`;
+            console.log(`[DriveSync] fetchAllSyncedData started. URL: ${url}`);
+            
             try {
-                const resp = await fetch(`${this.APP_URL}?action=get_all_synced_ids`);
+                const resp = await fetch(url, {
+                    mode: 'cors',
+                    cache: 'no-cache'
+                });
+                
+                console.log(`[DriveSync] Fetch response status: ${resp.status} ${resp.statusText}`);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                
                 const res = await resp.json();
+                console.log(`[DriveSync] Data received. Success: ${res.status === 'success'}. Data format: ${Array.isArray(res.data) ? 'Array' : 'Object'}`);
+
                 if (res.status === 'success' && res.data) {
-                    // Expecting res.data to be { surveyId: timestamp, ... }
-                    State.syncedData = res.data;
-                    console.log("Synced data loaded:", Object.keys(State.syncedData).length, "records");
-                    // Re-apply filters if the filter was already enabled or just to update status
-                    if(State.driveOnlyFilter) App.apply();
+                    const normalized = {};
+                    let count = 0;
+                    
+                    if (Array.isArray(res.data)) {
+                        res.data.forEach(id => {
+                            if (id) {
+                                normalized[String(id).trim()] = true;
+                                count++;
+                            }
+                        });
+                    } else {
+                        Object.keys(res.data).forEach(id => {
+                            if (id) {
+                                normalized[String(id).trim()] = res.data[id];
+                                count++;
+                            }
+                        });
+                    }
+                    State.syncedData = normalized;
+                    
+                    console.log(`[DriveSync] Synced data loaded: ${count} records`);
+                    if (count > 0) {
+                        console.log("[DriveSync] Registry Sample Keys:", Object.keys(State.syncedData).slice(0, 10));
+                    } else {
+                        console.warn("[DriveSync] Synced data fetch returned 0 valid records.");
+                    }
+                    
+                    // Synchronize checkbox state with State object
+                    const cb = document.getElementById('f-drive-only');
+                    if (cb) State.driveOnlyFilter = cb.checked;
+
+                    // Re-apply filters to update map markers instantly
+                    App.apply();
+                } else {
+                    console.warn("[DriveSync] Synced data fetch failed or returned empty:", res.message || "No data");
                 }
             } catch (e) {
-                console.error("Error fetching all synced data:", e);
+                console.error("[DriveSync] FATAL fetchAllSyncedData error:", e);
+                const badge = document.getElementById('sync-server-badge');
+                if (badge) {
+                    badge.innerHTML = '<span style="color:red; font-size:8px;">❌ DRIVE SYNC FAIL</span>';
+                    badge.style.background = '#fee2e2';
+                    badge.style.borderColor = '#fecaca';
+                }
             }
         },
 
@@ -13280,11 +13361,12 @@ const DriveSync = {
                     this.renderSyncedImages(surveyId, res.data || []);
                     this.updateStatus(surveyId);
                 } else {
-                    this.updateStatus(surveyId); 
+                    console.warn("Drive Script logic failure:", res.message);
+                    this.updateStatus(surveyId, "Sync Failed"); 
                 }
             } catch (e) { 
                 console.error("Metadata fetch error:", e); 
-                this.updateStatus(surveyId); 
+                this.updateStatus(surveyId, "Connection Error"); 
             }
         },
 
@@ -13310,13 +13392,21 @@ const DriveSync = {
             }).join('');
         },
 
-        updateStatus(surveyId) {
+        updateStatus(surveyId, errorState = null) {
             const sid = this._safeId(surveyId);
             const statusBadge = document.getElementById(`drive-status-${sid}`);
             const syncBtn = document.getElementById('btn-sync-drive');
             const actionBtns = document.querySelectorAll('.sync-action-btn:not(.upload)');
             
             if (!statusBadge) return;
+            
+            if (errorState) {
+                statusBadge.innerText = `⚠️ ${errorState}`;
+                statusBadge.style.color = "#dc2626"; // red-600
+                statusBadge.style.background = "#fef2f2";
+                statusBadge.style.borderColor = "#fecaca";
+                return;
+            }
             
             const syncedTotal = this.currentDriveCount;
             const pendingTotal = this.files.length;
