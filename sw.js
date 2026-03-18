@@ -1,9 +1,13 @@
-const CACHE_NAME = 'rsp-safe-cache-v1';
+const CACHE_NAME = 'rsp-v8-2-cache';
 const PRECACHE_ASSETS = [
+    './',
     './index.html',
     './manifest.json',
     './icon-192.png',
-    './icon-512.png'
+    './icon-512.png',
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+    'https://fonts.googleapis.com/icon?family=Material+Icons+Round'
 ];
 
 // Service Worker Installation

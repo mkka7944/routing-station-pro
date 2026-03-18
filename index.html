@@ -9169,7 +9169,7 @@ input[type=number] {
 </style>
 </head>
 <body>
-    <!-- <script>window.DEV_MODE = false; window.DATA_CHUNKS_COUNT = 10;</script> handled via script injection -->
+    <!-- %dev_mode% handled via script injection -->
     <div id="login-overlay" style="position:fixed; inset:0; background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); z-index:999999; display:flex; align-items:center; justify-content:center; padding:20px; transition: opacity 0.5s ease;">
         <div style="background:white; padding:40px; border-radius:24px; width:100%; max-width:400px; text-align:center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
             <div style="background:linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); width:72px; height:72px; border-radius:20px; display:flex; align-items:center; justify-content:center; margin:0 auto 24px; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);">
@@ -9208,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 17-Mar 03:01 PM 
+                Updated: 18-Mar 12:39 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -9217,7 +9217,18 @@ input[type=number] {
             <div id="zoom-level-text" style="font-size: 12px; color: #64748b; font-weight: 500;">Z: 13</div>
             <div style="font-size: 10px; color: #94a3b8; font-weight: 500;">Kashif Khalil <span style="font-size: 9px;">™</span></div>
         </div>
-        
+    </div>
+
+    <!-- PWA Install Button (Hidden by default, shown via beforeinstallprompt listener) -->
+    <div id="sidebar-install-btn" onclick="App.triggerInstall()" style="display:none; margin: 10px var(--spacer); padding: 12px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 12px; align-items: center; gap: 12px; color: white; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); transition: transform 0.2s ease;">
+        <div style="background: rgba(255,255,255,0.2); width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+            <span class="material-icons-round" style="font-size: 20px;">download_for_offline</span>
+        </div>
+        <div style="flex: 1;">
+            <div style="font-weight: 700; font-size: 13px;">Install App</div>
+            <div style="font-size: 10px; opacity: 0.9; font-weight: 500;">Run Fullscreen & Offline</div>
+        </div>
+        <span class="material-icons-round" style="font-size: 18px; opacity: 0.7;">chevron_right</span>
     </div>
     
     <div id="sidebar-scroll" style="flex:1; overflow-y:auto; overflow-x: hidden; padding-bottom: 20px;">
@@ -10600,6 +10611,25 @@ const State = {
         } catch (e) { /* App not ready */ }
 
         return 1200; // Safe cap for "All Areas" on mobile
+    },
+
+    // State Persistence: Prevent view reset on mobile reloads
+    save() {
+        try {
+            const data = {
+                dist: App.getSelected('f-dist'),
+                tehsil: App.getSelected('f-tehsil'),
+                mc: App.getSelectedMCUC ? App.getSelectedMCUC() : []
+            };
+            localStorage.setItem('rsp_last_view', JSON.stringify(data));
+        } catch (e) { console.warn("State save failed:", e); }
+    },
+
+    load() {
+        try {
+            const saved = localStorage.getItem('rsp_last_view');
+            return saved ? JSON.parse(saved) : null;
+        } catch (e) { return null; }
     }
 };
 
@@ -10720,13 +10750,39 @@ const App = {
         if (window.SpatialRouter) SpatialRouter.init();
         if (typeof UniversalSearch !== 'undefined') UniversalSearch.init();
 
-        // INITIAL SYNC: Fetch global verifications on startup
-        if (window.Settings && window.Settings.fetchGlobalVerifications) {
-            Settings.fetchGlobalVerifications();
+        // 1. Initial State Restoration: Prevent view reset on mobile reloads
+        const saved = State.load();
+        if (saved && saved.dist && saved.dist.length > 0) {
+            console.log("[App.init] Restoring last view:", saved);
+            this.setSelected('f-dist', saved.dist);
+            this.onDistChange();
+            if (saved.tehsil) this.setSelected('f-tehsil', saved.tehsil);
+            this.onTehsilChange();
+            if (saved.mc) this.setSelected('f-mc', saved.mc);
+            this.apply(true);
+        } else {
+            this.resetFilters();
+            this.apply(true); // Populate default view (Sargodha City) so map isn't empty on load
         }
 
-        this.resetFilters();
-        this.apply(true); // Populate default view (Sargodha City) so map isn't empty on load
+        // 2. PWA Install Prompt Listener
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent the mini-infobar from appearing on mobile
+            e.preventDefault();
+            // Stash the event so it can be triggered later.
+            window.deferredPrompt = e;
+            // Update UI to notify the user they can install the PWA
+            const installBtn = document.getElementById('sidebar-install-btn');
+            if (installBtn) installBtn.style.display = 'flex';
+        });
+
+        window.addEventListener('appinstalled', (evt) => {
+            console.log('RSP was installed');
+            const installBtn = document.getElementById('sidebar-install-btn');
+            if (installBtn) installBtn.style.display = 'none';
+        });
+
+        // INITIAL SYNC: Fetch global verifications on startup
 
         // Live Zoom Updates
         State.map.on('zoomend', () => {
@@ -11386,7 +11442,7 @@ const App = {
 
         this.updateSidebarStatus();
         this.updateSurveyors();
-        this.render();
+        this.render(null, isInitial);
 
         if (!isInitial) {
             if (window.innerWidth <= 768) {
@@ -11403,9 +11459,31 @@ const App = {
                 ViewSwitcher.toMap();
             }
         }
+
+        // State Persistence: Save current view
+        State.save();
     },
 
-    render(limit = null) {
+    triggerInstall() {
+        if (window.deferredPrompt) {
+            console.log("[App.triggerInstall] Prompting user...");
+            window.deferredPrompt.prompt();
+            window.deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('User accepted the Install prompt');
+                } else {
+                    console.log('User dismissed the Install prompt');
+                }
+                window.deferredPrompt = null;
+                const installBtn = document.getElementById('sidebar-install-btn');
+                if (installBtn) installBtn.style.display = 'none';
+            });
+        } else {
+            console.warn("[App.triggerInstall] No deferred prompt available.");
+        }
+    },
+
+    render(limit = null, forceSyncView = false) {
         // 1. Initial Cleanup
         if (State.markerLayer) {
             State.map.removeLayer(State.markerLayer);
@@ -11502,8 +11580,8 @@ const App = {
                     // If drawing area, markers should NOT be interactive
                     if (window.SpatialRouter && SpatialRouter.isDrawing) return;
 
-                    // If routing panel is open AND actively editing, clicking adds to pool
-                    if (window.SpatialRouter && SpatialRouter.isRoutingPanelOpen() && SpatialRouter.isEditing) {
+                    // If routing panel is open AND actively editing/marking, clicking adds to pool
+                    if (window.SpatialRouter && SpatialRouter.isMarkingMode()) {
                         SpatialRouter.addManualID(r[0]);
                         return;
                     }
@@ -11544,10 +11622,10 @@ const App = {
             const sw = bounds.getSouthWest();
             const ne = bounds.getNorthEast();
             
-            if (Math.abs(currentBounds.getSouth() - sw.lat) > threshold || 
+            if (forceSyncView && (Math.abs(currentBounds.getSouth() - sw.lat) > threshold || 
                 Math.abs(currentBounds.getWest() - sw.lng) > threshold ||
                 Math.abs(currentBounds.getNorth() - ne.lat) > threshold ||
-                Math.abs(currentBounds.getEast() - ne.lng) > threshold) {
+                Math.abs(currentBounds.getEast() - ne.lng) > threshold)) {
                 
                 State.map.fitBounds(bounds, { padding: [40, 40], maxZoom: 18 });
             }
@@ -15630,7 +15708,7 @@ const SpatialRouter = {
     backgroundLayers: [],
     drawnPolygons: [],
     currentDrawLayer: null,
-    activeTab: 'editor',
+    activeTab: 'manager',
     isEditing: false,
     pickingMode: null,
     activePolygon: null, // Track currently selected polygon
@@ -16205,10 +16283,9 @@ const SpatialRouter = {
         const isActive = overlay.classList.toggle('active');
 
         if (isActive) {
-            this.renderRoute();
-            this.renderRouteManager();
+            this.switchTab(this.activeTab);
         } else {
-            this.finishDrawing();
+            this.cancelDrawing();
             this.setEditMode(false);
         }
     },
@@ -16221,8 +16298,10 @@ const SpatialRouter = {
         // Clear persistent display layer
         if (this._displayLayer) { State.map.removeLayer(this._displayLayer); this._displayLayer = null; }
         this.activeDisplayRoutes = [];
+        this.activeTab = 'manager';
         this._sidebarDisplayIdx = null; // Un-highlight
         this.editingRouteIdx = null; // Un-highlight
+        this.setEditMode(false);
         this.toggleRoutePager(false);
         const modal = document.getElementById('modal-marker-card');
         if (modal) {
@@ -16243,10 +16322,7 @@ const SpatialRouter = {
         this.renderRouteManager();
         this.renderSavedList();
 
-        // Reset filters on clear (this will now completely clear the map)
-        if (window.App) App.resetFilters();
-
-        if (App.showToast) App.showToast('Map cleared and reset.');
+        if (App.showToast) App.showToast('Routing displays cleared.');
     },
 
     switchTab(tab) {
@@ -16590,6 +16666,10 @@ const SpatialRouter = {
         return overlay && overlay.style.display !== 'none';
     },
 
+    isMarkingMode() {
+        return this.isRoutingPanelOpen() && this.activeTab === 'editor' && this.isEditing;
+    },
+
     clearArea() {
         if (this.selectionLayer) this.selectionLayer.clearLayers();
         this.points = [];
@@ -16893,7 +16973,9 @@ const SpatialRouter = {
         this._seqNavIdx = ((this._seqNavIdx || 0) + dir + this.sequence.length) % this.sequence.length;
         const p = this.sequence[this._seqNavIdx];
         if (p && State.map) {
-            State.map.panTo([p.lat, p.lng]);
+            if (!this.isMarkingMode()) {
+                State.map.panTo([p.lat, p.lng]);
+            }
             this.highlightMarker(p.id);
             this.highlightListItem(p.id);
             const navText = document.getElementById('route-nav-text');
@@ -17101,10 +17183,15 @@ const SpatialRouter = {
             }).addTo(this._displayLayer);
 
             m.bindTooltip(`#${sid}`, { permanent: false, direction: 'top', offset: [0, -10] });
-            m.on('click', () => { m.closeTooltip(); this.showMarkerCard(sid); });
+            m.on('click', () => { 
+                m.closeTooltip(); 
+                if (!this.isMarkingMode()) {
+                    this.showMarkerCard(sid); 
+                }
+            });
         });
 
-        if (chunkPts.length > 0 && !isNavigatingMarker) {
+        if (chunkPts.length > 0 && !isNavigatingMarker && !this.isMarkingMode()) {
             State.map.fitBounds(L.latLngBounds(chunkPts), { padding: [50, 50], animate: true, duration: 0.8 });
         }
 
@@ -17267,7 +17354,9 @@ const SpatialRouter = {
                         `;
                     item.onclick = (e) => {
                         e.stopPropagation();
-                        State.map.panTo([p.lat, p.lng]);
+                        if (!this.isMarkingMode()) {
+                            State.map.panTo([p.lat, p.lng]);
+                        }
                         this.highlightMarker(p.id, p.lat, p.lng);
                     };
                     fragment.appendChild(item);
@@ -17330,7 +17419,9 @@ const SpatialRouter = {
                 `;
             item.onclick = (e) => {
                 e.stopPropagation();
-                State.map.panTo([lat, lng]);
+                if (!this.isMarkingMode()) {
+                    State.map.panTo([lat, lng]);
+                }
                 this.highlightMarker(sid, lat, lng);
             };
             fragment.appendChild(item);
@@ -17486,8 +17577,8 @@ const SpatialRouter = {
             lng = parseFloat(row[2]);
         }
 
-        // Center map on the marker
-        if (State.map) {
+        // Center map on the marker (but skip if marking to prevent "jerks")
+        if (State.map && !this.isMarkingMode()) {
             State.map.setView([lat, lng], 18);
         }
 
@@ -17511,13 +17602,18 @@ const SpatialRouter = {
             }
         }, 40);
 
-        // Automatically pop up the modal card unless skipped
-        if (!skipCard) {
+        // Automatically pop up the modal card unless skipped or in marking mode
+        if (!skipCard && !this.isMarkingMode()) {
             this.showMarkerCard(sid);
         }
     },
 
     clearActiveRoute() {
+        if (this.sequence.length > 0) {
+            if (!confirm('You have an unsaved route sequence. Are you sure you want to clear it?')) {
+                return;
+            }
+        }
         // 1. Clear Map Displays (Both Editor & Viewer)
         if (this.activePolygon) {
             State.map.removeLayer(this.activePolygon);
@@ -17549,6 +17645,7 @@ const SpatialRouter = {
 
         // 3. UI Resets
         this.resetCurrentRoute();
+        this.activeTab = 'manager';
         this.setEditMode(false);
         this.toggleRoutePager(false);
         this.renderRoute();
@@ -17707,8 +17804,25 @@ const SpatialRouter = {
     },
 
     cancelDrawing() {
-        this.finishDrawing();
+        // Stop Map Listeners
+        State.map.off('click', this._boundClick);
+        State.map.off('contextmenu', this._boundContext);
+        
+        // Cleanup Layers
         if (this.currentDrawLayer) State.map.removeLayer(this.currentDrawLayer);
+        this.currentDrawLayer = null;
+        
+        // Reset UI
+        State.map.getContainer().style.cursor = '';
+        const btnDone = document.getElementById('btn-finish-draw');
+        const btnCancel = document.getElementById('btn-cancel-draw');
+        if (btnDone) btnDone.style.display = 'none';
+        if (btnCancel) btnCancel.style.display = 'none';
+        
+        // Reset State
+        this.isDrawing = false;
+        this.setEditMode(false);
+        if (App.showToast) App.showToast("Drawing cancelled.");
     },
 
     selectAll() { this.autoNumber(); },
@@ -17917,7 +18031,7 @@ const SpatialRouter = {
 
         this.renderSavedList();
         this.renderRouteManager();
-        this.activeTab = 'editor';
+        this.activeTab = 'manager';
         this.activeDisplayRoutes = []; // Array of route names currently on map
         this.setEditMode(false);
 
