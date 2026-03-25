@@ -9208,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 25-Mar 05:20 PM 
+                Updated: 25-Mar 05:41 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -10931,7 +10931,10 @@ const App = {
             if (window.SpatialRouter && typeof SpatialRouter.closeMarkerCard === 'function') {
                 SpatialRouter.closeMarkerCard();
             }
-            // NEW: Clear verified ghost layers on map interaction
+        });
+
+        // Clear verified ghost layers ONLY on deliberate user click (not programmatic zoom/fly)
+        State.map.on('click', () => {
             if (window.VerifiedLayer && VerifiedLayer.focusLayer) {
                 VerifiedLayer.focusLayer.clearLayers();
             }
