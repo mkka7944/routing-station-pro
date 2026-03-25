@@ -9208,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 25-Mar 04:17 PM 
+                Updated: 25-Mar 04:56 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -10931,6 +10931,10 @@ const App = {
             if (window.SpatialRouter && typeof SpatialRouter.closeMarkerCard === 'function') {
                 SpatialRouter.closeMarkerCard();
             }
+            // NEW: Clear verified ghost layers on map interaction
+            if (window.VerifiedLayer && VerifiedLayer.focusLayer) {
+                VerifiedLayer.focusLayer.clearLayers();
+            }
         });
 
         // Create a dedicated pane for Routing polygons
@@ -11939,14 +11943,24 @@ const ListView = {
         const cachedInfo = window.SpatialRouter ? SpatialRouter.verifiedSIDs.get(cacheKey) : null;
 
         if (cachedInfo) {
-            btn.style.background = '#e2e8f0';
-            btn.style.color = '#1e293b';
+            btn.style.background = '#e0f2fe';
+            btn.style.color = '#0284c7';
             btn.style.boxShadow = 'none';
-            btn.disabled = true;
+            btn.disabled = false;
+            btn.style.cursor = 'pointer';
+            btn.onclick = () => {
+                if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
+                    VerifiedLayer.focusHouse(sid);
+                }
+                if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
+                    ViewSwitcher.toMap();
+                }
+            };
 
-            // Update button text to dynamic "Verified"
+            const iconSpan = btn.querySelector('.material-icons-round');
+            if (iconSpan) iconSpan.innerText = 'my_location';
             const labelSpan = btn.querySelector('span:not(.material-icons-round)');
-            if (labelSpan) labelSpan.innerText = 'Verified';
+            if (labelSpan) labelSpan.innerText = 'View Pin';
 
             const verifierInfo = document.getElementById(`verifier-info-${sid}`);
             if (verifierInfo) {
@@ -11970,14 +11984,24 @@ const ListView = {
                 .maybeSingle();
 
             if (data && !error) {
-                btn.style.background = '#e2e8f0';
-                btn.style.color = '#1e293b';
+                btn.style.background = '#e0f2fe';
+                btn.style.color = '#0284c7';
                 btn.style.boxShadow = 'none';
-                btn.disabled = true;
+                btn.disabled = false;
+                btn.style.cursor = 'pointer';
+                btn.onclick = () => {
+                    if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
+                        VerifiedLayer.focusHouse(sid);
+                    }
+                    if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
+                        ViewSwitcher.toMap();
+                    }
+                };
 
-                // Update button text to dynamic "Verified"
+                const iconSpan = btn.querySelector('.material-icons-round');
+                if (iconSpan) iconSpan.innerText = 'my_location';
                 const labelSpan = btn.querySelector('span:not(.material-icons-round)');
-                if (labelSpan) labelSpan.innerText = 'Verified';
+                if (labelSpan) labelSpan.innerText = 'View Pin';
 
                 const verifierInfo = document.getElementById(`verifier-info-${sid}`);
                 if (verifierInfo) {
@@ -16035,6 +16059,7 @@ const SpatialRouter = {
 
         this.closeMarkerCard();
         if (window.MapNavigator) MapNavigator.toggle(false);
+        if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') ViewSwitcher.toMap();
 
         State.isPinning = true;
         State.pinningSID = sid;
