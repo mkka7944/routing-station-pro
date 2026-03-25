@@ -9208,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 25-Mar 03:26 PM 
+                Updated: 25-Mar 04:17 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -9866,11 +9866,11 @@ input[type=number] {
                 <!-- Action buttons as overlay -->
                 <div class="marker-card-actions-overlay">
                     <div class="marker-btn-group-verify">
-                        <button class="marker-btn marker-btn-verify" id="btn-verify-house" title="Verify via GPS">
+                        <button class="marker-btn marker-btn-verify" id="btn-verify-house" title="Verify Temporarily Disabled" disabled style="opacity: 0.5; cursor: not-allowed; pointer-events: none;">
                             <span class="material-icons-round">my_location</span>
                         </button>
-                        <div class="marker-btn-verify-label">
-                            <div id="btn-verify-text">Verify House</div>
+                        <div class="marker-btn-verify-label" style="opacity: 0.5;">
+                            <div id="btn-verify-text">Verify (Disabled)</div>
                             <div id="marker-card-verifier" style="display:none;"></div>
                         </div>
                     </div>
@@ -11829,10 +11829,15 @@ const ListView = {
                                 <div onclick="ListView.sort('status-paid')" style="padding:10px 14px; font-size:11px; font-weight:600; cursor:pointer;">Paid First</div>
                             </div>
                         </button>
-                        <button id="btn-verify-house-${r[0]}" onclick="SpatialRouter.verifyHouseLocation('${r[0]}', ${r[1]}, ${r[2]}, { skipModal: true })" 
-                                style="flex:1; min-width:120px; background:#2563eb; color:white; border:none; border-radius:10px; height:34px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:800; font-size:10px; transition: all 0.2s;">
+                        <button id="btn-verify-house-${r[0]}" disabled 
+                                style="flex:1; min-width:0; background:#e2e8f0; color:#94a3b8; border:none; border-radius:10px; height:34px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:not-allowed; font-weight:800; font-size:10px; opacity:0.6;">
                             <span class="material-icons-round" style="font-size:16px;">verified</span>
-                            <span>Verify House</span>
+                            <span>Verify</span>
+                        </button>
+                        <button id="btn-drop-pin-${r[0]}" onclick="SpatialRouter.startManualPin('${r[0]}')" 
+                                style="flex:1; min-width:0; background:#f59e0b; color:white; border:none; border-radius:10px; height:34px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:pointer; font-weight:800; font-size:10px; box-shadow:0 2px 5px rgba(245, 158, 11, 0.3); transition: all 0.2s;">
+                            <span class="material-icons-round" style="font-size:16px;">edit_location_alt</span>
+                            <span>Drop Pin</span>
                         </button>
                         <button id="btn-delivery-${r[0]}" title="Mark Delivered" disabled 
                                 style="background:#fef3c7; color:#d97706; border:none; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:default; opacity:0.6;">
@@ -14316,6 +14321,13 @@ const Settings = {
             }
 
             if (typeof LayerManager !== 'undefined') LayerManager.renderSettingsUI();
+            
+            if (window.VerifiedLayer && typeof VerifiedLayer.updateList === 'function') {
+                VerifiedLayer.updateList();
+            }
+            if (window.App && typeof App.render === 'function') {
+                App.render();
+            }
         } catch (e) {
             console.error("Failed to fetch global verifications:", e);
             window.ALL_VERIFIED_DATA = []; // Prevent infinite loading
@@ -14702,6 +14714,9 @@ const Settings = {
             if (window.ListView) {
                 ListView.render();
             }
+
+            // Immediately synchronize VerifiedLayer with the newly targeted billing month
+            this.fetchGlobalVerifications(true);
         } catch (e) {
             console.error("Failed to update billing month:", e);
             const errorMsg = e.message || "Cloud rejected";
