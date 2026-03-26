@@ -9208,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 26-Mar 10:14 AM 
+                Updated: 26-Mar 11:23 AM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -10309,7 +10309,7 @@ window.HIERARCHY = {};
 window.GEO_LAYERS = {};
 window.ROLES = {};
 window.USER = null;
-window.ALL_VERIFIED_DATA = null;
+window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 
 // Global Billing Tracker (Dynamic)
 window.ACTIVE_BILLING_MONTH = 'loading...';
@@ -10539,6 +10539,11 @@ async function loadData() {
             if (window.App && window.App.init) {
                 window.App.init();
                 Auth.updateUI();
+                
+                // NEW: Auto-fetch global verifications for all roles (ensures staff see pins)
+                if (window.Settings && Settings.fetchGlobalVerifications) {
+                    Settings.fetchGlobalVerifications();
+                }
             } else {
                 console.log("Waiting for App logic to parse...");
             }
@@ -10943,10 +10948,12 @@ const App = {
         // Create a dedicated pane for Routing polygons
         State.map.createPane('routingPane');
         State.map.getPane('routingPane').style.zIndex = 650;
+        State.map.getPane('routingPane').style.pointerEvents = 'none';
 
         // Create a dedicated pane for Routing markers to keep them above polygons
         State.map.createPane('routingMarkerPane');
         State.map.getPane('routingMarkerPane').style.zIndex = 660;
+        State.map.getPane('routingMarkerPane').style.pointerEvents = 'none';
 
         State.layers = {
             roads: L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
@@ -13260,6 +13267,15 @@ const VerifiedLayer = {
             });
         }
 
+        // 4. Also ensure any focused SID connection is drawn
+        if (this.focusedSID) {
+            const item = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === String(this.focusedSID));
+            if (item) {
+                const record = window.SID_MAP ? window.SID_MAP.get(String(item.survey_id)) : null;
+                if (record) this.renderConnection(item, record, true, this.focusLayer);
+            }
+        }
+
         if (!State.map.hasLayer(this.layer)) this.layer.addTo(State.map);
         if (!State.map.hasLayer(this.lineLayer)) this.lineLayer.addTo(State.map);
         if (!State.map.hasLayer(this.focusLayer)) this.focusLayer.addTo(State.map);
@@ -14400,12 +14416,16 @@ const Settings = {
     renderVerificationStats() {
         if (typeof RAW_DATA === 'undefined') return '<div style="padding:20px; text-align:center; color:#94a3b8;">Base data loading...</div>';
 
-        if (window.ALL_VERIFIED_DATA === null) {
-            this.fetchGlobalVerifications();
+        if (!window.ALL_VERIFIED_DATA || window.ALL_VERIFIED_DATA.length === 0) {
+            // Trigger fetch only if it's truly null or first load
+            if (window.ALL_VERIFIED_DATA === null || (window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.length === 0)) {
+                this.fetchGlobalVerifications();
+            }
+
             return `
                     <div style="padding:60px 20px; text-align:center; color:#64748b;">
                         <span class="material-icons-round spinning" style="font-size:48px; display:block; margin-bottom:16px; color:var(--primary);">refresh</span>
-                        <div style="font-weight:700;">Fetching data from Supabase...</div>
+                        <div style="font-weight:700;">Fetching verification data...</div>
                         <div style="font-size:12px; margin-top:8px; opacity:0.7;">This may take a few seconds</div>
                     </div>`;
         }
@@ -14444,7 +14464,7 @@ const Settings = {
             });
         }
 
-        const verifiedSet = new Set(window.ALL_VERIFIED_DATA.map(v => String(v.survey_id)));
+        const verifiedSet = new Set((window.ALL_VERIFIED_DATA || []).map(v => String(v.survey_id)));
         const totalVerified = verifiedSet.size;
 
         // SORTING LOGIC
@@ -14620,7 +14640,7 @@ const Settings = {
         if (State.verificationViewMode === 'list') {
             // Performance by User (Using Unfiltered Data to allow selection, but showing total count relative to other filters)
             const userStats = {};
-            window.ALL_VERIFIED_DATA.forEach(v => {
+            (window.ALL_VERIFIED_DATA || []).forEach(v => {
                 // Pre-filter by date if necessary so user totals match the selected date.
                 if (State.verifSelectedDate && (!v.verified_at || !String(v.verified_at).startsWith(State.verifSelectedDate))) return;
 
