@@ -9208,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 25-Mar 05:41 PM 
+                Updated: 26-Mar 10:14 AM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -10971,11 +10971,26 @@ const App = {
 
     toggleLayer() {
         const isRoads = State.activeLayer === 'roads';
-        State.map.removeLayer(State.layers[State.activeLayer]);
-        State.activeLayer = isRoads ? 'sat' : 'roads';
-        State.layers[State.activeLayer].addTo(State.map);
+        this.setLayer(isRoads ? 'sat' : 'roads');
+    },
 
-        document.getElementById('layer-icon').innerText = isRoads ? 'map' : 'satellite_alt';
+    setLayer(name) {
+        if (!State.layers[name]) return;
+        
+        // Remove current
+        if (State.activeLayer && State.layers[State.activeLayer]) {
+            State.map.removeLayer(State.layers[State.activeLayer]);
+        }
+        
+        // Add new
+        State.activeLayer = name;
+        State.layers[name].addTo(State.map);
+        
+        // Update UI icon
+        const icon = document.getElementById('layer-icon');
+        if (icon) {
+            icon.innerText = (name === 'roads') ? 'satellite_alt' : 'map';
+        }
     },
 
     toggleFilterGroup(el) {
@@ -11952,12 +11967,16 @@ const ListView = {
             btn.disabled = false;
             btn.style.cursor = 'pointer';
             btn.onclick = () => {
-                if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
-                    VerifiedLayer.focusHouse(sid);
-                }
                 if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
                     ViewSwitcher.toMap();
                 }
+                
+                // Delay FocusHouse to allow map to be visible and Leaflet to size correctly
+                setTimeout(() => {
+                    if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
+                        VerifiedLayer.focusHouse(sid);
+                    }
+                }, 300);
             };
 
             const iconSpan = btn.querySelector('.material-icons-round');
@@ -11993,12 +12012,16 @@ const ListView = {
                 btn.disabled = false;
                 btn.style.cursor = 'pointer';
                 btn.onclick = () => {
-                    if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
-                        VerifiedLayer.focusHouse(sid);
-                    }
                     if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
                         ViewSwitcher.toMap();
                     }
+
+                    // Delay FocusHouse to allow map to be visible and Leaflet to size correctly
+                    setTimeout(() => {
+                        if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
+                            VerifiedLayer.focusHouse(sid);
+                        }
+                    }, 300);
                 };
 
                 const iconSpan = btn.querySelector('.material-icons-round');
@@ -16069,24 +16092,33 @@ const SpatialRouter = {
         if (window.MapNavigator) MapNavigator.toggle(false);
         if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') ViewSwitcher.toMap();
 
+        // New Drop Pin Enhancements
+        if (window.App && App.setLayer) App.setLayer('sat');
+        
+        const lat = parseFloat(row[1]);
+        const lng = parseFloat(row[2]);
+        if (State.map) {
+            State.map.flyTo([lat, lng], 19, { duration: 0.5 });
+        }
+
         State.isPinning = true;
         State.pinningSID = sid;
-        State.pinningOrigLat = parseFloat(row[1]);
-        State.pinningOrigLng = parseFloat(row[2]);
+        State.pinningOrigLat = lat;
+        State.pinningOrigLng = lng;
 
-        // NEW: Add reference marker for portal location
+        // NEW: Add reference marker for portal location on a high-visibility pane
         if (State.map) {
             if (State.pinningRefMarker) State.map.removeLayer(State.pinningRefMarker);
-            State.pinningRefMarker = L.circleMarker([State.pinningOrigLat, State.pinningOrigLng], {
-                radius: 10,
+            State.pinningRefMarker = L.circleMarker([lat, lng], {
+                radius: 12,
                 color: '#0ea5e9',
                 fillColor: '#0ea5e9',
                 fillOpacity: 0.4,
-                weight: 2,
-                dashArray: '4, 4',
-                pane: 'markerPane'
+                weight: 3,
+                dashArray: '5, 5',
+                pane: 'routingMarkerPane' // High Z-index pane (660)
             }).addTo(State.map)
-                .bindTooltip("Original Portal location", { permanent: true, direction: 'top', className: 'portal-ref-tooltip' });
+                .bindTooltip("Portal Position", { permanent: true, direction: 'top', className: 'portal-ref-tooltip' });
         }
 
         // Show HUD and Crosshair
