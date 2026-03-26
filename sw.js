@@ -53,7 +53,26 @@ self.addEventListener('fetch', (event) => {
         return; // Let the browser handle it completely natively = 100% safe
     }
 
-    // 2. NETWORK-FIRST STRATEGY for everything else (HTML, JS, CSS)
+    // 2. STALE-WHILE-REVALIDATE for JSON data chunks
+    if (url.pathname.endsWith('.json')) {
+        event.respondWith(
+            caches.match(event.request).then((cachedResponse) => {
+                const fetchPromise = fetch(event.request).then((networkResponse) => {
+                    if (networkResponse && networkResponse.status === 200) {
+                        const responseToCache = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(event.request, responseToCache);
+                        });
+                    }
+                    return networkResponse;
+                });
+                return cachedResponse || fetchPromise;
+            })
+        );
+        return;
+    }
+    
+    // 3. NETWORK-FIRST STRATEGY for everything else (HTML, JS, CSS)
     // Always try to fetch from the network first to guarantee users get updates.
     // Only fallback to the cache if the network fails completely (offline).
     event.respondWith(

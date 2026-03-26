@@ -9208,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 26-Mar 11:23 AM 
+                Updated: 26-Mar 01:05 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -10313,19 +10313,24 @@ window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before
 
 // Global Billing Tracker (Dynamic)
 window.ACTIVE_BILLING_MONTH = 'loading...';
+window.DATA_VERSION = 'v1'; // Default
 
 async function fetchAppSettings() {
     try {
         const { data, error } = await window._supabase
             .from('app_settings')
-            .select('value')
-            .eq('key', 'active_billing_month')
-            .maybeSingle();
+            .select('key, value')
+            .in('key', ['active_billing_month', 'data_version']);
 
         if (error) throw error;
-        if (data && data.value) {
-            window.ACTIVE_BILLING_MONTH = data.value;
-            console.log("Active Billing Month loaded:", window.ACTIVE_BILLING_MONTH);
+        if (data) {
+            const billing = data.find(d => d.key === 'active_billing_month');
+            const version = data.find(d => d.key === 'data_version');
+            
+            if (billing) window.ACTIVE_BILLING_MONTH = billing.value;
+            if (version) window.DATA_VERSION = version.value;
+            
+            console.log("App Settings:", { billing: window.ACTIVE_BILLING_MONTH, version: window.DATA_VERSION });
         } else {
             console.warn("active_billing_month not found in app_settings, falling back to default.");
             window.ACTIVE_BILLING_MONTH = 'feb2026'; // Fallback
@@ -10418,8 +10423,14 @@ async function checkSession() {
 const Auth = {
     logout() {
         if (confirm("Are you sure you want to Logout?")) {
+            // DEEP CLEANUP: Clear large data from memory
+            window.RAW_DATA = [];
+            window.SID_MAP = null;
+            window.ALL_VERIFIED_DATA = [];
+            
             sessionStorage.removeItem('auth_token');
-            window.location.reload();
+            // Use replace instead of reload to prevent bfcache issues on mobile
+            window.location.replace(window.location.pathname);
         }
     },
     toggle() {
@@ -10496,7 +10507,7 @@ async function loadData() {
             return await res.json();
         };
 
-        const vStr = `?v=${Date.now()}`;
+        const vStr = `?v=${window.DATA_VERSION || Date.now()}`;
         const chunkCount = window.DATA_CHUNKS_COUNT || 1;
         const dataPromises = [];
         for (let i = 1; i <= chunkCount; i++) {
@@ -10512,21 +10523,40 @@ async function loadData() {
 
         const rawData = [].concat(...dataChunks);
 
-        // Build O(1) lookup index, decode PII, and PRE-CALCULATE search strings
+        // NON-BLOCKING: Process records in background batches to prevent UI freeze
         status.innerText = 'Optimizing Search Engine...';
         window.SID_MAP = new Map();
-        window.RAW_DATA = rawData.map(r => {
-            r[4] = decodePII(r[4]); // Name
-            r[5] = decodePII(r[5]); // Address
-            r[15] = decodePII(r[15]); // PSID
+        
+        const total = rawData.length;
+        const batchSize = 10000;
+        let processed = 0;
 
-            // Format: ID|PSID|Name|Address|MCUC|Surveyor
-            r._search = `${r[0]}|${r[15]}|${r[4]}|${r[5]}|${r[12]}|${r[6]}`.toLowerCase();
+        const processBatch = () => {
+            return new Promise((resolve) => {
+                const end = Math.min(processed + batchSize, total);
+                for (let i = processed; i < end; i++) {
+                    const r = rawData[i];
+                    r[4] = decodePII(r[4]);
+                    r[5] = decodePII(r[5]);
+                    r[15] = decodePII(r[15]);
+                    r._search = `${r[0]}|${r[15]}|${r[4]}|${r[5]}|${r[12]}|${r[6]}`.toLowerCase();
+                    window.SID_MAP.set(String(r[0]).trim(), r);
+                }
+                
+                processed = end;
+                const pct = Math.round((processed / total) * 100);
+                status.innerText = `Optimizing Search Engine (${pct}%)...`;
 
-            const key = String(r[0]).trim();
-            window.SID_MAP.set(key, r);
-            return r;
-        });
+                if (processed < total) {
+                    // Small delay to allow browser to paint/refresh UI
+                    setTimeout(() => resolve(processBatch()), 10);
+                } else {
+                    resolve(rawData);
+                }
+            });
+        };
+
+        window.RAW_DATA = await processBatch();
 
         window.PAID_DATA = paidData;
         window.HIERARCHY = hierarchyData;
@@ -10740,6 +10770,12 @@ const App = {
 
         this.initMap();
         window.map = State.map; // Explicit for SpatialRouter
+        
+        // Fix for mobile sizing issues after login/hidden container
+        setTimeout(() => {
+            if (State.map) State.map.invalidateSize();
+        }, 300);
+
         this.initFilters();
         Sidebar.init();
         InfoCard.init();
@@ -18517,5 +18553,15 @@ window.onload = () => {
         });
     }
 </script>
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('RSP Service Worker registered:', reg.scope))
+                    .catch(err => console.error('RSP Service Worker registration failed:', err));
+            });
+        }
+    </script>
 </body>
 </html>
