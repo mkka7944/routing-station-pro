@@ -9208,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 28-Mar 12:58 PM 
+                Updated: 28-Mar 01:18 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -13290,15 +13290,15 @@ const VerifiedLayer = {
 
         // Unified rendering loop
         window.ALL_VERIFIED_DATA.forEach(v => {
-            const sidStr = String(v.survey_id);
+            const sidStr = String(v.survey_id).trim();
             const record = window.SID_MAP ? window.SID_MAP.get(sidStr) : null;
             if (!record) return;
 
             const mc = record[12];
             const isFilt = this.selectedMCs.includes(mc);
-            const isFoc = sidStr === String(this.focusedSID);
-            const isSearch = sidStr === String(this.searchID);
-            const isAudit = this.auditMode && (this.auditData[this.auditIndex]?.survey_id === v.survey_id);
+            const isFoc = sidStr === String(this.focusedSID).trim();
+            const isSearch = sidStr === String(this.searchID).trim();
+            const isAudit = this.auditMode && (String(this.auditData[this.auditIndex]?.survey_id) === sidStr);
 
             if (isFilt || isFoc || isSearch || isAudit) {
                 this.renderItem(v, record, isFoc);
@@ -13319,11 +13319,14 @@ const VerifiedLayer = {
 
         if (vLat && vLng) {
             // 1. Verified Icon (Main Layer)
+            const iconSize = isFocused ? [16, 16] : [12, 12];
+            const iconAnchor = isFocused ? [8, 8] : [6, 6];
+            
             const m = L.marker([vLat, vLng], {
                 icon: L.divIcon({
                     className: isFocused ? 'marker-verified-square focused' : 'marker-verified-square',
-                    iconSize: [20, 20],
-                    iconAnchor: [10, 10]
+                    iconSize: iconSize,
+                    iconAnchor: iconAnchor
                 })
             });
 
