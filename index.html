@@ -9208,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 28-Mar 01:18 PM 
+                Updated: 28-Mar 02:56 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -12004,32 +12004,29 @@ const ListView = {
         const cachedInfo = window.SpatialRouter ? SpatialRouter.verifiedSIDs.get(cacheKey) : null;
 
         if (cachedInfo) {
-            const isCurrentlyFocused = window.VerifiedLayer && VerifiedLayer.focusedSID === String(sid);
-            
-            btn.style.background = isCurrentlyFocused ? '#fef2f2' : '#e0f2fe';
-            btn.style.color = isCurrentlyFocused ? '#ef4444' : '#0284c7';
-            btn.style.border = isCurrentlyFocused ? '1px solid #fee2e2' : 'none';
+            btn.style.background = '#e0f2fe';
+            btn.style.color = '#0284c7';
+            btn.style.border = 'none';
             btn.disabled = false;
             btn.style.cursor = 'pointer';
             btn.onclick = () => {
-                if (!isCurrentlyFocused && window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
+                // ALWAYS switch to map and focus
+                if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
                     ViewSwitcher.toMap();
                 }
                 
-                // Delay FocusHouse if switching to map, otherwise immediate toggle
-                const delay = (!isCurrentlyFocused && document.getElementById('view-list').style.display !== 'none') ? 300 : 0;
-                
+                // Delay slightly to ensure map container is ready
                 setTimeout(() => {
                     if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
                         VerifiedLayer.focusHouse(sid);
                     }
-                }, delay);
+                }, 100);
             };
 
             const iconSpan = btn.querySelector('.material-icons-round');
-            if (iconSpan) iconSpan.innerText = isCurrentlyFocused ? 'location_off' : 'my_location';
+            if (iconSpan) iconSpan.innerText = 'my_location';
             const labelSpan = btn.querySelector('span:not(.material-icons-round)');
-            if (labelSpan) labelSpan.innerText = isCurrentlyFocused ? 'Hide Pin' : 'View Pin';
+            if (labelSpan) labelSpan.innerText = 'View Pin';
 
             const verifierInfo = document.getElementById(`verifier-info-${sid}`);
             if (verifierInfo) {
@@ -12053,32 +12050,28 @@ const ListView = {
                 .maybeSingle();
 
             if (data && !error) {
-                const isCurrentlyFocused = window.VerifiedLayer && VerifiedLayer.focusedSID === String(sid);
-
-                btn.style.background = isCurrentlyFocused ? '#fef2f2' : '#e0f2fe';
-                btn.style.color = isCurrentlyFocused ? '#ef4444' : '#0284c7';
-                btn.style.border = isCurrentlyFocused ? '1px solid #fee2e2' : 'none';
+                btn.style.background = '#e0f2fe';
+                btn.style.color = '#0284c7';
+                btn.style.border = 'none';
                 btn.disabled = false;
                 btn.style.cursor = 'pointer';
                 btn.onclick = () => {
-                    if (!isCurrentlyFocused && window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
+                    // ALWAYS switch to map and focus
+                    if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
                         ViewSwitcher.toMap();
                     }
-
-                    // Delay FocusHouse if switching to map, otherwise immediate toggle
-                    const delay = (!isCurrentlyFocused && document.getElementById('view-list').style.display !== 'none') ? 300 : 0;
 
                     setTimeout(() => {
                         if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
                             VerifiedLayer.focusHouse(sid);
                         }
-                    }, delay);
+                    }, 100);
                 };
 
                 const iconSpan = btn.querySelector('.material-icons-round');
-                if (iconSpan) iconSpan.innerText = isCurrentlyFocused ? 'location_off' : 'my_location';
+                if (iconSpan) iconSpan.innerText = 'my_location';
                 const labelSpan = btn.querySelector('span:not(.material-icons-round)');
-                if (labelSpan) labelSpan.innerText = isCurrentlyFocused ? 'Hide Pin' : 'View Pin';
+                if (labelSpan) labelSpan.innerText = 'View Pin';
 
                 const verifierInfo = document.getElementById(`verifier-info-${sid}`);
                 if (verifierInfo) {
@@ -13152,14 +13145,6 @@ const VerifiedLayer = {
     focusHouse(sid) {
         const targetSID = String(sid);
         
-        // TOGGLE LOGIC: If already focused, clear focus
-        if (this.focusedSID === targetSID) {
-            console.log("[VerifiedLayer] Clearing focus for ID:", targetSID);
-            this.focusedSID = null;
-            App.apply(); // Re-render to clear focus layer
-            return;
-        }
-
         this.focusedSID = targetSID;
         const item = window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === this.focusedSID);
         if (item) {
@@ -13180,7 +13165,9 @@ const VerifiedLayer = {
                 }
             }
         }
-        App.apply(); // Trigger full surgical render
+        if (typeof App !== 'undefined' && typeof App.render === 'function') {
+            App.render(); // Surgical render to show focused house without resetting filters
+        }
     },
 
     renderConnection(v, record, isFocused, targetLayer) {
