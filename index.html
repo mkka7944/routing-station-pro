@@ -9208,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 28-Mar 12:11 PM 
+                Updated: 28-Mar 12:58 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -12004,28 +12004,32 @@ const ListView = {
         const cachedInfo = window.SpatialRouter ? SpatialRouter.verifiedSIDs.get(cacheKey) : null;
 
         if (cachedInfo) {
-            btn.style.background = '#e0f2fe';
-            btn.style.color = '#0284c7';
-            btn.style.boxShadow = 'none';
+            const isCurrentlyFocused = window.VerifiedLayer && VerifiedLayer.focusedSID === String(sid);
+            
+            btn.style.background = isCurrentlyFocused ? '#fef2f2' : '#e0f2fe';
+            btn.style.color = isCurrentlyFocused ? '#ef4444' : '#0284c7';
+            btn.style.border = isCurrentlyFocused ? '1px solid #fee2e2' : 'none';
             btn.disabled = false;
             btn.style.cursor = 'pointer';
             btn.onclick = () => {
-                if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
+                if (!isCurrentlyFocused && window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
                     ViewSwitcher.toMap();
                 }
                 
-                // Delay FocusHouse to allow map to be visible and Leaflet to size correctly
+                // Delay FocusHouse if switching to map, otherwise immediate toggle
+                const delay = (!isCurrentlyFocused && document.getElementById('view-list').style.display !== 'none') ? 300 : 0;
+                
                 setTimeout(() => {
                     if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
                         VerifiedLayer.focusHouse(sid);
                     }
-                }, 300);
+                }, delay);
             };
 
             const iconSpan = btn.querySelector('.material-icons-round');
-            if (iconSpan) iconSpan.innerText = 'my_location';
+            if (iconSpan) iconSpan.innerText = isCurrentlyFocused ? 'location_off' : 'my_location';
             const labelSpan = btn.querySelector('span:not(.material-icons-round)');
-            if (labelSpan) labelSpan.innerText = 'View Pin';
+            if (labelSpan) labelSpan.innerText = isCurrentlyFocused ? 'Hide Pin' : 'View Pin';
 
             const verifierInfo = document.getElementById(`verifier-info-${sid}`);
             if (verifierInfo) {
@@ -12049,28 +12053,32 @@ const ListView = {
                 .maybeSingle();
 
             if (data && !error) {
-                btn.style.background = '#e0f2fe';
-                btn.style.color = '#0284c7';
-                btn.style.boxShadow = 'none';
+                const isCurrentlyFocused = window.VerifiedLayer && VerifiedLayer.focusedSID === String(sid);
+
+                btn.style.background = isCurrentlyFocused ? '#fef2f2' : '#e0f2fe';
+                btn.style.color = isCurrentlyFocused ? '#ef4444' : '#0284c7';
+                btn.style.border = isCurrentlyFocused ? '1px solid #fee2e2' : 'none';
                 btn.disabled = false;
                 btn.style.cursor = 'pointer';
                 btn.onclick = () => {
-                    if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
+                    if (!isCurrentlyFocused && window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
                         ViewSwitcher.toMap();
                     }
 
-                    // Delay FocusHouse to allow map to be visible and Leaflet to size correctly
+                    // Delay FocusHouse if switching to map, otherwise immediate toggle
+                    const delay = (!isCurrentlyFocused && document.getElementById('view-list').style.display !== 'none') ? 300 : 0;
+
                     setTimeout(() => {
                         if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
                             VerifiedLayer.focusHouse(sid);
                         }
-                    }, 300);
+                    }, delay);
                 };
 
                 const iconSpan = btn.querySelector('.material-icons-round');
-                if (iconSpan) iconSpan.innerText = 'my_location';
+                if (iconSpan) iconSpan.innerText = isCurrentlyFocused ? 'location_off' : 'my_location';
                 const labelSpan = btn.querySelector('span:not(.material-icons-round)');
-                if (labelSpan) labelSpan.innerText = 'View Pin';
+                if (labelSpan) labelSpan.innerText = isCurrentlyFocused ? 'Hide Pin' : 'View Pin';
 
                 const verifierInfo = document.getElementById(`verifier-info-${sid}`);
                 if (verifierInfo) {
@@ -13142,7 +13150,17 @@ const VerifiedLayer = {
     },
 
     focusHouse(sid) {
-        this.focusedSID = String(sid);
+        const targetSID = String(sid);
+        
+        // TOGGLE LOGIC: If already focused, clear focus
+        if (this.focusedSID === targetSID) {
+            console.log("[VerifiedLayer] Clearing focus for ID:", targetSID);
+            this.focusedSID = null;
+            App.apply(); // Re-render to clear focus layer
+            return;
+        }
+
+        this.focusedSID = targetSID;
         const item = window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === this.focusedSID);
         if (item) {
             const record = window.SID_MAP ? window.SID_MAP.get(this.focusedSID) : null;
@@ -13156,25 +13174,13 @@ const VerifiedLayer = {
                 const bounds = L.latLngBounds(points);
                 State.map.flyToBounds(bounds, { padding: [80, 80], maxZoom: 19 });
 
-                // SURGICAL UPDATE: Use dedicated focusLayer
-                if (this.focusLayer) this.focusLayer.clearLayers();
-
-                // CRITICAL FIX: Ensure focusLayer is attached to the map before drawing
-                // It only gets added inside renderLayer() which may not have been called yet.
-                if (this.focusLayer && State.map && !State.map.hasLayer(this.focusLayer)) {
-                    this.focusLayer.addTo(State.map);
-                }
-
-                // Always show the focused connection regardless of global showBase
-                this.renderConnection(item, record, true, this.focusLayer);
-
                 // Trigger the pulse AND open the card
                 if (window.SpatialRouter && typeof SpatialRouter.highlightMarker === 'function') {
                     SpatialRouter.highlightMarker(sid, oLat, oLng, false);
                 }
             }
         }
-        // NO App.apply() - keep it surgical
+        App.apply(); // Trigger full surgical render
     },
 
     renderConnection(v, record, isFocused, targetLayer) {
@@ -13280,37 +13286,24 @@ const VerifiedLayer = {
         if (this.lineLayer) this.lineLayer.clearLayers();
         if (this.focusLayer) this.focusLayer.clearLayers();
 
-        if (this.selectedMCs.length === 0 && !this.searchID && !this.auditMode) return;
+        if (this.selectedMCs.length === 0 && !this.searchID && !this.auditMode && !this.focusedSID) return;
 
-        // Audit Mode Overrides everything
-        if (this.auditMode) {
-            const current = this.auditData[this.auditIndex];
-            if (current) this.renderItem(current);
-        } else if (this.searchID) {
-            // Search Mode
-            const item = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === String(this.searchID));
-            if (item) this.renderItem(item);
-            else if (App.showToast) App.showToast("Verified ID not found.");
-        } else {
-            // Normal Filter Mode
-            window.ALL_VERIFIED_DATA.forEach(v => {
-                const record = window.SID_MAP ? window.SID_MAP.get(String(v.survey_id)) : null;
-                if (!record) return;
-                const mc = record[12];
-                if (this.selectedMCs.includes(mc)) {
-                    this.renderItem(v);
-                }
-            });
-        }
+        // Unified rendering loop
+        window.ALL_VERIFIED_DATA.forEach(v => {
+            const sidStr = String(v.survey_id);
+            const record = window.SID_MAP ? window.SID_MAP.get(sidStr) : null;
+            if (!record) return;
 
-        // 4. Also ensure any focused SID connection is drawn
-        if (this.focusedSID) {
-            const item = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === String(this.focusedSID));
-            if (item) {
-                const record = window.SID_MAP ? window.SID_MAP.get(String(item.survey_id)) : null;
-                if (record) this.renderConnection(item, record, true, this.focusLayer);
+            const mc = record[12];
+            const isFilt = this.selectedMCs.includes(mc);
+            const isFoc = sidStr === String(this.focusedSID);
+            const isSearch = sidStr === String(this.searchID);
+            const isAudit = this.auditMode && (this.auditData[this.auditIndex]?.survey_id === v.survey_id);
+
+            if (isFilt || isFoc || isSearch || isAudit) {
+                this.renderItem(v, record, isFoc);
             }
-        }
+        });
 
         if (!State.map.hasLayer(this.layer)) this.layer.addTo(State.map);
         if (!State.map.hasLayer(this.lineLayer)) this.lineLayer.addTo(State.map);
@@ -13320,19 +13313,17 @@ const VerifiedLayer = {
         else if (!this.showBase) State.map.removeLayer(this.ghostLayer);
     },
 
-    renderItem(v) {
-        const record = window.SID_MAP ? window.SID_MAP.get(String(v.survey_id)) : null;
-        if (!record) return;
-
+    renderItem(v, record, isFocused) {
         const vLat = v.latitude || record[1];
         const vLng = v.longitude || record[2];
 
         if (vLat && vLng) {
+            // 1. Verified Icon (Main Layer)
             const m = L.marker([vLat, vLng], {
                 icon: L.divIcon({
-                    className: 'marker-verified-square',
-                    iconSize: [14, 14],
-                    iconAnchor: [7, 7]
+                    className: isFocused ? 'marker-verified-square focused' : 'marker-verified-square',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
                 })
             });
 
@@ -13345,10 +13336,11 @@ const VerifiedLayer = {
 
             m.addTo(this.layer);
 
-            // Draw connecting line if requested OR in audit mode OR focused
-            const isFocused = String(this.focusedSID) === String(v.survey_id);
-            if (this.showBase || this.auditMode || isFocused) {
-                this.renderConnection(v, record, isFocused);
+            // 2. Connection Line & Original Point
+            // Draw if: Global "Show Base" is ON, OR it is explicitly Focused/Audited
+            const showDetails = this.showBase || this.auditMode || isFocused;
+            if (showDetails) {
+                this.renderConnection(v, record, isFocused, isFocused ? this.focusLayer : this.lineLayer);
             }
         }
     }
