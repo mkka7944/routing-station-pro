@@ -9208,7 +9208,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 28-Mar 02:56 PM 
+                Updated: 31-Mar 02:41 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -13146,6 +13146,38 @@ const VerifiedLayer = {
         const targetSID = String(sid);
         
         this.focusedSID = targetSID;
+        
+        // Show mobile-friendly floating clear button
+        let clearBtn = document.getElementById('btn-clear-v-focus');
+        if (!clearBtn) {
+            clearBtn = document.createElement('button');
+            clearBtn.id = 'btn-clear-v-focus';
+            clearBtn.innerHTML = `<span class="material-icons-round" style="font-size:16px;">close</span> Clear Pin`;
+            clearBtn.style.cssText = `
+                position: absolute;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 9999;
+                background: #ef4444;
+                color: white;
+                border: none;
+                border-radius: 20px;
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: 800;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+                cursor: pointer;
+            `;
+            clearBtn.onclick = () => this.clearFocus();
+            const mapContainer = document.getElementById('main-stage') || document.body;
+            mapContainer.appendChild(clearBtn);
+        }
+        clearBtn.style.display = 'flex';
+
         const item = window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === this.focusedSID);
         if (item) {
             const record = window.SID_MAP ? window.SID_MAP.get(this.focusedSID) : null;
@@ -13167,6 +13199,20 @@ const VerifiedLayer = {
         }
         if (typeof App !== 'undefined' && typeof App.render === 'function') {
             App.render(); // Surgical render to show focused house without resetting filters
+        }
+    },
+
+    clearFocus() {
+        this.focusedSID = null;
+        
+        const btn = document.getElementById('btn-clear-v-focus');
+        if (btn) btn.style.display = 'none';
+        
+        // Surgical re-render strictly following sidebar filters
+        if (typeof App !== 'undefined' && typeof App.render === 'function') {
+            App.render();
+        } else {
+            this.renderLayer();
         }
     },
 
