@@ -3708,6 +3708,75 @@ body {
         background: #ddd;
 }
 
+/* ListView Sorting UI */
+
+.lv-sort-btn {
+        background: #f8fafc;
+        color: var(--primary);
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        width: 34px;
+        height: 34px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        position: relative;
+        transition: all 0.2s;
+}
+
+.lv-sort-btn:active {
+        transform: scale(0.95);
+        background: #f1f5f9;
+}
+
+.lv-sort-dropdown {
+        display: none;
+        position: absolute;
+        left: 0;
+        top: 42px;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        min-width: 180px;
+        z-index: 1001;
+        overflow: hidden;
+        animation: slideIn 0.2s ease-out;
+}
+
+@media (max-width: 600px) {
+        .lv-sort-dropdown {
+                left: 0;
+                min-width: 160px;
+        }
+}
+
+@keyframes slideIn {
+        from { opacity: 0; transform: translateY(-5px); }
+        to { opacity: 1; transform: translateY(0); }
+}
+
+.lv-sort-item {
+        padding: 12px 16px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #475569;
+        cursor: pointer;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background 0.2s;
+}
+
+.lv-sort-item:last-child {
+        border-bottom: none;
+}
+
+.lv-sort-item:hover {
+        background: #f8fafc;
+        color: var(--primary);
+}
+
 /* Fullscreen List View */
 
 #list-view-stage {
@@ -9169,7 +9238,7 @@ input[type=number] {
 </style>
 </head>
 <body>
-    <script>window.DEV_MODE = false; window.DATA_CHUNKS_COUNT = 11;</script> <!-- Handled via script injection -->
+     <!-- Handled via script injection -->
     <div id="login-overlay" style="position:fixed; inset:0; background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); z-index:999999; display:flex; align-items:center; justify-content:center; padding:20px; transition: opacity 0.5s ease;">
         <div style="background:white; padding:40px; border-radius:24px; width:100%; max-width:400px; text-align:center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
             <div style="background:linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); width:72px; height:72px; border-radius:20px; display:flex; align-items:center; justify-content:center; margin:0 auto 24px; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);">
@@ -9208,7 +9277,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 31-Mar 02:41 PM 
+                Updated: 06-Apr 01:46 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -9473,7 +9542,12 @@ input[type=number] {
                     </div>
 
                     <div style="display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px solid #f1f5f9;">
-                         <div style="font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Cloud Options</div>
+                         <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div style="font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Cloud Options</div>
+                            <div id="sync-server-badge-sidebar" class="sync-status-badge" style="background:#fefce8; color:#ca8a04; border-color:#fde68a; cursor:pointer;" onclick="event.stopPropagation(); DriveSync.fetchAllSyncedData(true)">
+                                <span style="font-size:8px;">⏳ SYNC...</span>
+                            </div>
+                         </div>
                          <div id="f-drive" class="multi-option" onclick="App.handleMultiClick(event, 'f-drive', 'apply')" style="margin:0; padding:12px; background:#ecfdf5; border:1px solid #d1fae5; border-radius:10px; width:100%; box-sizing:border-box;">
                             <input type="checkbox" id="f-drive-only" onchange="App.handleMultiChange(event, 'f-drive', 'apply')" style="margin-right:10px;">
                             <span style="font-weight:700; color:#065f46; font-size:12px;">Show Drive Images Only</span>
@@ -10660,6 +10734,8 @@ const State = {
 };
 
 window.KML_META = {};
+window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
+window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
 
 // === 04_app.js ===
 // === 04_app.js ===
@@ -10776,6 +10852,13 @@ const App = {
             if (State.map) State.map.invalidateSize();
         }, 300);
 
+        // [OPTIMIZATION] Immediate Drive Sync on Boot (Relocated from setTimeout)
+        if (window.DriveSync) {
+            window.DriveSync.fetchAllSyncedData();
+        }
+
+        console.log("App initialized.");
+
         this.initFilters();
         Sidebar.init();
         InfoCard.init();
@@ -10816,9 +10899,6 @@ const App = {
 
         // Handle URL Params (QR Code Link)
         setTimeout(() => this.handleUrlParams(), 1000);
-
-        // Background Fetch Synced Data
-        setTimeout(() => DriveSync.fetchAllSyncedData(), 2000);
     },
 
     handleUrlParams() {
@@ -11422,10 +11502,19 @@ const App = {
             console.groupEnd();
         }
 
-        // PERFORMANCE: Single-pass filtering (was 8 sequential passes)
         const result = [];
         const availableSurvSet = new Set();
         const seenSIDs = new Set();
+
+        if (typeof RAW_DATA === 'undefined') {
+            console.warn("[App.apply] RAW_DATA not found. Skipping filter pass.");
+            State.filtered = [];
+            State.masterFiltered = [];
+            this.updateSidebarStatus();
+            this.updateSurveyors();
+            this.render();
+            return;
+        }
 
         for (let i = 0; i < RAW_DATA.length; i++) {
             const r = RAW_DATA[i];
@@ -11887,13 +11976,17 @@ const ListView = {
                         <button onclick="ListView.showOnMap('${r[0]}')" title="Show on Map" style="background:#f8fafc; color:var(--primary); border:1px solid #e2e8f0; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer;">
                             <span class="material-icons-round" style="font-size:18px;">my_location</span>
                         </button>
-                        <button onclick="ListView.toggleSortDropdown()" title="Sort Records" style="background:#f8fafc; color:var(--primary); border:1px solid #e2e8f0; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative;">
-                            <span class="material-icons-round" style="font-size:18px;">sort</span>
-                            <div id="lv-sort-dropdown" style="display:none; position:absolute; right:0; top:42px; background:white; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.15); min-width:180px; z-index:1001; overflow:hidden;">
-                                <div onclick="ListView.sort('id-desc')" style="padding:10px 14px; font-size:11px; font-weight:600; cursor:pointer; border-bottom:1px solid #f1f5f9;">Newest First</div>
-                                <div onclick="ListView.sort('status-paid')" style="padding:10px 14px; font-size:11px; font-weight:600; cursor:pointer;">Paid First</div>
+                        <div style="position:relative;">
+                            <button onclick="ListView.toggleSortDropdown()" title="Sort Records" class="lv-sort-btn">
+                                <span class="material-icons-round" style="font-size:18px;">sort</span>
+                            </button>
+                            <div id="lv-sort-dropdown" class="lv-sort-dropdown">
+                                <div onclick="ListView.sort('id-desc'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Newest first (ID)</div>
+                                <div onclick="ListView.sort('id-asc'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Oldest first (ID)</div>
+                                <div onclick="ListView.sort('drive-desc'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Synced Recently</div>
+                                <div onclick="ListView.sort('status-paid'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Paid First</div>
                             </div>
-                        </button>
+                        </div>
                         <button id="btn-verify-house-${r[0]}" disabled 
                                 style="flex:1; min-width:0; background:#e2e8f0; color:#94a3b8; border:none; border-radius:10px; height:34px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:not-allowed; font-weight:800; font-size:10px; opacity:0.6;">
                             <span class="material-icons-round" style="font-size:16px;">verified</span>
@@ -12426,6 +12519,56 @@ const ListView = {
         if (State.history.length > 0) {
             ViewSwitcher.back();
         }
+    },
+
+    toggleSortDropdown(forceState = null) {
+        const dd = document.getElementById('lv-sort-dropdown');
+        if (!dd) return;
+        const isOpening = forceState !== null ? forceState : (dd.style.display !== 'block');
+        dd.style.display = isOpening ? 'block' : 'none';
+        
+        // Add one-time click-away listener
+        if (isOpening) {
+            const close = (e) => {
+                if (!e.target.closest('.lv-sort-btn') && !e.target.closest('.lv-sort-dropdown')) {
+                    this.toggleSortDropdown(false);
+                    document.removeEventListener('click', close);
+                }
+            };
+            setTimeout(() => document.addEventListener('click', close), 10);
+        }
+    },
+
+    sort(type) {
+        console.log(`[ListView] Sorting by: ${type}`);
+        if (!State.filtered || State.filtered.length === 0) return;
+
+        switch (type) {
+            case 'id-desc':
+                State.filtered.sort((a, b) => b[0] - a[0]);
+                break;
+            case 'id-asc':
+                State.filtered.sort((a, b) => a[0] - b[0]);
+                break;
+            case 'drive-desc':
+                State.filtered.sort((a, b) => {
+                    const timeA = State.syncedData[a[0]] ? (State.syncedData[a[0]].timestamp || 0) : 0;
+                    const timeB = State.syncedData[b[0]] ? (State.syncedData[b[0]].timestamp || 0) : 0;
+                    return timeB - timeA;
+                });
+                break;
+            case 'status-paid':
+                State.filtered.sort((a, b) => {
+                    const payA = a[16].toLowerCase() === 'paid' ? 0 : 1;
+                    const payB = b[16].toLowerCase() === 'paid' ? 0 : 1;
+                    return payA - payB;
+                });
+                break;
+        }
+
+        State.currentIdx = 0;
+        this.render();
+        App.showToast ? App.showToast(`Sorted by ${type.replace('-', ' ')}`) : null;
     }
 };
 
@@ -13393,6 +13536,8 @@ const DriveSync = {
         APP_URL: 'https://script.google.com/macros/s/AKfycbxKdvyJf00rvveSyqPVMvk1iNSq_gbmFAHKkk51utr0Ptaoetqwyu_ftwritA-W06VmLw/exec', 
         whitelist: null,
         currentDriveCount: 0,
+        _lastSync: 0,
+        _cacheExpiry: 3600000, // 1 hour reliability cache
         
         _safeId(id) { return id.toString().replace(/[^a-z0-9]/gi, '_'); },
 
@@ -13481,67 +13626,123 @@ const DriveSync = {
             }
         },
 
-        async fetchAllSyncedData() {
+        async fetchAllSyncedData(force = false) {
             if (!this.APP_URL) return;
+
+            // RELIABILITY CACHE: Use session memory if fresh
+            const now = Date.now();
+            if (!force && (now - this._lastSync < this._cacheExpiry) && Object.keys(State.syncedData || {}).length > 0) {
+                console.log("[DriveSync] Using fresh session cache for Synced IDs");
+                return;
+            }
+
             const url = `${this.APP_URL.trim()}?action=get_all_synced_ids`;
-            console.log(`[DriveSync] fetchAllSyncedData started. URL: ${url}`);
+            console.log(`[DriveSync] fetchAllSyncedData started. force=${force}`);
             
+            const badges = [
+                document.getElementById('sync-server-badge'),
+                document.getElementById('sync-server-badge-sidebar')
+            ].filter(b => b);
+
+            badges.forEach(b => {
+                b.innerHTML = '<span class="material-icons-round spinning" style="font-size:10px;">sync</span>';
+            });
+
             try {
+                // TIMEOUT SAFETY: Abort fetch after 15 seconds
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
+
                 const resp = await fetch(url, {
                     mode: 'cors',
-                    cache: 'no-cache'
+                    cache: 'no-cache',
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
                 
-                console.log(`[DriveSync] Fetch response status: ${resp.status} ${resp.statusText}`);
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                if (!resp.ok) {
+                    if (resp.status === 401 || resp.status === 403) throw new Error("LOGIN_REQUIRED");
+                    throw new Error(`HTTP ${resp.status}`);
+                }
                 
                 const res = await resp.json();
-                console.log(`[DriveSync] Data received. Success: ${res.status === 'success'}. Data format: ${Array.isArray(res.data) ? 'Array' : 'Object'}`);
-
                 if (res.status === 'success' && res.data) {
                     const normalized = {};
                     let count = 0;
                     
-                    if (Array.isArray(res.data)) {
-                        res.data.forEach(id => {
-                            if (id) {
-                                normalized[String(id).trim()] = true;
-                                count++;
-                            }
-                        });
-                    } else {
-                        Object.keys(res.data).forEach(id => {
-                            if (id) {
-                                normalized[String(id).trim()] = res.data[id];
-                                count++;
-                            }
-                        });
-                    }
-                    State.syncedData = normalized;
-                    
-                    console.log(`[DriveSync] Synced data loaded: ${count} records`);
-                    if (count > 0) {
-                        console.log("[DriveSync] Registry Sample Keys:", Object.keys(State.syncedData).slice(0, 10));
-                    } else {
-                        console.warn("[DriveSync] Synced data fetch returned 0 valid records.");
-                    }
-                    
-                    // Synchronize checkbox state with State object
-                    const cb = document.getElementById('f-drive-only');
-                    if (cb) State.driveOnlyFilter = cb.checked;
+                    const dataArray = Array.isArray(res.data) ? res.data : Object.keys(res.data);
+                    dataArray.forEach(id => {
+                        if (id) {
+                            normalized[String(id).trim()] = true;
+                            count++;
+                        }
+                    });
 
-                    // Re-apply filters to update map markers instantly
+                    State.syncedData = normalized;
+                    this._lastSync = now;
+                    
+                    // PERSISTENCE: Save to localStorage for offline/quota fallback
+                    localStorage.setItem('drive_sync_cache', JSON.stringify({
+                        timestamp: now,
+                        data: normalized
+                    }));
+
+                    console.log(`[DriveSync] Synced data loaded: ${count} records`);
+                    
+                    badges.forEach(b => {
+                        b.innerHTML = '<span class="material-icons-round" style="font-size:10px;">cached</span> <span style="font-size:8px;">🟢 CLOUD</span>';
+                        b.style.background = '#f0fdf4';
+                        b.style.color = '#15803d';
+                        b.style.borderColor = '#bbf7d0';
+                        b.title = `Last sync: ${new Date().toLocaleTimeString()} - Click to Re-sync`;
+                        b.onclick = () => this.fetchAllSyncedData(true);
+                        b.style.cursor = 'pointer';
+                    });
+
+                    if (document.getElementById('f-drive-only')) {
+                        State.driveOnlyFilter = document.getElementById('f-drive-only').checked;
+                    }
                     App.apply();
                 } else {
-                    console.warn("[DriveSync] Synced data fetch failed or returned empty:", res.message || "No data");
+                    throw new Error(res.message || "EMPTY_RESPONSE");
                 }
             } catch (e) {
-                console.error("[DriveSync] FATAL fetchAllSyncedData error:", e);
-                const badge = document.getElementById('sync-server-badge');
-                if (badge) {
-                    badge.innerHTML = '<span style="color:red; font-size:8px;">❌ DRIVE SYNC FAIL</span>';
-                    badge.style.background = '#fee2e2';
-                    badge.style.borderColor = '#fecaca';
+                console.error("[DriveSync] fetchAllSyncedData error:", e);
+                
+                // FALLBACK: Try to load from LocalStorage if API fails
+                const localCache = localStorage.getItem('drive_sync_cache');
+                if (localCache) {
+                    try {
+                        const parsed = JSON.parse(localCache);
+                        State.syncedData = parsed.data;
+                        console.warn("[DriveSync] API Failed. Using LocalStorage fallback cache from:", new Date(parsed.timestamp).toLocaleString());
+                        
+                        badges.forEach(b => {
+                            b.innerHTML = '<span class="material-icons-round" style="font-size:10px;">history</span> <span style="font-size:8px;">🟡 CACHED</span>';
+                            b.style.background = '#fffbeb';
+                            b.style.color = '#b45309';
+                            b.style.borderColor = '#fde68a';
+                            b.title = "Offline/API Error. Showing cached data. Click to retry.";
+                            b.onclick = () => this.fetchAllSyncedData(true);
+                        });
+                        App.apply();
+                        return;
+                    } catch (err) { /* corrupted cache */ }
+                }
+
+                if (badges.length > 0) {
+                    let errorMsg = "❌ ERROR";
+                    if (e.message === "LOGIN_REQUIRED") errorMsg = "🔑 LOGIN";
+                    else if (e.message.includes("Failed to fetch")) errorMsg = "🌐 OFFLINE";
+
+                    badges.forEach(b => {
+                        b.innerHTML = `<span class="material-icons-round" style="font-size:10px;">sync_problem</span> <span style="font-size:8px;">${errorMsg}</span>`;
+                        b.style.background = '#fef2f2';
+                        b.style.color = '#dc2626';
+                        b.style.borderColor = '#fecaca';
+                        b.title = e.message + " - Click to retry";
+                        b.onclick = () => this.fetchAllSyncedData(true);
+                    });
                 }
             }
         },
@@ -13608,13 +13809,22 @@ const DriveSync = {
             const syncedTotal = this.currentDriveCount;
             const pendingTotal = this.files.length;
             
+            // Make the badge clickable for manual refresh
+            statusBadge.onclick = (e) => {
+                e.stopPropagation();
+                statusBadge.innerText = "⏳ Checking...";
+                this.fetchMetadata(surveyId);
+            };
+            statusBadge.style.cursor = 'pointer';
+            statusBadge.title = "Click to refresh specific record sync status";
+
             if (syncedTotal > 0 || pendingTotal > 0) {
-                statusBadge.innerText = `${syncedTotal} Synced${pendingTotal > 0 ? ` + ${pendingTotal} Pending` : ''}`;
+                statusBadge.innerHTML = `<span class="material-icons-round" style="font-size:12px; vertical-align:middle;">sync</span> ${syncedTotal} Synced${pendingTotal > 0 ? ` + ${pendingTotal} Pending` : ''}`;
                 statusBadge.style.color = "var(--primary)";
                 statusBadge.style.background = "#eff6ff";
                 statusBadge.style.borderColor = "#dbeafe";
             } else {
-                statusBadge.innerText = "No Images Synced";
+                statusBadge.innerHTML = `<span class="material-icons-round" style="font-size:12px; vertical-align:middle;">sync</span> No Images Synced`;
                 statusBadge.style.color = "#64748b";
                 statusBadge.style.background = "#f8fafc";
                 statusBadge.style.borderColor = "#e2e8f0";
@@ -14408,6 +14618,14 @@ const Settings = {
     async fetchGlobalVerifications(forceRefresh = false) {
         if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
 
+        // EGRESS FIX: Check if we have data and it was fetched recently (within 10 mins)
+        const now = Date.now();
+        const cacheAge = now - (window.__VERIFIED_CACHE_TIME || 0);
+        if (!forceRefresh && window.ALL_VERIFIED_DATA?.length > 0 && cacheAge < 600000) {
+            console.log("[Settings] Using cached verification data (age: " + Math.round(cacheAge/1000) + "s)");
+            return;
+        }
+
         // Show loading state if forced refresh
         const refreshBtn = document.getElementById('btn-refresh-verified');
         if (forceRefresh) {
@@ -14448,6 +14666,7 @@ const Settings = {
             }
 
             window.ALL_VERIFIED_DATA = allData;
+            window.__VERIFIED_CACHE_TIME = Date.now(); // Update timestamp after successful fetch
             console.log(`Fetched ${window.ALL_VERIFIED_DATA.length} verification records.`);
 
             // CRITICAL: Clear spatial cache to force re-fetch from global data
@@ -17097,12 +17316,9 @@ const SpatialRouter = {
         this.activePolygonPts = [];
         this.setEditMode(false);
         this.renderRoute();
-
         this.toggleRoutePager(false);
-
         this.renderRouteManager();
-        this.renderSavedList(); // ensure sidebar lists are re-rendered too
-        if (App.showToast) App.showToast("Starting new area...");
+        this.renderSavedList();
     },
 
     reverseSequence() {
