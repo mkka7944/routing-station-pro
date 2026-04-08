@@ -9239,7 +9239,7 @@ input[type=number] {
 </style>
 </head>
 <body>
-    <script>window.DEV_MODE = false; window.DATA_CHUNKS_COUNT = 11;</script> <!-- Handled via script injection -->
+    <script>window.DEV_MODE = false;</script> <!-- Handled via script injection -->
     <div id="login-overlay" style="position:fixed; inset:0; background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); z-index:999999; display:flex; align-items:center; justify-content:center; padding:20px; transition: opacity 0.5s ease;">
         <div style="background:white; padding:40px; border-radius:24px; width:100%; max-width:400px; text-align:center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
             <div style="background:linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); width:72px; height:72px; border-radius:20px; display:flex; align-items:center; justify-content:center; margin:0 auto 24px; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);">
@@ -9278,7 +9278,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Billing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 06-Apr 04:23 PM 
+                Updated: 08-Apr 05:28 PM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -10378,7 +10378,7 @@ input[type=number] {
 
 // Global Data Placeholders
 window.RAW_DATA = [];
-window.DATA_CHUNKS_COUNT = window.DATA_CHUNKS_COUNT || 10;
+window.DATA_CHUNKS_COUNT = (typeof window.DATA_CHUNKS_COUNT === 'number') ? window.DATA_CHUNKS_COUNT : 10;
 window.PAID_DATA = [];
 window.HIERARCHY = {};
 window.GEO_LAYERS = {};
@@ -10388,7 +10388,7 @@ window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before
 
 // Global Billing Tracker (Dynamic)
 window.ACTIVE_BILLING_MONTH = 'loading...';
-window.DATA_VERSION = 'v1'; // Default
+window.DATA_VERSION = window.DATA_VERSION || 'v1'; // Use injected version if present
 
 async function fetchAppSettings() {
     try {
@@ -10735,6 +10735,8 @@ const State = {
 };
 
 window.KML_META = {"MC1": "<b>MC-01 District</b><br>Primary Industrial Zone", "MC 2": "<b>MC-02 District</b><br>Residential Hub", "MC3": "<b>MC-03 District</b><br>Commercial Core"};
+window.DATA_VERSION = "v2026.04.08.1728";
+window.DATA_CHUNKS_COUNT = 11;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
 
@@ -12093,9 +12095,21 @@ const ListView = {
         const btn = document.getElementById(`btn-verify-house-${sid}`);
         if (!btn) return;
 
-        // First check local session cache (month-specific)
-        const cacheKey = `${sid}_${ACTIVE_BILLING_MONTH}`;
-        const cachedInfo = window.SpatialRouter ? SpatialRouter.verifiedSIDs.get(cacheKey) : null;
+        const sidStr = String(sid);
+        const cacheKey = `${sidStr}_${ACTIVE_BILLING_MONTH}`;
+        
+        // 1. Check local session cache (for immediate UI response)
+        let cachedInfo = window.SpatialRouter ? SpatialRouter.verifiedSIDs.get(cacheKey) : null;
+
+        // 2. OPTIMIZATION: Check the Global Sync Data (window.ALL_VERIFIED_DATA)
+        // This is the primary source that prevents per-row Supabase calls.
+        if (!cachedInfo && window.ALL_VERIFIED_DATA) {
+            const found = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
+            if (found) {
+                cachedInfo = { verified_by: found.verified_by };
+                if (window.SpatialRouter) SpatialRouter.verifiedSIDs.set(cacheKey, cachedInfo);
+            }
+        }
 
         if (cachedInfo) {
             btn.style.background = '#e0f2fe';
@@ -12104,16 +12118,9 @@ const ListView = {
             btn.disabled = false;
             btn.style.cursor = 'pointer';
             btn.onclick = () => {
-                // ALWAYS switch to map and focus
-                if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
-                    ViewSwitcher.toMap();
-                }
-                
-                // Delay slightly to ensure map container is ready
+                if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') ViewSwitcher.toMap();
                 setTimeout(() => {
-                    if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
-                        VerifiedLayer.focusHouse(sid);
-                    }
+                    if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') VerifiedLayer.focusHouse(sid);
                 }, 100);
             };
 
@@ -12128,59 +12135,26 @@ const ListView = {
                 verifierInfo.innerHTML = `<span class="material-icons-round" style="font-size:14px;">verified</span> Verified by: ${cachedInfo.verified_by || 'Field Staff'}`;
             }
 
-            // Sync Delivery UI instantly
             this.updateDeliveryUI(sid, 'delivered');
             return;
         }
 
-        try {
-            // Check Supabase for a verification in THIS specific billing month
-            const { data, error } = await window._supabase
-                .from('verified_houses')
-                .select('survey_id, verified_by')
-                .eq('survey_id', String(sid))
-                .eq('billing_month', ACTIVE_BILLING_MONTH)
-                .limit(1)
-                .maybeSingle();
+        // 3. Fallback: Only hit Supabase if global data isn't loaded yet
+        if (!window.ALL_VERIFIED_DATA || window.ALL_VERIFIED_DATA.length === 0) {
+            try {
+                const { data, error } = await window._supabase
+                    .from('verified_houses')
+                    .select('survey_id, verified_by')
+                    .eq('survey_id', sidStr)
+                    .eq('billing_month', ACTIVE_BILLING_MONTH)
+                    .limit(1)
+                    .maybeSingle();
 
-            if (data && !error) {
-                btn.style.background = '#e0f2fe';
-                btn.style.color = '#0284c7';
-                btn.style.border = 'none';
-                btn.disabled = false;
-                btn.style.cursor = 'pointer';
-                btn.onclick = () => {
-                    // ALWAYS switch to map and focus
-                    if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') {
-                        ViewSwitcher.toMap();
-                    }
-
-                    setTimeout(() => {
-                        if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') {
-                            VerifiedLayer.focusHouse(sid);
-                        }
-                    }, 100);
-                };
-
-                const iconSpan = btn.querySelector('.material-icons-round');
-                if (iconSpan) iconSpan.innerText = 'my_location';
-                const labelSpan = btn.querySelector('span:not(.material-icons-round)');
-                if (labelSpan) labelSpan.innerText = 'View Pin';
-
-                const verifierInfo = document.getElementById(`verifier-info-${sid}`);
-                if (verifierInfo) {
-                    verifierInfo.style.display = 'flex';
-                    verifierInfo.innerHTML = `<span class="material-icons-round" style="font-size:14px;">verified</span> Verified by: ${data.verified_by || 'Field Staff'}`;
+                if (data && !error) {
+                    if (window.SpatialRouter) SpatialRouter.verifiedSIDs.set(cacheKey, { verified_by: data.verified_by });
+                    this.checkVerificationStatus(sid); // Recurse now that it's cached
                 }
-
-                // Sync Delivery UI instantly
-                this.updateDeliveryUI(sid, 'delivered');
-
-                // Seed session cache for faster navigation
-                if (window.SpatialRouter) SpatialRouter.verifiedSIDs.set(cacheKey, { verified_by: data.verified_by });
-            }
-        } catch (e) {
-            console.warn("Verification status check missed:", e);
+            } catch (e) { console.warn("Network check bypassed:", e); }
         }
     },
 
@@ -14619,77 +14593,86 @@ const Settings = {
     async fetchGlobalVerifications(forceRefresh = false) {
         if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
 
-        // EGRESS FIX: Check if we have data and it was fetched recently (within 10 mins)
-        const now = Date.now();
-        const cacheAge = now - (window.__VERIFIED_CACHE_TIME || 0);
-        if (!forceRefresh && window.ALL_VERIFIED_DATA?.length > 0 && cacheAge < 600000) {
-            console.log("[Settings] Using cached verification data (age: " + Math.round(cacheAge/1000) + "s)");
-            return;
-        }
-
-        // Show loading state if forced refresh
-        const refreshBtn = document.getElementById('btn-refresh-verified');
-        if (forceRefresh) {
-            window.ALL_VERIFIED_DATA = null;
-            if (typeof LayerManager !== 'undefined') LayerManager.renderSettingsUI();
-
-            // Add spinning feedback to sidebar refresh button
-            if (refreshBtn) {
-                const icon = refreshBtn.querySelector('.material-icons-round');
-                if (icon) icon.classList.add('spinning');
+        const cacheKey = `v_cache_${window.ACTIVE_BILLING_MONTH}`;
+        
+        // 1. Initial Load: Check LocalStorage for existing pins
+        if (!window.ALL_VERIFIED_DATA || window.ALL_VERIFIED_DATA.length === 0) {
+            const stored = localStorage.getItem(cacheKey);
+            if (stored) {
+                try {
+                    window.ALL_VERIFIED_DATA = JSON.parse(stored);
+                    console.log(`[Sync] Restored ${window.ALL_VERIFIED_DATA.length} pins from local cache.`);
+                } catch(e) { window.ALL_VERIFIED_DATA = []; }
             }
         }
 
+        // 2. EGRESS GUARD: Check if we need to hit the server
+        const now = Date.now();
+        const cacheAge = now - (window.__VERIFIED_CACHE_TIME || 0);
+        if (!forceRefresh && window.ALL_VERIFIED_DATA?.length > 0 && cacheAge < 300000) {
+            console.log("[Settings] Recent cache valid.");
+            return;
+        }
+
+        const refreshBtn = document.getElementById('btn-refresh-verified');
+        if (forceRefresh && refreshBtn) {
+            const icon = refreshBtn.querySelector('.material-icons-round');
+            if (icon) icon.classList.add('spinning');
+        }
+
         try {
-            let allData = [];
+            // 3. DELTA SYNC: Find latest timestamp in local data
+            let latestTime = "2000-01-01T00:00:00Z";
+            if (window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.length > 0) {
+                const times = window.ALL_VERIFIED_DATA.map(v => v.verified_at).filter(Boolean);
+                if (times.length > 0) latestTime = times.sort().reverse()[0];
+            }
+
+            console.log(`[Sync] Delta sync starting. Fetching records where verified_at > ${latestTime}`);
+
+            let newRecords = [];
             let hasMore = true;
             let from = 0;
             let step = 1000;
 
             while (hasMore) {
-                console.log(`[Settings] Fetching batch from verified_houses. Range: ${from} - ${from + step - 1}`);
                 const { data, error } = await window._supabase
                     .from('verified_houses')
                     .select('survey_id, verified_by, verified_at, latitude, longitude')
                     .eq('billing_month', window.ACTIVE_BILLING_MONTH)
+                    .gt('verified_at', latestTime)
                     .range(from, from + step - 1);
 
                 if (error) throw error;
-
                 if (data && data.length > 0) {
-                    allData = allData.concat(data);
+                    newRecords = newRecords.concat(data);
                     from += step;
                 }
-
-                if (!data || data.length < step) {
-                    hasMore = false;
-                }
+                if (!data || data.length < step) hasMore = false;
             }
 
-            window.ALL_VERIFIED_DATA = allData;
-            window.__VERIFIED_CACHE_TIME = Date.now(); // Update timestamp after successful fetch
-            console.log(`Fetched ${window.ALL_VERIFIED_DATA.length} verification records.`);
-
-            // CRITICAL: Clear spatial cache to force re-fetch from global data
-            if (window.SpatialRouter && SpatialRouter.verifiedSIDs) {
-                SpatialRouter.verifiedSIDs.clear();
+            if (newRecords.length > 0) {
+                // Merge new records with existing ones (avoid duplicates)
+                const existingSIDs = new Set((window.ALL_VERIFIED_DATA || []).map(v => String(v.survey_id)));
+                const uniqueNew = newRecords.filter(v => !existingSIDs.has(String(v.survey_id)));
+                window.ALL_VERIFIED_DATA = (window.ALL_VERIFIED_DATA || []).concat(uniqueNew);
+                
+                // Persist to LocalStorage
+                localStorage.setItem(cacheKey, JSON.stringify(window.ALL_VERIFIED_DATA));
+                console.log(`[Sync] Success! Added ${uniqueNew.length} new records.`);
+            } else {
+                console.log("[Sync] Already up to date.");
             }
 
+            window.__VERIFIED_CACHE_TIME = Date.now();
+            if (window.SpatialRouter && SpatialRouter.verifiedSIDs) SpatialRouter.verifiedSIDs.clear();
             if (typeof LayerManager !== 'undefined') LayerManager.renderSettingsUI();
-            
-            if (window.VerifiedLayer && typeof VerifiedLayer.updateList === 'function') {
-                VerifiedLayer.updateList();
-            }
-            if (window.App && typeof App.render === 'function') {
-                App.render();
-            }
+            if (window.VerifiedLayer && typeof VerifiedLayer.updateList === 'function') VerifiedLayer.updateList();
+            if (window.App && typeof App.render === 'function') App.render();
+
         } catch (e) {
-            console.error("Failed to fetch global verifications:", e);
-            window.ALL_VERIFIED_DATA = []; // Prevent infinite loading
-            if (typeof LayerManager !== 'undefined') LayerManager.renderSettingsUI();
+            console.error("Delta Sync Failure:", e);
         } finally {
-            // Remove spinning feedback
-            const refreshBtn = document.getElementById('btn-refresh-verified');
             if (refreshBtn) {
                 const icon = refreshBtn.querySelector('.material-icons-round');
                 if (icon) icon.classList.remove('spinning');
@@ -16580,17 +16563,19 @@ const SpatialRouter = {
 
     async loadRoutes(filename = null, isInitial = false) {
         try {
+            // OPTIMIZATION: Fetch metadata only to reduce initial egress
             const { data, error } = await window._supabase
                 .from('saved_routes')
-                .select('*')
+                .select('id, route_name, created_at')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
 
             const formattedData = data.map(item => ({
-                ...item.route_data,
                 id: item.id,
-                name: item.route_name || item.route_data.name
+                name: item.route_name,
+                created_at: item.created_at,
+                sequence: null // Lazy-loaded later
             }));
 
             this._applyRoutes(formattedData);
@@ -17376,14 +17361,17 @@ const SpatialRouter = {
         routesWithMeta.forEach(r => {
             if (!areaStats[r.area]) areaStats[r.area] = { routes: 0, pts: 0 };
             areaStats[r.area].routes++;
-            const pts = r.route.sequence ? r.route.sequence.length : 0;
+            const pts = (r.route.sequence && r.route.sequence.length) ? r.route.sequence.length : 0;
             areaStats[r.area].pts += pts;
             totalOverallPts += pts;
         });
 
         // Update global "Designed Routes" header
         const overallHeader = document.getElementById('designed-routes-total');
-        if (overallHeader) overallHeader.innerText = `(${routesWithMeta.length} routes, ${totalOverallPts} pts)`;
+        if (overallHeader) {
+            if (totalOverallPts > 0) overallHeader.innerText = `(${routesWithMeta.length} routes, ${totalOverallPts} pts)`;
+            else overallHeader.innerText = `(${routesWithMeta.length} routes)`;
+        }
 
         let lastArea = null;
         let localIdx = 0;
@@ -17405,7 +17393,7 @@ const SpatialRouter = {
 
             if (this.collapsedGroups.has(area)) return;
 
-            const ptCount = route.sequence ? route.sequence.length : 0;
+            const ptCount = (route.sequence && route.sequence.length) ? route.sequence.length : 0;
             const isActive = (this.editingRouteIdx === originalIdx) || (this._sidebarDisplayIdx === originalIdx);
             const activeStyle = isActive ? 'background: #eff6ff; border-left: 3px solid #3b82f6;' : 'background: #fff; border: 1px solid #e2e8f0;';
 
@@ -17420,7 +17408,7 @@ const SpatialRouter = {
                     <div style="width:22px; height:22px; background:#eff6ff; color:var(--primary); border-radius:4px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:10px; flex-shrink:0;">${localIdx}</div>
                     <div style="flex:1; min-width:0;">
                         <div style="font-weight:700; font-size:10px; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${displayName}">${displayName}</div>
-                        <div style="font-size:8px; color:#94a3b8;"><span style="color: darkorange; font-weight: bold;">${ptCount} pts</span></div>
+                        <div style="font-size:8px; color:#94a3b8;"><span style="color: darkorange; font-weight: bold;">${ptCount > 0 ? ptCount + ' pts' : '(Fetch details...)'}</span></div>
                     </div>
                     <button onclick="event.stopPropagation(); SpatialRouter.toggleSidebarRouteDisplay(${originalIdx})" title="${isActive ? 'Hide' : 'Show'} on Map" style="background:none; border:none; cursor:pointer; padding:2px; color:${isActive ? '#ef4444' : '#10b981'}; flex-shrink:0;">
                         <span class="material-icons-round" style="font-size:16px;">${isActive ? 'visibility_off' : 'visibility'}</span>
@@ -17437,11 +17425,40 @@ const SpatialRouter = {
         });
     },
 
-    toggleSidebarRouteDisplay(idx) {
+    async ensureRouteData(idx) {
         const r = State.savedRoutes[idx];
-        if (!r || !r.sequence) return;
+        if (!r) return false;
+        if (r.sequence && r.sequence.length > 0) return true;
 
-        // Toggle: if already displayed, remove; otherwise show
+        if (App.showToast) App.showToast(`Downloading route: ${r.name || '...'}`, 2000);
+        try {
+            const { data, error } = await window._supabase
+                .from('saved_routes')
+                .select('route_data')
+                .eq('id', r.id)
+                .single();
+            
+            if (error) throw error;
+            if (data && data.route_data) {
+                // Merge loaded data into state
+                State.savedRoutes[idx].sequence = data.route_data.sequence;
+                State.savedRoutes[idx].points = data.route_data.points || [];
+                State.savedRoutes[idx].polygon = data.route_data.polygon || null;
+                return true;
+            }
+            throw new Error("Empty route data");
+        } catch (err) {
+            console.error("Lazy Load failed:", err);
+            if (App.showToast) App.showToast("Cloud connection failed.");
+            return false;
+        }
+    },
+
+    async toggleSidebarRouteDisplay(idx) {
+        const r = State.savedRoutes[idx];
+        if (!r) return;
+
+        // Toggle: if already displayed, remove
         if (this._sidebarDisplayIdx === idx && this._displayLayer) {
             State.map.removeLayer(this._displayLayer);
             this._displayLayer = null;
@@ -17453,22 +17470,26 @@ const SpatialRouter = {
             return;
         }
 
+        // Fetch details before showing on map
+        const success = await this.ensureRouteData(idx);
+        if (!success) return;
+
         this._sidebarDisplayIdx = idx;
-        this.activeDisplayRoutes = [r.name];
+        const updatedRoute = State.savedRoutes[idx];
+        this.activeDisplayRoutes = [updatedRoute.name];
         this.currentPage = 1;
 
         this.renderDisplayLayer();
         this.toggleRoutePager(true);
         this.renderRouteManager();
-        if (App.showToast) App.showToast(`Showing: ${r.name}`);
+        if (App.showToast) App.showToast(`Showing: ${updatedRoute.name}`);
 
-        // Refinement: Start at first marker on load (SHOW card pop-up as established)
         this._activeMarkerIdx = 0;
-        this.updatePagerInfo(r.sequence.length);
+        this.updatePagerInfo(updatedRoute.sequence.length);
         setTimeout(() => this.changeMarker(0, false), 400);
 
         // Sync MapNavigator
-        const seqOrder = new Map(r.sequence.map((p, i) => [String(p.surveyId || p.id), i]));
+        const seqOrder = new Map(updatedRoute.sequence.map((p, i) => [String(p.surveyId || p.id), i]));
         State.filtered = (window.RAW_DATA || [])
             .filter(row => seqOrder.has(String(row[0])))
             .sort((rowA, rowB) => seqOrder.get(String(rowA[0])) - seqOrder.get(String(rowB[0])));
@@ -17640,7 +17661,9 @@ const SpatialRouter = {
         `;
     },
 
-    openRouteInListView(idx) {
+    async openRouteInListView(idx) {
+        const success = await this.ensureRouteData(idx);
+        if (!success) return;
 
         this.toggleSidebarRouteDisplay(idx);
         const r = State.savedRoutes[idx];
