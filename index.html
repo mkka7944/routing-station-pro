@@ -9278,7 +9278,7 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Billing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 16-Apr 04:40 PM 
+                Updated: 18-Apr 09:11 AM 
                 <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
             </div>
         </div>
@@ -10735,7 +10735,7 @@ const State = {
 };
 
 window.KML_META = {"MC1": "<b>MC-01 District</b><br>Primary Industrial Zone", "MC 2": "<b>MC-02 District</b><br>Residential Hub", "MC3": "<b>MC-03 District</b><br>Commercial Core"};
-window.DATA_VERSION = "v2026.04.16.1640";
+window.DATA_VERSION = "v2026.04.18.0911";
 window.DATA_CHUNKS_COUNT = 11;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -11888,6 +11888,7 @@ const ViewSwitcher = {
 // ListView
 
 const ListView = {
+    pendingSyncSIDs: new Set(),
     render() {
         if (State.currentIdx >= State.filtered.length && State.filtered.length > 0) {
             State.currentIdx = 0;
@@ -11973,14 +11974,26 @@ const ListView = {
         const surveyor = r[6] || 'Unknown';
         const dateTime = `${r[7] || ''} ${r[8] || ''}`.trim() || 'No Date';
 
+        // SMART BATCHING: If we don't have this house in cache, sync it and its nearest neighbors
+        const sidStr = String(r[0]);
+        if (window.ALL_VERIFIED_DATA && !window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr)) {
+            if (!this.pendingSyncSIDs.has(sidStr)) {
+                const batchSize = 15;
+                const start = Math.max(0, State.currentIdx - 2);
+                const end = Math.min(State.filtered.length, start + batchSize);
+                const batchSIDs = State.filtered.slice(start, end).map(item => item[0]);
+                this.batchSyncRoute(batchSIDs);
+            }
+        }
+
         el.innerHTML = `
                 <div class="card-header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding: 10px 0 8px 0;">
                     <div style="display:flex; gap:6px; flex:1; flex-shrink:0; flex-wrap:wrap;">
-                        <button onclick="ListView.showOnMap('${r[0]}')" title="Show on Map" style="background:#f8fafc; color:var(--primary); border:1px solid #e2e8f0; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                        <button type="button" onclick="ListView.showOnMap('${r[0]}')" title="Show on Map" style="background:#f8fafc; color:var(--primary); border:1px solid #e2e8f0; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer;">
                             <span class="material-icons-round" style="font-size:18px;">my_location</span>
                         </button>
                         <div style="position:relative;">
-                            <button onclick="ListView.toggleSortDropdown()" title="Sort Records" class="lv-sort-btn">
+                            <button type="button" onclick="ListView.toggleSortDropdown()" title="Sort Records" class="lv-sort-btn">
                                 <span class="material-icons-round" style="font-size:18px;">sort</span>
                             </button>
                             <div id="lv-sort-dropdown" class="lv-sort-dropdown">
@@ -11990,17 +12003,17 @@ const ListView = {
                                 <div onclick="ListView.sort('status-paid'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Paid First</div>
                             </div>
                         </div>
-                        <button id="btn-verify-house-${r[0]}" disabled 
+                        <button type="button" id="btn-verify-house-${r[0]}" disabled 
                                 style="flex:1; min-width:0; background:#e2e8f0; color:#94a3b8; border:none; border-radius:10px; height:34px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:not-allowed; font-weight:800; font-size:10px; opacity:0.6;">
                             <span class="material-icons-round" style="font-size:16px;">verified</span>
                             <span>Verify</span>
                         </button>
-                        <button id="btn-drop-pin-${r[0]}" onclick="SpatialRouter.startManualPin('${r[0]}')" 
+                        <button type="button" id="btn-intel-${r[0]}" onclick="ListView.toggleActionPanel('${r[0]}')" 
                                 style="flex:1; min-width:0; background:#f59e0b; color:white; border:none; border-radius:10px; height:34px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:pointer; font-weight:800; font-size:10px; box-shadow:0 2px 5px rgba(245, 158, 11, 0.3); transition: all 0.2s;">
-                            <span class="material-icons-round" style="font-size:16px;">edit_location_alt</span>
-                            <span>Drop Pin</span>
+                            <span class="material-icons-round" style="font-size:16px;">edit_note</span>
+                            <span>House Intel</span>
                         </button>
-                        <button id="btn-delivery-${r[0]}" title="Mark Delivered" disabled 
+                        <button type="button" id="btn-delivery-${r[0]}" title="Mark Delivered" disabled 
                                 style="background:#fef3c7; color:#d97706; border:none; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:default; opacity:0.6;">
                             <span class="material-icons-round" style="font-size:18px;">local_shipping</span>
                         </button>
@@ -12037,9 +12050,52 @@ const ListView = {
                             </div>
                         </div>
 
-                        <div style="display:flex; gap:6px; align-items:flex-start; margin-top:2px;">
-                            <span class="material-icons-round" style="font-size:14px; color:#94a3b8; margin-top:2px;">place</span>
-                            <div class="line-clamp-2" style="font-weight:600; font-size:11px; color:#64748b; line-height:1.4; flex:1;">${decodePII(r[5])}</div>
+                    </div>
+                </div>
+
+                <!-- NEW: Integrated Action Panel -->
+                <div id="action-panel-${r[0]}" style="display:none; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px; margin-top:10px; box-shadow:inset 0 2px 4px rgba(0,0,0,0.02);">
+                    <div style="display:flex; flex-direction:column; gap:10px;">
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <div style="flex:1;">
+                                <label style="display:block; font-size:9px; font-weight:800; color:#94a3b8; margin-bottom:4px; text-transform:uppercase;">Street No</label>
+                                <select id="intel-street-${r[0]}" style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none;">
+                                    <option value="C">Commercial (C)</option>
+                                    ${Array.from({length: 50}, (_, i) => `<option value="G${i+1}">G${i+1}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div style="flex:0.8;">
+                                <label style="display:block; font-size:9px; font-weight:800; color:#94a3b8; margin-bottom:4px; text-transform:uppercase;">Sequence #</label>
+                                <input type="number" id="intel-seq-${r[0]}" placeholder="0" style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none;">
+                            </div>
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; align-items:center; background:white; padding:8px; border-radius:10px; border:1px solid #e2e8f0;">
+                            <div style="display:flex; gap:12px;">
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                                    <input type="checkbox" id="intel-side-l-${r[0]}" onchange="document.getElementById('intel-side-r-${r[0]}').checked = !this.checked" style="accent-color:var(--primary); width:16px; height:16px;">
+                                    <span style="font-size:11px; font-weight:800; color:#475569;">Left</span>
+                                </label>
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                                    <input type="checkbox" id="intel-side-r-${r[0]}" onchange="document.getElementById('intel-side-l-${r[0]}').checked = !this.checked" style="accent-color:var(--primary); width:16px; height:16px;">
+                                    <span style="font-size:11px; font-weight:800; color:#475569;">Right</span>
+                                </label>
+                            </div>
+                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; background:#f0fdf4; padding:4px 8px; border-radius:6px; border:1px solid #dcfce7;">
+                                <input type="checkbox" id="intel-delivered-${r[0]}" style="accent-color:#16a34a; width:16px; height:16px;">
+                                <span style="font-size:11px; font-weight:800; color:#16a34a;">Mark Delivered</span>
+                            </label>
+                        </div>
+
+                        <div style="display:flex; gap:8px;">
+                            <button type="button" onclick="SpatialRouter.startManualPin('${r[0]}')" 
+                                    style="flex:1; background:white; color:#64748b; border:1.5px solid #e2e8f0; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:800; font-size:11px;">
+                                <span class="material-icons-round" style="font-size:18px;">add_location_alt</span> Manual Pin
+                            </button>
+                            <button type="button" onclick="ListView.saveIntel('${r[0]}')" 
+                                    style="flex:1.5; background:#10b981; color:white; border:none; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:900; font-size:11px; box-shadow:0 4px 6px rgba(16, 185, 129, 0.2);">
+                                <span class="material-icons-round" style="font-size:18px;">cloud_upload</span> Save & Close
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -12098,11 +12154,10 @@ const ListView = {
         const sidStr = String(sid);
         const cacheKey = `${sidStr}_${ACTIVE_BILLING_MONTH}`;
         
-        // 1. Check local session cache (for immediate UI response)
+        // 1. Check local session cache 
         let cachedInfo = window.SpatialRouter ? SpatialRouter.verifiedSIDs.get(cacheKey) : null;
 
-        // 2. OPTIMIZATION: Check the Global Sync Data (window.ALL_VERIFIED_DATA)
-        // This is the primary source that prevents per-row Supabase calls.
+        // 2. Check Global Sync Data
         if (!cachedInfo && window.ALL_VERIFIED_DATA) {
             const found = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
             if (found) {
@@ -12112,9 +12167,9 @@ const ListView = {
         }
 
         if (cachedInfo) {
-            btn.style.background = '#e0f2fe';
-            btn.style.color = '#0284c7';
-            btn.style.border = 'none';
+            btn.style.background = '#f0fdf4'; // Light green
+            btn.style.color = '#16a34a'; // Dark green
+            btn.style.border = '1px solid #bbf7d0';
             btn.disabled = false;
             btn.style.cursor = 'pointer';
             btn.onclick = () => {
@@ -12125,159 +12180,93 @@ const ListView = {
             };
 
             const iconSpan = btn.querySelector('.material-icons-round');
-            if (iconSpan) iconSpan.innerText = 'my_location';
+            if (iconSpan) iconSpan.innerText = 'check_circle';
             const labelSpan = btn.querySelector('span:not(.material-icons-round)');
-            if (labelSpan) labelSpan.innerText = 'View Pin';
+            if (labelSpan) labelSpan.innerText = 'Verified';
 
             const verifierInfo = document.getElementById(`verifier-info-${sid}`);
             if (verifierInfo) {
                 verifierInfo.style.display = 'flex';
-                verifierInfo.innerHTML = `<span class="material-icons-round" style="font-size:14px;">verified</span> Verified by: ${cachedInfo.verified_by || 'Field Staff'}`;
+                verifierInfo.innerHTML = `<span class="material-icons-round" style="font-size:14px; color:#16a34a;">verified</span> <span style="color:#16a34a;">Verified by: ${cachedInfo.verified_by || 'Field Staff'}</span>`;
             }
 
-            this.updateDeliveryUI(sid, 'delivered');
+            // Sync Delivery UI if record says it is delivered
+            const houseRecord = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
+            if (houseRecord && houseRecord.is_delivered) {
+                this.updateDeliveryUI(sid, 'delivered');
+            }
             return;
         }
 
-        // 3. Fallback: Only hit Supabase if global data isn't loaded yet
-        if (!window.ALL_VERIFIED_DATA || window.ALL_VERIFIED_DATA.length === 0) {
-            try {
-                const { data, error } = await window._supabase
-                    .from('verified_houses')
-                    .select('survey_id, verified_by')
-                    .eq('survey_id', sidStr)
-                    .eq('billing_month', ACTIVE_BILLING_MONTH)
-                    .limit(1)
-                    .maybeSingle();
-
-                if (data && !error) {
-                    if (window.SpatialRouter) SpatialRouter.verifiedSIDs.set(cacheKey, { verified_by: data.verified_by });
-                    this.checkVerificationStatus(sid); // Recurse now that it's cached
-                }
-            } catch (e) { console.warn("Network check bypassed:", e); }
-        }
+        // NO FALLBACK QUERIES HERE - Managed by batchSyncRoute
     },
 
     async checkDeliveryStatus(sid) {
         const btn = document.getElementById(`btn-delivery-${sid}`);
         if (!btn) return;
 
-        // Visual feedback that checking is in progress
-        btn.style.opacity = '0.3';
-        btn.innerHTML = `<span class="material-icons-round" style="font-size:16px; animation:spin 2s linear infinite;">autorenew</span>`;
-
-        // Always handle verified first (instant update)
-        const cacheKey = `${sid}_${ACTIVE_BILLING_MONTH}`;
-        const isVerified = window.SpatialRouter && SpatialRouter.verifiedSIDs.has(cacheKey);
-
-        if (isVerified) {
-            this.updateDeliveryUI(sid, 'delivered');
-            return;
+        const sidStr = String(sid);
+        
+        // DEPEGGED: Always prefer House-centric confirmed data from verified_houses
+        if (window.ALL_VERIFIED_DATA) {
+            const found = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
+            if (found && found.is_delivered) {
+                this.updateDeliveryUI(sid, 'delivered');
+                return;
+            }
         }
 
+        // Default state if not confirmed as delivered 
+        btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">local_shipping</span>`;
+        btn.style.opacity = '0.6';
+    },
+
+    async batchSyncRoute(sids) {
+        if (!window._supabase || !sids || sids.length === 0) return;
+        
+        // Filter out SIDs already in cache OR currently pending
+        const missingSIDs = sids.map(id => String(id)).filter(id => {
+            const inCache = window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === id);
+            const isPending = this.pendingSyncSIDs.has(id);
+            return !inCache && !isPending;
+        });
+
+        if (missingSIDs.length === 0) return;
+
+        // Mark as pending
+        missingSIDs.forEach(id => this.pendingSyncSIDs.add(id));
+
         try {
-            const colName = `delivery_${ACTIVE_BILLING_MONTH}`;
+            console.log(`[BatchSync] Fetching status for ${missingSIDs.length} houses...`);
             const { data, error } = await window._supabase
-                .from('saved_routes')
-                .select(`${colName}`)
-                .contains('route_data', { sequence: [{ surveyId: sid }] })
-                .limit(1)
-                .maybeSingle();
+                .from('verified_houses')
+                .select('survey_id, verified_by, verified_at, street_no, sequence_no, is_right, is_delivered')
+                .eq('billing_month', window.ACTIVE_BILLING_MONTH)
+                .in('survey_id', missingSIDs);
 
-            let finalData = data;
-            if (!finalData || error) {
-                const fallback = await window._supabase
-                    .from('saved_routes')
-                    .select(`${colName}`)
-                    .contains('route_data', { sequence: [{ id: sid }] })
-                    .limit(1)
-                    .maybeSingle();
-                finalData = fallback.data;
-            }
-
-            if (finalData && finalData[colName] && finalData[colName][sid] === 'delivered') {
-                this.updateDeliveryUI(sid, 'delivered');
-            } else {
-                // IMPORTANT: Stop the spinner if not delivered, 
-                // BUT ONLY if not already confirmed as verified (race condition fix)
-                const isStillVerified = window.SpatialRouter && SpatialRouter.verifiedSIDs.has(cacheKey);
-                if (!isStillVerified) {
-                    this.updateDeliveryUI(sid, 'pending');
-                } else {
-                    this.updateDeliveryUI(sid, 'delivered'); // Final safety sync
-                }
+            if (error) throw error;
+            
+            if (data && data.length > 0) {
+                if (!window.ALL_VERIFIED_DATA) window.ALL_VERIFIED_DATA = [];
+                
+                window.ALL_VERIFIED_DATA = Array.from(sidMap.values());
+                
+                // Refresh currently visible card indicators
+                data.forEach(record => {
+                    const sid = String(record.survey_id);
+                    this.checkVerificationStatus(sid);
+                    this.checkDeliveryStatus(sid);
+                });
             }
         } catch (e) {
-            console.warn("Delivery check missed:", e);
-            const isStillVerified = window.SpatialRouter && SpatialRouter.verifiedSIDs.has(cacheKey);
-            if (!isStillVerified) this.updateDeliveryUI(sid, 'pending');
-            else this.updateDeliveryUI(sid, 'delivered');
+            console.error("[BatchSync] Error:", e);
         }
     },
 
     async markDelivered(sid, options = {}) {
-        const btn = document.getElementById(`btn-delivery-${sid}`);
-        if (btn) {
-            btn.innerHTML = `<span class="material-icons-round" style="font-size:18px; animation:spin 1s linear infinite;">autorenew</span>`;
-        }
-
-        try {
-            const colName = `delivery_${ACTIVE_BILLING_MONTH}`;
-
-            const { data: routeSearch, error: searchErr } = await window._supabase
-                .from('saved_routes')
-                .select(`id, ${colName}`)
-                .contains('route_data', { sequence: [{ surveyId: sid }] })
-                .limit(1)
-                .maybeSingle();
-
-            let targetRoute = routeSearch;
-            if (!targetRoute) {
-                const idFallback = await window._supabase
-                    .from('saved_routes')
-                    .select(`id, ${colName}`)
-                    .contains('route_data', { sequence: [{ id: sid }] })
-                    .limit(1)
-                    .maybeSingle();
-                targetRoute = idFallback.data;
-            }
-
-            if (!targetRoute) {
-                // Logic Update: If not in route, still update the UI immediately if it's been verified
-                this.updateDeliveryUI(sid, 'delivered');
-                if (!options.silent) console.log("Survey ID not found in routes, but UI updated via verification.");
-                return;
-            }
-
-            const currentDelivery = targetRoute[colName] || {};
-            const isCurrentlyDelivered = currentDelivery[sid] === 'delivered';
-            const newStatus = options.forceStatus || (isCurrentlyDelivered ? 'pending' : 'delivered');
-
-            // If already at target status, skip update to save quota/time
-            if (currentDelivery[sid] === newStatus) {
-                this.updateDeliveryUI(sid, newStatus);
-                return;
-            }
-
-            const updatedDelivery = { ...currentDelivery, [sid]: newStatus };
-
-            const { error: updErr } = await window._supabase
-                .from('saved_routes')
-                .update({ [colName]: updatedDelivery })
-                .eq('id', targetRoute.id);
-
-            if (updErr) throw updErr;
-            this.updateDeliveryUI(sid, newStatus);
-
-            if (!options.silent) {
-                if (newStatus === 'delivered') App.showToast("Marked as Delivered ✅");
-                else App.showToast("Delivery status reset 🔄");
-            }
-        } catch (e) {
-            console.error("Delivery status update failed:", e);
-            if (!options.silent && App.showToast) App.showToast("Failed to update delivery status.");
-            if (btn) btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">local_shipping</span>`;
-        }
+        // Redirection: use the unified House Intelligence panel logic
+        // Only kept for legacy compatibility during migration
+        if (window.ListView) ListView.toggleActionPanel(sid, true);
     },
 
     updateDeliveryUI(sid, status) {
@@ -12544,6 +12533,165 @@ const ListView = {
         State.currentIdx = 0;
         this.render();
         App.showToast ? App.showToast(`Sorted by ${type.replace('-', ' ')}`) : null;
+    },
+
+    toggleActionPanel(sid, forceState = null) {
+        const panel = document.getElementById(`action-panel-${sid}`);
+        if (!panel) return;
+        const btn = document.getElementById(`btn-intel-${sid}`);
+        
+        const isOpening = forceState !== null ? forceState : (panel.style.display === 'none');
+        panel.style.display = isOpening ? 'block' : 'none';
+        
+        if (btn) {
+            btn.style.background = isOpening ? '#1e293b' : '#f59e0b';
+            const icon = btn.querySelector('.material-icons-round');
+            if (icon) icon.innerText = isOpening ? 'expand_less' : 'edit_note';
+        }
+
+        // Pre-fill if we have cached data
+        if (isOpening && window.ALL_VERIFIED_DATA) {
+            const info = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === String(sid));
+            if (info) {
+                const streetEl = document.getElementById(`intel-street-${sid}`);
+                const seqEl = document.getElementById(`intel-seq-${sid}`);
+                const sideLEl = document.getElementById(`intel-side-l-${sid}`);
+                const sideREl = document.getElementById(`intel-side-r-${sid}`);
+                const delivEl = document.getElementById(`intel-delivered-${sid}`);
+
+                if (streetEl) streetEl.value = info.street_no || 'C';
+                if (seqEl) seqEl.value = info.sequence_no || '';
+                if (sideLEl) sideLEl.checked = info.is_right === false;
+                if (sideREl) sideREl.checked = info.is_right === true;
+                if (delivEl) delivEl.checked = info.is_delivered === true;
+            }
+        }
+    },
+
+    async saveIntel(sid) {
+        if (!window.SpatialRouter) return;
+        
+        const street = document.getElementById(`intel-street-${sid}`)?.value;
+        const seq = parseInt(document.getElementById(`intel-seq-${sid}`)?.value || 0);
+        const isRight = document.getElementById(`intel-side-r-${sid}`)?.checked;
+        const isDelivered = document.getElementById(`intel-delivered-${sid}`)?.checked;
+
+        const options = {
+            street_no: street,
+            sequence_no: seq,
+            is_right: isRight,
+            is_delivered: isDelivered
+        };
+
+        // Call the unified save function in SpatialRouter (Phase 3)
+        const success = await SpatialRouter.saveHouseIntelligence(sid, options);
+        
+        if (success) {
+            this.toggleActionPanel(sid, false);
+            // Refresh the specific card indicators (Phase 4)
+            this.checkVerificationStatus(sid);
+        }
+    },
+
+    async batchSyncRoute(sids) {
+        if (!window._supabase || !sids || sids.length === 0) return;
+        
+        // Filter out SIDs already in cache OR currently pending
+        const missingSIDs = sids.map(id => String(id)).filter(id => {
+            const inCache = window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === id);
+            const isPending = this.pendingSyncSIDs.has(id);
+            return !inCache && !isPending;
+        });
+
+        if (missingSIDs.length === 0) return;
+
+        // Mark as pending
+        missingSIDs.forEach(id => this.pendingSyncSIDs.add(id));
+
+        try {
+            console.log(`[BatchSync] Fetching status for ${missingSIDs.length} houses...`);
+            const { data, error } = await window._supabase
+                .from('verified_houses')
+                .select('survey_id, verified_by, verified_at, street_no, sequence_no, is_right, is_delivered')
+                .eq('billing_month', window.ACTIVE_BILLING_MONTH)
+                .in('survey_id', missingSIDs);
+
+            if (error) throw error;
+            
+            if (data && data.length > 0) {
+                if (window.ALL_VERIFIED_DATA) {
+                    // Update global cache (avoid duplicates correctly)
+                    const existingSIDs = new Set(window.ALL_VERIFIED_DATA.map(v => String(v.survey_id)));
+                    const trulyNew = data.filter(v => !existingSIDs.has(String(v.survey_id)));
+                    window.ALL_VERIFIED_DATA = window.ALL_VERIFIED_DATA.concat(trulyNew);
+                }
+            }
+
+            // Update UI components (Phase 4 Logic)
+            if (this.checkVerificationStatus) {
+                missingSIDs.forEach(sid => this.checkVerificationStatus(sid));
+            }
+
+        } catch (e) {
+            console.warn("[BatchSync] Failed:", e);
+        } finally {
+            // Unmark as pending
+            missingSIDs.forEach(id => this.pendingSyncSIDs.delete(id));
+        }
+    },
+
+    jumpToID(id) {
+        if (!id) return;
+        const searchId = id.toString().trim().toLowerCase();
+        const idx = State.filtered.findIndex(r => 
+            r[0].toString().trim().toLowerCase() === searchId || 
+            (r[15] && r[15].toString().trim().toLowerCase() === searchId)
+        );
+
+        State.history.push({
+            filtered: [...State.filtered],
+            idx: State.currentIdx,
+            label: document.getElementById('stat-label').innerText
+        });
+
+        if (idx !== -1) {
+            State.currentIdx = idx;
+            this.render();
+        } else {
+            const record = RAW_DATA.find(r => 
+                r[0].toString().trim().toLowerCase() === searchId || 
+                (r[15] && r[15].toString().trim().toLowerCase() === searchId)
+            );
+            if (record) {
+                State.filtered = [record];
+                State.currentIdx = 0;
+                this.render();
+            } else {
+                State.history.pop();
+                App.showToast ? App.showToast(`ID #${id} not found.`) : null;
+            }
+        }
+    },
+
+    next() { if (State.currentIdx < State.filtered.length - 1) { State.currentIdx++; this.render(); } },
+    prev() { if (State.currentIdx > 0) { State.currentIdx--; this.render(); } },
+
+    async showOnMap(id) {
+        const record = RAW_DATA.find(r => r[0].toString() === id.toString());
+        if (!record) return;
+
+        ViewSwitcher.toMap();
+        
+        // Lazy Load coordinates if this is a verified house but missing from meta-sync
+        if (window.SpatialRouter) {
+            const coords = await SpatialRouter.getHouseCoordinates(id);
+            const target = L.latLng(coords.lat || record[1], coords.lng || record[2]);
+            State.map.flyTo(target, 19, { duration: 0.8 });
+            
+            setTimeout(() => {
+                if (window.VerifiedLayer) VerifiedLayer.focusHouse(id);
+            }, 800);
+        }
     }
 };
 
@@ -14180,7 +14328,7 @@ const LayerManager = {
 
         const isVerificationTab = this.activeTab === '📈 Pin Management';
 
-        let tabsHtml = `<div class="settings-tabs-row" style="${isVerificationTab ? 'display:none;' : ''}">`;
+        let tabsHtml = `<div class="settings-tabs-row">`;
         tabs.forEach(tab => {
             const isActive = this.activeTab === tab;
             tabsHtml += `
@@ -14281,10 +14429,25 @@ const LayerManager = {
                         <div style="margin-top:16px; padding:16px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:16px; font-size:11px; color:#0369a1; line-height:1.6; font-weight:600;">
                             <b>Important:</b> Changing this value affects all verifications and delivery tracking across the entire platform. Ensure the month name matches your Supabase column convention (e.g. <code>delivery_feb2026</code>).
                         </div>
+
+                        <div style="margin-top:20px; padding:20px; background:white; border:1px solid #e2e8f0; border-radius:16px;">
+                            <h4 style="margin:0 0 12px 0; color:#1e293b; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">Administration Tools</h4>
+                            <button onclick="Settings.exportHouseSequences()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#f8fafc; color:#475569; border:1px solid #e2e8f0; padding:12px; border-radius:10px; font-weight:800; gap:8px;">
+                                <span class="material-icons-round">download_for_offline</span> Export Sequencing CSV
+                            </button>
+                        </div>
                     </div>`;
         }
         else if (this.activeTab === '📈 Pin Management') {
             contentHtml += Settings.renderVerificationStats();
+            // Master Export Button for Admin (within Pin Management)
+            contentHtml += `
+                <div style="padding:16px; margin-top:0;">
+                    <button onclick="Settings.exportHouseSequences()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#2563eb; color:white; border:none; padding:14px; border-radius:12px; font-weight:800; gap:8px; box-shadow:0 4px 10px rgba(37,99,235,0.2);">
+                        <span class="material-icons-round">file_download</span> Master Export (Intelligence CSV)
+                    </button>
+                </div>
+            `;
         }
         else {
             // KML Cities Sections
@@ -14554,6 +14717,7 @@ const InfoCard = {
 // Settings
 
 const Settings = {
+    isFetchingGlobal: false,
     open() {
         try {
             if (typeof LayerManager !== 'undefined') {
@@ -14591,7 +14755,10 @@ const Settings = {
     },
 
     async fetchGlobalVerifications(forceRefresh = false) {
+        if (this.isFetchingGlobal) return;
         if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
+        
+        this.isFetchingGlobal = true;
 
         const cacheKey = `v_cache_${window.ACTIVE_BILLING_MONTH}`;
         
@@ -14638,7 +14805,7 @@ const Settings = {
             while (hasMore) {
                 const { data, error } = await window._supabase
                     .from('verified_houses')
-                    .select('survey_id, verified_by, verified_at, latitude, longitude')
+                    .select('survey_id, verified_by, verified_at, street_no, sequence_no, is_right, is_delivered')
                     .eq('billing_month', window.ACTIVE_BILLING_MONTH)
                     .gt('verified_at', latestTime)
                     .range(from, from + step - 1);
@@ -14673,6 +14840,7 @@ const Settings = {
         } catch (e) {
             console.error("Delta Sync Failure:", e);
         } finally {
+            this.isFetchingGlobal = false;
             if (refreshBtn) {
                 const icon = refreshBtn.querySelector('.material-icons-round');
                 if (icon) icon.classList.remove('spinning');
@@ -14684,16 +14852,16 @@ const Settings = {
         if (typeof RAW_DATA === 'undefined') return '<div style="padding:20px; text-align:center; color:#94a3b8;">Base data loading...</div>';
 
         if (!window.ALL_VERIFIED_DATA || window.ALL_VERIFIED_DATA.length === 0) {
-            // Trigger fetch only if it's truly null or first load
-            if (window.ALL_VERIFIED_DATA === null || (window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.length === 0)) {
-                this.fetchGlobalVerifications();
-            }
-
             return `
                     <div style="padding:60px 20px; text-align:center; color:#64748b;">
-                        <span class="material-icons-round spinning" style="font-size:48px; display:block; margin-bottom:16px; color:var(--primary);">refresh</span>
-                        <div style="font-weight:700;">Fetching verification data...</div>
-                        <div style="font-size:12px; margin-top:8px; opacity:0.7;">This may take a few seconds</div>
+                        <span class="material-icons-round" style="font-size:48px; display:block; margin-bottom:16px; color:#cbd5e1;">cloud_sync</span>
+                        <div style="font-weight:700;">No Local Records Found</div>
+                        <div style="font-size:12px; margin-top:8px; opacity:0.7; margin-bottom:24px;">Synchronize with the cloud to see verification stats.</div>
+                        <button onclick="Settings.fetchGlobalVerifications(true)" 
+                            style="background:var(--primary); color:white; border:none; padding:12px 24px; border-radius:12px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:8px; box-shadow:0 4px 12px rgba(37,99,235,0.2);">
+                            <span class="material-icons-round">sync</span>
+                            ${this.isFetchingGlobal ? 'Syncing...' : 'Start Synchronization'}
+                        </button>
                     </div>`;
         }
 
@@ -15081,21 +15249,27 @@ const Settings = {
 
             if (error) throw error;
 
-            // Refresh data
-            await this.fetchGlobalVerifications(true);
+            // CRITICAL: Update local cache manually since Delta Sync doesn't detect deletions
+            if (window.ALL_VERIFIED_DATA) {
+                window.ALL_VERIFIED_DATA = window.ALL_VERIFIED_DATA.filter(v => String(v.survey_id) !== String(sid));
+                const cacheKey = `v_cache_${window.ACTIVE_BILLING_MONTH}`;
+                localStorage.setItem(cacheKey, JSON.stringify(window.ALL_VERIFIED_DATA));
+            }
 
-            // CRITICAL: Clear spatial cache to ensure Marker Card updates
             if (window.SpatialRouter && SpatialRouter.verifiedSIDs) {
                 SpatialRouter.verifiedSIDs.clear();
             }
 
+            // UI Updates
+            if (typeof LayerManager !== 'undefined') LayerManager.renderSettingsUI();
             if (window.App) App.render();
             if (window.VerifiedLayer) VerifiedLayer.updateList();
+            if (window.ListView) ListView.render();
 
-            App.showToast("Record deleted successfully.");
+            App.showToast("Record deleted successfully. ✅");
         } catch (e) {
             console.error("Delete failed:", e);
-            App.showToast("Error deleting record.");
+            App.showToast("Error deleting record: " + e.message);
         }
     },
 
@@ -15126,6 +15300,74 @@ const Settings = {
             State.verifSortDir = 'desc';
         }
         LayerManager.renderSettingsUI();
+    },
+
+    exportHouseSequences() {
+        if (!window.ALL_VERIFIED_DATA || window.ALL_VERIFIED_DATA.length === 0) {
+            return App.showToast("No data to export.");
+        }
+
+        console.log(`[Export] Generating sequence report for ${window.ALL_VERIFIED_DATA.length} records...`);
+
+        // 1. Enrich data with Location info from RAW_DATA
+        const sidToRow = new Map();
+        if (window.RAW_DATA) window.RAW_DATA.forEach(r => sidToRow.set(String(r[0]), r));
+
+        const reportData = window.ALL_VERIFIED_DATA.map(v => {
+            const row = sidToRow.get(String(v.survey_id)) || [];
+            return {
+                sid: v.survey_id,
+                name: decodePII(row[4] || 'Unknown'),
+                bill_id: decodePII(row[15] || '-'),
+                district: row[10] || '-',
+                city: row[11] || '-',
+                area: row[12] || '-',
+                street: v.street_no || 'C',
+                side: v.is_right ? 'Right' : 'Left',
+                sequence: v.sequence_no || 0,
+                is_delivered: v.is_delivered ? 'YES' : 'NO',
+                verified_by: v.verified_by,
+                verified_at: v.verified_at
+            };
+        });
+
+        // 2. Sort by Area -> Street -> Sequence
+        reportData.sort((a, b) => {
+            if (a.area !== b.area) return a.area.localeCompare(b.area);
+            if (a.street !== b.street) return a.street.localeCompare(b.street, undefined, { numeric: true });
+            return a.sequence - b.sequence;
+        });
+
+        // 3. Generate CSV
+        const headers = ["SurveyID", "Name", "Bill_ID", "District", "City", "Area", "Street", "Side", "Sequence", "Is_Delivered", "Verified_By", "Verified_At"];
+        const rows = reportData.map(d => [
+            d.sid, 
+            `"${d.name.replace(/"/g, '""')}"`, 
+            d.bill_id, 
+            d.district, 
+            d.city, 
+            d.area, 
+            d.street, 
+            d.side, 
+            d.sequence, 
+            d.is_delivered, 
+            d.verified_by, 
+            d.verified_at
+        ]);
+
+        const csvContent = "data:text/csv;charset=utf-8," 
+            + headers.join(",") + "\n"
+            + rows.map(e => e.join(",")).join("\n");
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `House_Intelligence_${window.ACTIVE_BILLING_MONTH}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        App.showToast("Sequence CSV Exported ✅");
     }
 };
 
@@ -16128,7 +16370,13 @@ const SpatialRouter = {
             if (btnVerifyText) btnVerifyText.innerText = 'Verify House';
             btnVerify.disabled = false;
             btnVerify.style.background = '#f97316';
-            btnVerify.onclick = () => this.verifyHouseLocation(sid, parseFloat(row[1]), parseFloat(row[2]));
+            btnVerify.onclick = () => {
+                ViewSwitcher.toList();
+                setTimeout(() => {
+                    ListView.jumpToID(sid);
+                    ListView.toggleActionPanel(sid, true);
+                }, 300);
+            };
 
             const verifierDisplay = document.getElementById('marker-card-verifier');
             if (verifierDisplay) verifierDisplay.style.display = 'none';
@@ -16158,7 +16406,7 @@ const SpatialRouter = {
                     // Fallback logic
                     const sidIdx = State.filtered.findIndex(r => String(r[0]) === String(sid));
                     if (sidIdx !== -1) State.currentIdx = sidIdx;
-                    if (typeof ViewSwitcher !== 'undefined') ViewSwitcher.toList();
+                    if (typeof ViewSwitcher !== 'undefined') ViewSwitcher.toList(false);
                 }
             };
         }
@@ -16226,6 +16474,113 @@ const SpatialRouter = {
                 modal.style.display = 'none';
             }
         }, 300);
+    },
+    async saveHouseIntelligence(sid, options = {}) {
+        try {
+            if (!window._supabase) throw new Error("Supabase client not found.");
+
+            const row = window.RAW_DATA.find(r => String(r[0]) === String(sid));
+            const surveyorName = row ? (row[6] || 'Unknown Surveyor') : 'Unknown Surveyor';
+            const currentRoute = this.editingRouteName || (this.activeDisplayRoutes && this.activeDisplayRoutes.length > 0 ? this.activeDisplayRoutes[0] : 'Unknown Route');
+
+            // Use pending pins if they exist, otherwise fallback to existing verified data or survey data
+            const pin = State.pendingPin || {};
+            const existing = (window.ALL_VERIFIED_DATA || []).find(v => String(v.survey_id) === String(sid));
+
+            const finalLat = pin.lat || (existing ? existing.latitude : parseFloat(row[1]));
+            const finalLng = pin.lng || (existing ? existing.longitude : parseFloat(row[2]));
+
+            const payload = {
+                survey_id: String(sid),
+                latitude: finalLat,
+                longitude: finalLng,
+                surveyor_name: surveyorName,
+                route_name: currentRoute,
+                default_lat: parseFloat(row[1]),
+                default_lng: parseFloat(row[2]),
+                billing_month: ACTIVE_BILLING_MONTH,
+                street_no: options.street_no || null,
+                is_right: options.is_right === true,
+                sequence_no: parseInt(options.sequence_no) || 0,
+                is_delivered: options.is_delivered === true,
+                delivered_at: options.is_delivered ? new Date().toISOString() : null,
+                verified_by: window.USER ? window.USER.email : 'anonymous',
+                verified_at: new Date().toISOString()
+            };
+
+            const { error } = await window._supabase.from('verified_houses').upsert([payload]);
+            if (error) throw error;
+
+            // Update Local Cache
+            const verInfo = {
+                survey_id: String(sid),
+                verified_by: payload.verified_by,
+                verified_at: payload.verified_at,
+                latitude: finalLat,
+                longitude: finalLng,
+                street_no: payload.street_no,
+                sequence_no: payload.sequence_no,
+                is_right: payload.is_right,
+                is_delivered: payload.is_delivered
+            };
+
+            const cacheKey = `${sid}_${ACTIVE_BILLING_MONTH}`;
+            this.verifiedSIDs.set(cacheKey, { verified_by: payload.verified_by });
+
+            if (window.ALL_VERIFIED_DATA) {
+                window.ALL_VERIFIED_DATA = window.ALL_VERIFIED_DATA.filter(v => String(v.survey_id) !== String(sid));
+                window.ALL_VERIFIED_DATA.push(verInfo);
+            }
+
+            State.pendingPin = null; // Clear pinning state after successful save
+            if (App.showToast) App.showToast("Intelligence Saved Successfully!");
+            return true;
+        } catch (e) {
+            console.error("[SaveIntel] Error:", e);
+            if (App.showToast) App.showToast(`Error Saving: ${e.message}`);
+            return false;
+        }
+    },
+
+    async getHouseCoordinates(sid) {
+        const sidStr = String(sid);
+        
+        // 1. Check local cache first
+        if (window.ALL_VERIFIED_DATA) {
+            const found = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
+            if (found && found.latitude && found.longitude) {
+                return { lat: found.latitude, lng: found.longitude };
+            }
+        }
+
+        // 2. Lazy fetch from Supabase if missing or metadata-only
+        try {
+            console.log(`[LazyLoad] Fetching coordinates for #${sidStr}...`);
+            const { data, error } = await window._supabase
+                .from('verified_houses')
+                .select('latitude, longitude')
+                .eq('survey_id', sidStr)
+                .order('verified_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (error) throw error;
+            if (data) {
+                // Update local record so we don't fetch again
+                if (window.ALL_VERIFIED_DATA) {
+                    const idx = window.ALL_VERIFIED_DATA.findIndex(v => String(v.survey_id) === sidStr);
+                    if (idx !== -1) {
+                        window.ALL_VERIFIED_DATA[idx].latitude = data.latitude;
+                        window.ALL_VERIFIED_DATA[idx].longitude = data.longitude;
+                    }
+                }
+                return { lat: data.latitude, lng: data.longitude };
+            }
+        } catch (e) {
+            console.warn("[LazyLoad] Failed to fetch coordinates:", e);
+        }
+
+        return { lat: null, lng: null };
     },
 
     async verifyHouseLocation(sid, origLat, origLng, options = {}) {
@@ -16422,11 +16777,21 @@ const SpatialRouter = {
 
         const center = State.map.getCenter();
         const sid = State.pinningSID;
-        const oLat = State.pinningOrigLat;
-        const oLng = State.pinningOrigLng;
 
-        this.cancelManualPin(true); // Close UI but we already have coordinates
-        this.verifyHouseLocation(sid, oLat, oLng, { manualLat: center.lat, manualLng: center.lng });
+        // Store as pending, don't save yet (Wait for 'Save' in Action Panel)
+        State.pendingPin = { lat: center.lat, lng: center.lng };
+
+        this.cancelManualPin(true); 
+        
+        if (App.showToast) App.showToast("Location Locked! Now fill details and click SAVE in the card.");
+        
+        // Return to List View to complete the workflow
+        if (window.ViewSwitcher) ViewSwitcher.toList();
+        
+        // Ensure Action Panel for this house is open
+        setTimeout(() => {
+            if (window.ListView) ListView.toggleActionPanel(sid, true);
+        }, 300);
     },
 
     cancelManualPin(isSilent = false) {
@@ -16495,16 +16860,8 @@ const SpatialRouter = {
         const wasCollapsed = this.collapsedGroups.has(group);
 
         // Accordion logic: First, collapse all known groups
-        const isMapReady = window.SID_MAP instanceof Map;
         (State.savedRoutes || []).forEach(route => {
-            let area = 'Unknown Area';
-            if (route.area) {
-                area = this.cleanMCName(route.area);
-            } else if (route.sequence && route.sequence.length > 0) {
-                const sid = String(route.sequence[0].surveyId || route.sequence[0].id);
-                const row = isMapReady ? window.SID_MAP.get(sid) : null;
-                if (row && row[12]) area = this.cleanMCName(row[12]);
-            }
+            const area = this.getRouteArea(route);
             this.collapsedGroups.add(area);
         });
 
