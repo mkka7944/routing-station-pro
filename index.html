@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Billing Station Pro [V8 PWA]</title>
+    <title>Routing Station Pro [v2026.04.20.1201]</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
@@ -7948,6 +7948,21 @@ path.leaflet-interactive:focus {
         white-space: nowrap;
 }
 
+.active-nav-tooltip {
+    background: #1e293b !important;
+    border: none !important;
+    color: white !important;
+    font-weight: 800 !important;
+    padding: 6px 12px !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4) !important;
+    font-size: 12px !important;
+}
+
+.active-nav-tooltip:before {
+    border-top-color: #1e293b !important;
+}
+
 .leaflet-tooltip-left:before,
 .leaflet-tooltip-right:before {
         border: none !important;
@@ -8432,11 +8447,6 @@ input[type=number] {
         overflow: hidden;
 }
 
-.marker-btn-group-verify {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-}
 
 .marker-btn {
         border: none;
@@ -8446,39 +8456,46 @@ input[type=number] {
         transition: all 0.2s;
 }
 
-.marker-btn-verify {
-        width: 32px;
-        height: 32px;
-        background: var(--primary);
-        color: white;
-        border-radius: 10px;
-        justify-content: center;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+.v6-status-badge {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 4px 10px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #cbd5e1;
 }
 
-.marker-btn-verify-label {
-        display: flex;
-        flex-direction: column;
-        line-height: 1.2;
-        min-width: 0;
-        flex: 1;
+.v6-status-badge.verified {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: #34d399;
 }
 
-#btn-verify-text {
-        font-size: 12px;
-        font-weight: 800;
-        color: white;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+.marker-static-btn {
+    width: 30px;
+    height: 30px;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    pointer-events: none; /* Explicitly static */
 }
 
-#marker-card-verifier {
-        font-size: 10px;
-        color: #cbd5e1;
-        font-weight: 600;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 140px;
+.marker-static-btn.active {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.marker-static-btn .material-icons-round {
+    font-size: 18px;
 }
 
 .marker-btn-list {
@@ -8552,15 +8569,6 @@ input[type=number] {
                 backdrop-filter: blur(8px) !important;
         }
 
-        .marker-btn-verify {
-                width: 28px !important;
-                height: 28px !important;
-                border-radius: 8px !important;
-        }
-
-        #btn-verify-text {
-                font-size: 10px !important;
-        }
 
         .marker-btn-list {
                 padding: 4px 10px !important;
@@ -9276,10 +9284,10 @@ input[type=number] {
     <!-- Compact Header -->
     <div class="sidebar-header-padding">
         <div>
-            <div style="font-weight: 700; font-size: 16px;">Billing Station Pro</div>
+            <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 18-Apr 04:10 PM 
-                <span style="color:var(--primary); margin-left:4px;">[Rev. V8 PWA]</span>
+                Updated: 21-Apr 04:30 PM 
+                <span style="color:var(--primary); margin-left:4px;">[v2026.04.21.1630]</span>
             </div>
         </div>
         
@@ -9534,10 +9542,10 @@ input[type=number] {
                         <div style="font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Map Categories</div>
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
                             <div class="multi-option selected" data-value="domestic" onclick="App.toggleQuickFilter('domestic', event)" style="margin:0; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; justify-content:center;">
-                                <input type="checkbox" checked id="q-domestic" style="margin-right:8px;"> <span style="font-size:12px; font-weight:700; color:#334155;">Domestic</span>
+                                <input type="checkbox" checked id="q-domestic" onchange="App.handleQuickFilterChange('domestic', event)" style="margin-right:8px;"> <span style="font-size:12px; font-weight:700; color:#334155;">Domestic</span>
                             </div>
                             <div class="multi-option selected" data-value="commercial" onclick="App.toggleQuickFilter('commercial', event)" style="margin:0; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; justify-content:center;">
-                                <input type="checkbox" checked id="q-commercial" style="margin-right:8px;"> <span style="font-size:12px; font-weight:700; color:#334155;">Commercial</span>
+                                <input type="checkbox" checked id="q-commercial" onchange="App.handleQuickFilterChange('commercial', event)" style="margin-right:8px;"> <span style="font-size:12px; font-weight:700; color:#334155;">Commercial</span>
                             </div>
                         </div>
                     </div>
@@ -9940,16 +9948,18 @@ input[type=number] {
 
                 <!-- Action buttons as overlay -->
                 <div class="marker-card-actions-overlay">
-                    <div class="marker-btn-group-verify">
-                        <button class="marker-btn marker-btn-verify" id="btn-verify-house" title="Verify Temporarily Disabled" disabled style="opacity: 0.5; cursor: not-allowed; pointer-events: none;">
-                            <span class="material-icons-round">my_location</span>
-                        </button>
-                        <div class="marker-btn-verify-label" style="opacity: 0.5;">
-                            <div id="btn-verify-text">Verify (Disabled)</div>
-                            <div id="marker-card-verifier" style="display:none;"></div>
+                    <div id="marker-card-status-container" style="display:flex; align-items:center; gap:8px;">
+                        <!-- Status Badge (Read-only) -->
+                        <div id="marker-card-status-badge" class="v6-status-badge">
+                            <span class="material-icons-round" style="font-size:14px;">history</span>
+                            <span id="marker-status-text">Unverified</span>
+                        </div>
+                        
+                        <!-- Delivery Indicator (Static) -->
+                        <div id="btn-delivery-modal" class="marker-static-btn" title="Delivery Status">
+                            <span class="material-icons-round">local_shipping</span>
                         </div>
                     </div>
-
                     
                     <button class="marker-btn-list" id="btn-modal-list-view">
                         <span class="material-icons-round">view_list</span> List
@@ -10700,21 +10710,19 @@ const State = {
     history: [], // [{ filtered, idx, label }] for back navigation
     searchLocalOnly: false, // Toggle for searching within current filters
     showTooltips: false, // User Preference for boundary layers
+    isMapPagerActive: false, // UI GUARD: Prevents map interactions from hiding pager
     kmlPane: null,
 
-    // Verification Panel State
-    verifSelectedVerifier: null,
-    verifSelectedDate: null,
-    verifSelectedDistrict: '',
-    verifSelectedCity: '',
-    verifSelectedArea: '',
-    verifSortBy: 'date', // date or email
-    verifSortDir: 'desc', // desc or asc
-    verificationViewMode: 'list', // list or cities
-    pinningRefMarker: null, // Temporary marker for original portal location
+    // Pinning Mode HUD Tracking
+    isPinning: false,
+    pinningSID: null,
+    pinningOrigin: null,
+    pinningViewSid: null, // Track SID for view mode return
+    pinningRefMarker: null, // Reference marker at portal position
+    manualPinMarker: null, // Marker at manually pinned position
+    unsavedChanges: {}, // { sid: { lat, lng, street_no, sequence_no, is_right, is_delivered, isLocked } }
     pendingHouseIntel: {}, // { sid: { street_no, sequence_no, is_right, is_delivered } }
-    pendingPin: null,      // { lat, lng } for the house currently being pinned
-
+    
     // Battery Optimization: Dynamic marker limit based on device and selection
     getEffectiveMarkerLimit() {
         const isDesktop = window.innerWidth > 768;
@@ -10741,7 +10749,7 @@ const State = {
 };
 
 window.KML_META = {"MC1": "<b>MC-01 District</b><br>Primary Industrial Zone", "MC 2": "<b>MC-02 District</b><br>Residential Hub", "MC3": "<b>MC-03 District</b><br>Commercial Core"};
-window.DATA_VERSION = "v2026.04.18.1610";
+window.DATA_VERSION = "v2026.04.21.1630";
 window.DATA_CHUNKS_COUNT = 11;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -10752,12 +10760,37 @@ window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were
 
 const App = {
     toggleQuickFilter(key, e) {
-        if (e && e.target.tagName === 'INPUT') return; // Handled by change listener potentially, but better to unify here
-        State.quickFilters[key] = !State.quickFilters[key];
+        // Determine the new state based on the checkbox or toggle
+        let newState;
         const checkbox = document.getElementById(`q-${key}`);
+        
+        if (e && e.target.tagName === 'INPUT') {
+            // When clicking checkbox directly, use its checked state
+            newState = e.target.checked;
+        } else {
+            // When clicking the container, toggle
+            newState = !State.quickFilters[key];
+        }
+        
+        // Update state
+        State.quickFilters[key] = newState;
+        
         if (checkbox) {
-            checkbox.checked = State.quickFilters[key];
-            checkbox.closest('.multi-option').classList.toggle('selected', State.quickFilters[key]);
+            checkbox.checked = newState;
+            const container = checkbox.closest('.multi-option');
+            if (container) {
+                container.classList.toggle('selected', newState);
+            }
+        }
+        this.apply();
+    },
+    
+    handleQuickFilterChange(key, e) {
+        // Handle onchange event from checkbox
+        State.quickFilters[key] = e.target.checked;
+        const container = e.target.closest('.multi-option');
+        if (container) {
+            container.classList.toggle('selected', e.target.checked);
         }
         this.apply();
     },
@@ -11050,7 +11083,26 @@ const App = {
         State.map.getPane('kmlPane').style.zIndex = 350;
 
         // Auto collapse the right-side extra controls when user manually interacts with map
-        State.map.on('dragstart zoomstart click touchstart', () => {
+        State.map.on('dragstart zoomstart click touchstart', (e) => {
+            // CRITICAL GUARD: If the map pager is active, do NOT allow map interactions to hide it.
+            // This prevents accidental collapses during transitions or navigation.
+            if (window.State && State.isMapPagerActive) return;
+
+            // CRITICAL: Prevent auto-hide if we are actively navigating (pager move)
+            const isNavigating = window.MapNavigator && MapNavigator._lastMoveTime && (Date.now() - MapNavigator._lastMoveTime < 2500);
+            if (isNavigating) return;
+
+            // NEW: Ignore if click target is within any UI container
+            if (e.originalEvent && (e.originalEvent.target.closest('#map-pager') || e.originalEvent.target.closest('#route-pager-container') || e.originalEvent.target.closest('.leaflet-control-container') || e.originalEvent.target.closest('.pop-card'))) {
+                return;
+            }
+
+            // Don't auto-collapse if clicking a marker - Leaflet handles marker clicks separately
+            if (e.type === 'click' || e.type === 'touchstart') {
+                const isMapContent = e.originalEvent && (e.originalEvent.target.classList.contains('leaflet-container') || e.originalEvent.target.id === 'map');
+                if (!isMapContent) return;
+            }
+
             if (window.UIInteractions && typeof UIInteractions.toggleExtraCtrls === 'function') {
                 UIInteractions.toggleExtraCtrls(true);
             }
@@ -11782,13 +11834,32 @@ const App = {
         }
     },
 
-    bindCustomTooltip(marker, content) {
+    bindCustomTooltip(marker, content, forcePermanent = false) {
         if (!marker || !content) return;
-        marker.bindTooltip(`${content}<div class="tooltip-arrow"><div class="tooltip-arrow-stem"></div><div class="tooltip-arrow-tip"></div></div>`, {
-            permanent: false,
+        
+        // UNIFIED TOOLTIP SYSTEM (v2026.04.20.FINAL)
+        // This handles both hover and touch (sticky) tooltips.
+        const tooltipOptions = {
+            permanent: forcePermanent,
             direction: 'top',
             offset: [0, -10],
-            className: 'custom-tooltip'
+            className: 'active-nav-tooltip custom-tooltip', 
+            opacity: 1,
+            sticky: !forcePermanent // Follow mouse only if not fixed
+        };
+
+        marker.unbindTooltip();
+        marker.bindTooltip(`${content}<div class="tooltip-arrow"><div class="tooltip-arrow-stem"></div><div class="tooltip-arrow-tip"></div></div>`, tooltipOptions);
+        
+        if (forcePermanent) marker.openTooltip();
+
+        // Ensure that on mobile/touch, a click triggers the 'permanent' feel
+        marker.on('click', (e) => {
+             const currentTooltip = marker.getTooltip();
+             if (currentTooltip && !currentTooltip.options.permanent) {
+                 // Toggle to permanent for this specific marker to make it 'stay' on touch
+                 this.bindCustomTooltip(marker, content, true);
+             }
         });
     }
 };
@@ -11889,6 +11960,7 @@ const ViewSwitcher = {
         }
     };
 
+// === 06_list_view.js ===
 // === 06_list_view.js ===
 // === 06_list_view.js ===
 // ListView
@@ -11992,17 +12064,35 @@ const ListView = {
             }
         }
 
-        // RESToration Bridge: Check for unsaved local data or remote cloud data
-        const p = State.pendingHouseIntel ? State.pendingHouseIntel[sidStr] : null;
+        // Unified Unsaved Context: Check for unsaved local data or remote cloud data
+        const staging = State.unsavedChanges[sidStr] || null;
+        const p = staging || (State.pendingHouseIntel ? State.pendingHouseIntel[sidStr] : null);
         const v = window.ALL_VERIFIED_DATA ? window.ALL_VERIFIED_DATA.find(i => String(i.survey_id) === sidStr) : null;
+
         const isLeft = v ? v.is_right === false : false;
         const isRight = v ? v.is_right === true : false;
         const isDeliv = v ? v.is_delivered === true : false;
 
+        // Verified context string (Street, Seq, Side)
+        let verifiedInfoHtml = '';
+        const activeIntel = p || v;
+        const hasPending = !!staging; // Defined solely by presence in unified state
+        
+        if (activeIntel) {
+            const sideStr = activeIntel.is_right === true ? 'Right' : (activeIntel.is_right === false ? 'Left' : '-');
+            verifiedInfoHtml = `
+                <div style="margin-top:4px; display:flex; align-items:center; gap:6px; font-size:10px; font-weight:800; color:#10b981; background:#f0fdf4; padding:2px 8px; border-radius:6px; border:1px solid #dcfce7; width:fit-content;">
+                    <span class="material-icons-round" style="font-size:12px;">verified</span>
+                    ${activeIntel.street_no || 'C'} • Seq ${activeIntel.sequence_no || 0} • ${sideStr}
+                    ${activeIntel.is_delivered ? ' • <span style="color:#059669">Delivered</span>' : ''}
+                </div>
+            `;
+        }
+
         el.innerHTML = `
                 <div class="card-header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding: 10px 0 8px 0;">
                     <div style="display:flex; gap:6px; flex:1; flex-shrink:0; flex-wrap:wrap;">
-                        <button type="button" onclick="ListView.showOnMap('${r[0]}')" title="Show on Map" style="background:#f8fafc; color:var(--primary); border:1px solid #e2e8f0; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                        <button type="button" onclick="event.stopPropagation(); ListView.showOnMap('${r[0]}')" title="Show on Map" style="background:#f8fafc; color:var(--primary); border:1px solid #e2e8f0; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; pointer-events:auto !important; position:relative; z-index:10;">
                             <span class="material-icons-round" style="font-size:18px;">my_location</span>
                         </button>
                         <div style="position:relative;">
@@ -12016,15 +12106,17 @@ const ListView = {
                                 <div onclick="ListView.sort('status-paid'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Paid First</div>
                             </div>
                         </div>
-                        <button type="button" id="btn-verify-house-${r[0]}" disabled 
-                                style="flex:1; min-width:0; background:#e2e8f0; color:#94a3b8; border:none; border-radius:10px; height:34px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:not-allowed; font-weight:800; font-size:10px; opacity:0.6;">
-                            <span class="material-icons-round" style="font-size:16px;">verified</span>
-                            <span>Verify</span>
-                        </button>
-                        <button type="button" id="btn-intel-${r[0]}" onclick="ListView.toggleActionPanel('${r[0]}')" 
-                                style="flex:1; min-width:0; background:#f59e0b; color:white; border:none; border-radius:10px; height:34px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:pointer; font-weight:800; font-size:10px; box-shadow:0 2px 5px rgba(245, 158, 11, 0.3); transition: all 0.2s;">
+                        <button type="button" id="btn-intel-${r[0]}" 
+                                 onclick="event.stopPropagation(); ListView.toggleActionPanel('${r[0]}')" 
+                                 style="flex:1; min-width:0; background:#f59e0b; color:white; border:none; border-radius:10px; height:34px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:pointer; font-weight:800; font-size:10px; box-shadow:0 2px 5px rgba(245, 158, 11, 0.3); transition: all 0.2s; pointer-events:auto !important; position:relative; z-index:1000;">
                             <span class="material-icons-round" style="font-size:16px;">edit_note</span>
                             <span>House Intel</span>
+                        </button>
+                        <button type="button" id="btn-manual-pin-${r[0]}" 
+                                 onclick="event.stopPropagation(); if(window.SpatialRouter) SpatialRouter.startManualPin('${r[0]}', false)" 
+                                 style="background:${(staging && staging.isManualPinned) ? '#8b5cf6' : '#e0e7ff'}; color:${(staging && staging.isManualPinned) ? 'white' : '#4338ca'}; border:none; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:800; font-size:10px; pointer-events:auto !important; position:relative; z-index:1000;"
+                                title="View Pin">
+                            <span class="material-icons-round" style="font-size:18px;">${(staging && staging.isManualPinned) ? 'location_on' : 'add_location_alt'}</span>
                         </button>
                         <button type="button" id="btn-delivery-${r[0]}" title="Mark Delivered" disabled 
                                 style="background:#fef3c7; color:#d97706; border:none; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:default; opacity:0.6;">
@@ -12042,17 +12134,23 @@ const ListView = {
                         <span style="color:var(--primary);">${surveyor}</span>
                         <span>&bull;</span>
                         <span style="font-size:9px;">${dateTime}</span>
+                        ${hasPending ? `<span style="background:#ef4444; color:white; font-size:8px; padding:2px 8px; border-radius:4px; font-weight:900; margin-left:8px; letter-spacing:0.5px;">⚠️ SAVE REQUIRED</span>` : ''}
                         <span class="pill ${payStatus}" style="font-size:8px; padding:1px 8px; font-weight:800; margin-left:auto;">${r[16]}</span>
                     </div>
 
                     <!-- Main Record Info -->
-                    <div style="display:flex; flex-direction:column; gap:6px;">
+                    <div style="display:flex; flex-direction:column; gap:4px;">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
                             <div style="font-weight:850; font-size:15px; color:#1e293b; line-height:1.2; flex:1; min-width:0;">${decodePII(r[4])}</div>
                             <div style="font-weight:900; font-size:15px; color:#ef4444; white-space:nowrap;">Rs. ${totalPayable}</div>
                         </div>
                         
-                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <!-- Physical Address -->
+                        <div style="font-size:11px; color:#64748b; font-weight:600; line-height:1.4;">${decodePII(r[5]) || 'No physical address found'}</div>
+
+                        ${verifiedInfoHtml}
+                        
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:4px;">
                             <div onclick="BillVerifier.open('${r[15]}')" style="display:flex; align-items:center; gap:4px; font-weight:800; font-size:10px; color:#2563eb; background:#eff6ff; padding:2px 8px; border-radius:6px; cursor:pointer;">
                                 <span class="material-icons-round" style="font-size:12px;">receipt_long</span>
                                 ${decodePII(r[15])}
@@ -12066,53 +12164,64 @@ const ListView = {
                     </div>
                 </div>
 
-                <!-- NEW: Integrated Action Panel -->
+                <!-- Integrated Action Panel (Overlay Removed for Interactivity) -->
                 <div id="action-panel-${r[0]}" style="display:${p ? 'block' : 'none'}; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px; margin-top:10px; box-shadow:inset 0 2px 4px rgba(0,0,0,0.02);">
+
                     <div style="display:flex; flex-direction:column; gap:10px;">
                         <div style="display:flex; gap:8px; align-items:center;">
                             <div style="flex:1;">
                                 <label style="display:block; font-size:9px; font-weight:800; color:#94a3b8; margin-bottom:4px; text-transform:uppercase;">Street No</label>
-                                <select id="intel-street-${r[0]}" style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none;">
+                                <select id="intel-street-${r[0]}" ${v && (!staging || staging.isLocked !== false) ? 'disabled' : ''} onchange="ListView.validateIntelInput('${r[0]}')" style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none;">
                                     <option value="C">Commercial (C)</option>
                                     ${Array.from({length: 50}, (_, i) => {
                                         const val = `G${i+1}`;
-                                        const isSelected = (p ? p.street_no === val : r[11] === val);
+                                        const isSelected = (p && p.street_no !== undefined ? p.street_no === val : (v ? v.street_no === val : r[11] === val));
                                         return `<option value="${val}" ${isSelected ? 'selected' : ''}>${val}</option>`;
                                     }).join('')}
                                 </select>
                             </div>
                             <div style="flex:0.8;">
                                 <label style="display:block; font-size:9px; font-weight:800; color:#94a3b8; margin-bottom:4px; text-transform:uppercase;">Sequence #</label>
-                                <input type="number" id="intel-seq-${r[0]}" value="${p ? p.sequence_no : (r[13] || '')}" placeholder="0" style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none;">
+                                <input type="number" id="intel-seq-${r[0]}" ${v && (!staging || staging.isLocked !== false) ? 'disabled' : ''} oninput="ListView.validateIntelInput('${r[0]}')" value="${(p && p.sequence_no !== undefined) ? p.sequence_no : (v && v.sequence_no !== undefined ? v.sequence_no : (r[13] || ''))}" placeholder="0" style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none;">
                             </div>
                         </div>
 
                         <div style="display:flex; justify-content:space-between; align-items:center; background:white; padding:8px; border-radius:10px; border:1px solid #e2e8f0;">
                             <div style="display:flex; gap:12px;">
                                 <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                                    <input type="checkbox" id="intel-side-l-${r[0]}" ${((p ? p.is_right === false : isLeft) ? 'checked' : '')} onchange="document.getElementById('intel-side-r-${r[0]}').checked = !this.checked" style="accent-color:var(--primary); width:16px; height:16px;">
+                                    <input type="checkbox" id="intel-side-l-${r[0]}" ${v && (!staging || staging.isLocked !== false) ? 'disabled' : ''} ${((p && p.is_right !== undefined ? p.is_right === false : isLeft) ? 'checked' : '')} onchange="document.getElementById('intel-side-r-${r[0]}').checked = !this.checked; ListView.validateIntelInput('${r[0]}')" style="accent-color:var(--primary); width:16px; height:16px;">
                                     <span style="font-size:11px; font-weight:800; color:#475569;">Left</span>
                                 </label>
                                 <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                                    <input type="checkbox" id="intel-side-r-${r[0]}" ${((p ? p.is_right === true : isRight) ? 'checked' : '')} onchange="document.getElementById('intel-side-l-${r[0]}').checked = !this.checked" style="accent-color:var(--primary); width:16px; height:16px;">
+                                    <input type="checkbox" id="intel-side-r-${r[0]}" ${v && (!staging || staging.isLocked !== false) ? 'disabled' : ''} ${((p && p.is_right !== undefined ? p.is_right === true : isRight) ? 'checked' : '')} onchange="document.getElementById('intel-side-l-${r[0]}').checked = !this.checked; ListView.validateIntelInput('${r[0]}')" style="accent-color:var(--primary); width:16px; height:16px;">
                                     <span style="font-size:11px; font-weight:800; color:#475569;">Right</span>
                                 </label>
                             </div>
                             <label style="display:flex; align-items:center; gap:6px; cursor:pointer; background:#f0fdf4; padding:4px 8px; border-radius:6px; border:1px solid #dcfce7;">
-                                <input type="checkbox" id="intel-delivered-${r[0]}" ${((p ? p.is_delivered : isDeliv) ? 'checked' : '')} style="accent-color:#16a34a; width:16px; height:16px;">
+                                <input type="checkbox" id="intel-delivered-${r[0]}" ${v && (!staging || staging.isLocked !== false) ? 'disabled' : ''} ${((p && p.is_delivered !== undefined ? p.is_delivered : isDeliv) ? 'checked' : '')} 
+                                       onchange="ListView.syncDeliveryState('${r[0]}')"
+                                       style="accent-color:#16a34a; width:16px; height:16px;">
                                 <span style="font-size:11px; font-weight:800; color:#16a34a;">Mark Delivered</span>
                             </label>
                         </div>
 
                         <div style="display:flex; gap:8px;">
-                            <button type="button" onclick="SpatialRouter.startManualPin('${r[0]}')" 
-                                    style="flex:1; background:white; color:#64748b; border:1.5px solid #e2e8f0; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:800; font-size:11px;">
-                                <span class="material-icons-round" style="font-size:18px;">add_location_alt</span> Manual Pin
+                             <button type="button" onclick="event.stopPropagation(); SpatialRouter.startManualPin('${r[0]}')" 
+                                     style="flex:1.2; background:${(staging && staging.isManualPinned) ? '#e0e7ff' : 'white'}; color:#2563eb; border:2px solid #dbeafe; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:800; font-size:11px; box-shadow:0 2px 4px rgba(37,99,235,0.05); pointer-events:auto !important; position:relative; z-index:1000;">
+                                 <span class="material-icons-round" style="font-size:18px;">${(staging && staging.isManualPinned) ? 'edit_location' : 'add_location_alt'}</span> ${(staging && staging.isManualPinned) ? 'Reposition' : 'Manual Pin'}
+                             </button>
+
+                            ${v && (!staging || staging.isLocked !== false) ? `
+                            <button type="button" onclick="ListView.unlockIntel('${r[0]}')" 
+                                    style="flex:1.5; background:#e0f2fe; color:#0369a1; border:none; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:900; font-size:11px; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+                                <span class="material-icons-round" style="font-size:18px;">lock_open</span> EDIT DETAILS
                             </button>
-                            <button type="button" onclick="ListView.saveIntel('${r[0]}')" 
-                                    style="flex:1.5; background:#10b981; color:white; border:none; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:900; font-size:11px; box-shadow:0 4px 6px rgba(16, 185, 129, 0.2);">
+                            ` : `
+                            <button type="button" id="btn-save-intel-${r[0]}" onclick="ListView.saveIntel('${r[0]}')" 
+                                    style="flex:1.5; background:#10b981; color:white; border:none; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:900; font-size:11px; box-shadow:0 4px 6px rgba(16, 185, 129, 0.2); transition: opacity 0.2s;">
                                 <span class="material-icons-round" style="font-size:18px;">cloud_upload</span> Save & Close
                             </button>
+                            `}
                         </div>
                     </div>
                 </div>
@@ -12165,9 +12274,6 @@ const ListView = {
     },
 
     async checkVerificationStatus(sid) {
-        const btn = document.getElementById(`btn-verify-house-${sid}`);
-        if (!btn) return;
-
         const sidStr = String(sid);
         const cacheKey = `${sidStr}_${ACTIVE_BILLING_MONTH}`;
         
@@ -12184,23 +12290,6 @@ const ListView = {
         }
 
         if (cachedInfo) {
-            btn.style.background = '#f0fdf4'; // Light green
-            btn.style.color = '#16a34a'; // Dark green
-            btn.style.border = '1px solid #bbf7d0';
-            btn.disabled = false;
-            btn.style.cursor = 'pointer';
-            btn.onclick = () => {
-                if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') ViewSwitcher.toMap();
-                setTimeout(() => {
-                    if (window.VerifiedLayer && typeof VerifiedLayer.focusHouse === 'function') VerifiedLayer.focusHouse(sid);
-                }, 100);
-            };
-
-            const iconSpan = btn.querySelector('.material-icons-round');
-            if (iconSpan) iconSpan.innerText = 'check_circle';
-            const labelSpan = btn.querySelector('span:not(.material-icons-round)');
-            if (labelSpan) labelSpan.innerText = 'Verified';
-
             const verifierInfo = document.getElementById(`verifier-info-${sid}`);
             if (verifierInfo) {
                 verifierInfo.style.display = 'flex';
@@ -12257,7 +12346,7 @@ const ListView = {
             console.log(`[BatchSync] Fetching status for ${missingSIDs.length} houses...`);
             const { data, error } = await window._supabase
                 .from('verified_houses')
-                .select('survey_id, verified_by, verified_at, street_no, sequence_no, is_right, is_delivered')
+                .select('survey_id, verified_by, verified_at, latitude, longitude, street_no, sequence_no, is_right, is_delivered')
                 .eq('billing_month', window.ACTIVE_BILLING_MONTH)
                 .in('survey_id', missingSIDs);
 
@@ -12266,13 +12355,18 @@ const ListView = {
             if (data && data.length > 0) {
                 if (!window.ALL_VERIFIED_DATA) window.ALL_VERIFIED_DATA = [];
                 
-                window.ALL_VERIFIED_DATA = Array.from(sidMap.values());
+                // Merge without duplicates
+                const existingSIDs = new Set(window.ALL_VERIFIED_DATA.map(v => String(v.survey_id)));
+                data.forEach(item => {
+                    if (!existingSIDs.has(String(item.survey_id))) {
+                        window.ALL_VERIFIED_DATA.push(item);
+                    }
+                });
                 
                 // Refresh currently visible card indicators
                 data.forEach(record => {
                     const sid = String(record.survey_id);
-                    this.checkVerificationStatus(sid);
-                    this.checkDeliveryStatus(sid);
+                    this.refreshCommittedUI(sid);
                 });
             }
         } catch (e) {
@@ -12327,7 +12421,8 @@ const ListView = {
 
 
     showOnMap(id, isolate = true) {
-        const record = RAW_DATA.find(r => r[0].toString() === id.toString());
+        const sidStr = String(id).trim();
+        const record = window.SID_MAP ? window.SID_MAP.get(sidStr) : null;
         if (!record) return;
 
         if (isolate) {
@@ -12375,25 +12470,11 @@ const ListView = {
         }
 
         this._showTimeout = setTimeout(() => {
-            let opened = false;
-            if (window.SpatialRouter && SpatialRouter.sequenceLayer) {
-                SpatialRouter.sequenceLayer.eachLayer(layer => {
-                    if (layer.options.id === id.toString()) {
-                        layer.fire('click');
-                        opened = true;
-                    }
-                });
-            }
-
-            if (!opened) {
-                State.markers.eachLayer(layer => {
-                    if (layer.options.id === id.toString()) {
-                        layer.fire('click');
-                    }
-                });
+            if (window.SpatialRouter) {
+                SpatialRouter.showMarkerCard(id);
             }
             if (window.MapNavigator) MapNavigator.show();
-        }, 800);
+        }, 500);
     },
 
     restoreView() {
@@ -12466,10 +12547,8 @@ const ListView = {
             const statLabel = document.getElementById('stat-label');
             if (statLabel) statLabel.innerHTML = `Linked Match <a href="javascript:void(0)" onclick="ViewSwitcher.back()" style="color:var(--primary); margin-left:8px; text-decoration:underline; font-size:10px;">[RETURN]</a>`;
         } else {
-            const record = RAW_DATA.find(r => 
-                r[0].toString().trim().toLowerCase() === searchId || 
-                (r[15] && r[15].toString().trim().toLowerCase() === searchId)
-            );
+            const sidStr = searchId.toString().trim();
+            const record = window.SID_MAP ? window.SID_MAP.get(sidStr) : null;
             if (record) {
                 State.filtered = [record];
                 State.currentIdx = 0;
@@ -12477,79 +12556,26 @@ const ListView = {
                 const statLabel = document.getElementById('stat-label');
                 if (statLabel) statLabel.innerHTML = `Search Result <a href="javascript:void(0)" onclick="ViewSwitcher.back()" style="color:var(--primary); margin-left:8px; text-decoration:underline; font-size:10px;">[RETURN]</a>`;
             } else {
+                if (window.App && App.showToast) App.showToast("Record not found");
                 // Pop history if search failed so we don't store a "failed jump" state
                 State.history.pop();
-                App.showToast ? App.showToast(`ID/PSID #${id} not found.`) : alert(`ID/PSID #${id} not found.`);
             }
         }
         this.toggleClearBtn(searchId);
     },
 
-    toggleClearBtn(val) {
-        const btn = document.getElementById('lv-search-clear');
-        if (!btn) return;
-        btn.style.display = (val || State.history.length > 0) ? 'block' : 'none';
-    },
-
-    clearSearch() {
-        const input = document.getElementById('lv-search-id');
-        if (input) input.value = '';
-        this.toggleClearBtn('');
-
-        // If we are in a search result/isolated view, go back
-        if (State.history.length > 0) {
-            ViewSwitcher.back();
+    triggerManualPin(sid) {
+        // Ensure action panel is open so user sees the "Reposition" or "Manual Pin" state
+        const panel = document.getElementById(`action-panel-${sid}`);
+        if (panel && panel.style.display === 'none') {
+            this.toggleActionPanel(sid, true);
         }
-    },
-
-    toggleSortDropdown(forceState = null) {
-        const dd = document.getElementById('lv-sort-dropdown');
-        if (!dd) return;
-        const isOpening = forceState !== null ? forceState : (dd.style.display !== 'block');
-        dd.style.display = isOpening ? 'block' : 'none';
         
-        // Add one-time click-away listener
-        if (isOpening) {
-            const close = (e) => {
-                if (!e.target.closest('.lv-sort-btn') && !e.target.closest('.lv-sort-dropdown')) {
-                    this.toggleSortDropdown(false);
-                    document.removeEventListener('click', close);
-                }
-            };
-            setTimeout(() => document.addEventListener('click', close), 10);
+        if (window.SpatialRouter && typeof SpatialRouter.startManualPin === 'function') {
+            SpatialRouter.startManualPin(sid);
+        } else {
+            console.error("SpatialRouter.startManualPin not found");
         }
-    },
-
-    sort(type) {
-        console.log(`[ListView] Sorting by: ${type}`);
-        if (!State.filtered || State.filtered.length === 0) return;
-
-        switch (type) {
-            case 'id-desc':
-                State.filtered.sort((a, b) => b[0] - a[0]);
-                break;
-            case 'id-asc':
-                State.filtered.sort((a, b) => a[0] - b[0]);
-                break;
-            case 'drive-desc':
-                State.filtered.sort((a, b) => {
-                    const timeA = State.syncedData[a[0]] ? (State.syncedData[a[0]].timestamp || 0) : 0;
-                    const timeB = State.syncedData[b[0]] ? (State.syncedData[b[0]].timestamp || 0) : 0;
-                    return timeB - timeA;
-                });
-                break;
-            case 'status-paid':
-                State.filtered.sort((a, b) => {
-                    const payA = a[16].toLowerCase() === 'paid' ? 0 : 1;
-                    const payB = b[16].toLowerCase() === 'paid' ? 0 : 1;
-                    return payA - payB;
-                });
-                break;
-        }
-
-        State.currentIdx = 0;
-        this.render();
-        App.showToast ? App.showToast(`Sorted by ${type.replace('-', ' ')}`) : null;
     },
 
     toggleActionPanel(sid, forceState = null) {
@@ -12581,15 +12607,67 @@ const ListView = {
                 if (sideLEl) sideLEl.checked = info.is_right === false;
                 if (sideREl) sideREl.checked = info.is_right === true;
                 if (delivEl) delivEl.checked = info.is_delivered === true;
+
+                const staging = State.unsavedChanges[sid] || {};
+                const shouldLock = staging.isLocked !== false;
+                if (shouldLock) {
+                    if (streetEl) streetEl.disabled = true;
+                    if (seqEl) seqEl.disabled = true;
+                    if (sideLEl) sideLEl.disabled = true;
+                    if (sideREl) sideREl.disabled = true;
+                    if (delivEl) delivEl.disabled = true;
+                    
+                    const btnSave = document.getElementById(`btn-save-intel-${sid}`);
+                    if (btnSave) {
+                        const parent = btnSave.parentElement;
+                        btnSave.remove();
+                        parent.insertAdjacentHTML('beforeend', `
+                            <button type="button" onclick="ListView.unlockIntel('${sid}')" 
+                                    style="flex:1.5; background:#e0f2fe; color:#0369a1; border:none; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:900; font-size:11px; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+                                <span class="material-icons-round" style="font-size:18px;">lock_open</span> EDIT DETAILS
+                            </button>
+                        `);
+                    }
+                }
             }
+        }
+    },
+    
+    validateIntelInput(sid) {
+        const street = document.getElementById(`intel-street-${sid}`)?.value;
+        const seqInput = document.getElementById(`intel-seq-${sid}`);
+        const seqStr = seqInput?.value;
+        const btn = document.getElementById(`btn-save-intel-${sid}`);
+        if (!btn) return;
+
+        const seq = (seqStr !== "" && !isNaN(parseInt(seqStr))) ? parseInt(seqStr) : -1;
+        const isSeqValid = seqStr !== "" && seq >= 0;
+        const isStreetValid = !!street && street !== "";
+
+        if (isSeqValid && isStreetValid) {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+            btn.style.background = '#10b981'; 
+        } else {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+            btn.style.background = '#94a3b8';
         }
     },
 
     async saveIntel(sid) {
         if (!window.SpatialRouter) return;
-        
+
         const street = document.getElementById(`intel-street-${sid}`)?.value;
-        const seq = parseInt(document.getElementById(`intel-seq-${sid}`)?.value || 0);
+        const seqInput = document.getElementById(`intel-seq-${sid}`)?.value;
+        const seq = parseInt(seqInput || 0);
+        
+        if (!street || !seqInput || seq <= 0) {
+            return App.showToast ? App.showToast("Please enter Street No and a valid Sequence #") : alert("Please enter Street No and a valid Sequence #");
+        }
+        
         const isRight = document.getElementById(`intel-side-r-${sid}`)?.checked;
         const isDelivered = document.getElementById(`intel-delivered-${sid}`)?.checked;
 
@@ -12600,120 +12678,69 @@ const ListView = {
             is_delivered: isDelivered
         };
 
-        // Call the unified save function in SpatialRouter (Phase 3)
+        const btn = document.getElementById(`btn-save-intel-${sid}`);
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="material-icons-round spinning">hourglass_top</span> Saving...';
+        }
+
         const success = await SpatialRouter.saveHouseIntelligence(sid, options);
         
         if (success) {
-            // NEW: Clear temporary state on success
             if (State.pendingHouseIntel) delete State.pendingHouseIntel[sid];
-            
+            if (State.unsavedChanges) delete State.unsavedChanges[sid];
             this.toggleActionPanel(sid, false);
-            // Refresh the specific card indicators (Phase 4)
             this.checkVerificationStatus(sid);
-        }
-    },
-
-    async batchSyncRoute(sids) {
-        if (!window._supabase || !sids || sids.length === 0) return;
-        
-        // Filter out SIDs already in cache OR currently pending
-        const missingSIDs = sids.map(id => String(id)).filter(id => {
-            const inCache = window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === id);
-            const isPending = this.pendingSyncSIDs.has(id);
-            return !inCache && !isPending;
-        });
-
-        if (missingSIDs.length === 0) return;
-
-        // Mark as pending
-        missingSIDs.forEach(id => this.pendingSyncSIDs.add(id));
-
-        try {
-            console.log(`[BatchSync] Fetching status for ${missingSIDs.length} houses...`);
-            const { data, error } = await window._supabase
-                .from('verified_houses')
-                .select('survey_id, verified_by, verified_at, street_no, sequence_no, is_right, is_delivered')
-                .eq('billing_month', window.ACTIVE_BILLING_MONTH)
-                .in('survey_id', missingSIDs);
-
-            if (error) throw error;
-            
-            if (data && data.length > 0) {
-                if (window.ALL_VERIFIED_DATA) {
-                    // Update global cache (avoid duplicates correctly)
-                    const existingSIDs = new Set(window.ALL_VERIFIED_DATA.map(v => String(v.survey_id)));
-                    const trulyNew = data.filter(v => !existingSIDs.has(String(v.survey_id)));
-                    window.ALL_VERIFIED_DATA = window.ALL_VERIFIED_DATA.concat(trulyNew);
-                }
-            }
-
-            // Update UI components (Phase 4 Logic)
-            if (this.checkVerificationStatus) {
-                missingSIDs.forEach(sid => this.checkVerificationStatus(sid));
-            }
-
-        } catch (e) {
-            console.warn("[BatchSync] Failed:", e);
-        } finally {
-            // Unmark as pending
-            missingSIDs.forEach(id => this.pendingSyncSIDs.delete(id));
-        }
-    },
-
-    jumpToID(id) {
-        if (!id) return;
-        const searchId = id.toString().trim().toLowerCase();
-        const idx = State.filtered.findIndex(r => 
-            r[0].toString().trim().toLowerCase() === searchId || 
-            (r[15] && r[15].toString().trim().toLowerCase() === searchId)
-        );
-
-        State.history.push({
-            filtered: [...State.filtered],
-            idx: State.currentIdx,
-            label: document.getElementById('stat-label').innerText
-        });
-
-        if (idx !== -1) {
-            State.currentIdx = idx;
             this.render();
-        } else {
-            const record = RAW_DATA.find(r => 
-                r[0].toString().trim().toLowerCase() === searchId || 
-                (r[15] && r[15].toString().trim().toLowerCase() === searchId)
-            );
-            if (record) {
-                State.filtered = [record];
-                State.currentIdx = 0;
-                this.render();
-            } else {
-                State.history.pop();
-                App.showToast ? App.showToast(`ID #${id} not found.`) : null;
-            }
+        } else if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-icons-round">cloud_upload</span> Try Again';
+            this.validateIntelInput(sid);
         }
     },
 
-    next() { if (State.currentIdx < State.filtered.length - 1) { State.currentIdx++; this.render(); } },
-    prev() { if (State.currentIdx > 0) { State.currentIdx--; this.render(); } },
+    toggleClearBtn(val) {
+        const btn = document.getElementById('lv-search-clear');
+        if (!btn) return;
+        btn.style.display = (val || (State.history && State.history.length > 0)) ? 'block' : 'none';
+    },
 
-    async showOnMap(id) {
-        const record = RAW_DATA.find(r => r[0].toString() === id.toString());
-        if (!record) return;
-
-        ViewSwitcher.toMap();
-        
-        // Lazy Load coordinates if this is a verified house but missing from meta-sync
-        if (window.SpatialRouter) {
-            const coords = await SpatialRouter.getHouseCoordinates(id);
-            const target = L.latLng(coords.lat || record[1], coords.lng || record[2]);
-            State.map.flyTo(target, 19, { duration: 0.8 });
-            
-            setTimeout(() => {
-                if (window.VerifiedLayer) VerifiedLayer.focusHouse(id);
-            }, 800);
+    clearSearch() {
+        const input = document.getElementById('lv-search-id');
+        if (input) input.value = '';
+        this.toggleClearBtn('');
+        if (State.history && State.history.length > 0) {
+            ViewSwitcher.back();
         }
+    },
+
+    refreshCommittedUI(sid) {
+        this.checkVerificationStatus(sid);
+        this.checkDeliveryStatus(sid);
+    },
+
+    syncDeliveryState(sid) {
+        const delivEl = document.getElementById(`intel-delivered-${sid}`);
+        if (!delivEl) return;
+        
+        if (!State.unsavedChanges[sid]) State.unsavedChanges[sid] = {};
+        State.unsavedChanges[sid].is_delivered = delivEl.checked;
+        
+        if (window.SpatialRouter) {
+            SpatialRouter.refreshToolbar(sid);
+        }
+    },
+
+    unlockIntel(sid) {
+        if (!State.unsavedChanges[sid]) State.unsavedChanges[sid] = {};
+        State.unsavedChanges[sid].isLocked = false;
+        this.render(); 
+        this.toggleActionPanel(sid, true);
     }
 };
+
+window.ListView = ListView;
+
 
 // === 07_stats.js ===
 // === 07_stats.js ===
@@ -12997,6 +13024,12 @@ const Gallery = {
         // Clear internal state to prevent "history" persistence
         this.images = [];
         this.idx = 0;
+        
+        // Return to Map view and re-show navigation controls
+        if (window.MapNavigator) {
+            MapNavigator.visible = true;
+            MapNavigator.updateUI();
+        }
     },
 
     handleKeys(e) {
@@ -13428,78 +13461,19 @@ const VerifiedLayer = {
         App.apply();
     },
 
-    focusHouse(sid) {
-        const targetSID = String(sid);
-        
-        this.focusedSID = targetSID;
-        
-        // Show mobile-friendly floating clear button
-        let clearBtn = document.getElementById('btn-clear-v-focus');
-        if (!clearBtn) {
-            clearBtn = document.createElement('button');
-            clearBtn.id = 'btn-clear-v-focus';
-            clearBtn.innerHTML = `<span class="material-icons-round" style="font-size:16px;">close</span> Clear Pin`;
-            clearBtn.style.cssText = `
-                position: absolute;
-                top: 20px;
-                left: 50%;
-                transform: translateX(-50%);
-                z-index: 9999;
-                background: #ef4444;
-                color: white;
-                border: none;
-                border-radius: 20px;
-                padding: 8px 16px;
-                font-size: 13px;
-                font-weight: 800;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-                cursor: pointer;
-            `;
-            clearBtn.onclick = () => this.clearFocus();
-            const mapContainer = document.getElementById('main-stage') || document.body;
-            mapContainer.appendChild(clearBtn);
-        }
-        clearBtn.style.display = 'flex';
-
-        const item = window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === this.focusedSID);
-        if (item) {
-            const record = window.SID_MAP ? window.SID_MAP.get(this.focusedSID) : null;
-            if (record) {
-                const oLat = record[1];
-                const oLng = record[2];
-                const vLat = item.latitude || oLat;
-                const vLng = item.longitude || oLng;
-
-                const points = [[vLat, vLng], [oLat, oLng]];
-                const bounds = L.latLngBounds(points);
-                State.map.flyToBounds(bounds, { padding: [80, 80], maxZoom: 19 });
-
-                // Trigger the pulse AND open the card
-                if (window.SpatialRouter && typeof SpatialRouter.highlightMarker === 'function') {
-                    SpatialRouter.highlightMarker(sid, oLat, oLng, false);
-                }
-            }
-        }
-        if (typeof App !== 'undefined' && typeof App.render === 'function') {
-            App.render(); // Surgical render to show focused house without resetting filters
-        }
+    destroyClearBtn() {
+        const btn = document.getElementById('btn-clear-v-focus');
+        if (btn) btn.remove();
     },
 
+    focusHouse(sid) {
+        // Temporarily disabled to streamline map navigation
+        return;
+    },
+    
     clearFocus() {
-        this.focusedSID = null;
-        
-        const btn = document.getElementById('btn-clear-v-focus');
-        if (btn) btn.style.display = 'none';
-        
-        // Surgical re-render strictly following sidebar filters
-        if (typeof App !== 'undefined' && typeof App.render === 'function') {
-            App.render();
-        } else {
-            this.renderLayer();
-        }
+        // Temporarily disabled to streamline map navigation
+        return;
     },
 
     renderConnection(v, record, isFocused, targetLayer) {
@@ -16302,6 +16276,7 @@ const UniversalSearch = {
 const SpatialRouter = {
     currentPage: 1,
     chunkSize: 25,
+    initialized: false,
     isDrawing: false,
     isLocked: false,
     points: [],
@@ -16317,26 +16292,35 @@ const SpatialRouter = {
     activeTab: 'manager',
     isEditing: false,
     pickingMode: null,
-    activePolygon: null, // Track currently selected polygon
-    activeDisplayRoutes: [], // Array of route names currently on map
-    batchRouteSequences: [], // NEW: Store separate sequences for batch display rendering
-    batchRoutePolygons: [], // NEW: Store separate polygons for batch display
-    collapsedGroups: new Set(), // Tracks which MC groups are collapsed in the list
-    verifiedSIDs: new Map(), // NEW: Track units verified in this session (id_month -> {verified_by})
+    activePolygon: null,
+    activeDisplayRoutes: [],
+    batchRouteSequences: [],
+    batchRoutePolygons: [],
+    collapsedGroups: new Set(),
+    verifiedSIDs: new Map(),
+
+    init() {
+        window.SpatialRouter = this;
+        this.initialized = true;
+    },
 
 
 
     async showMarkerCard(sid) {
         if (!sid) return;
+        
+        // SAFETY: Always clear any contextual HUDs (Pinning, Crosshair) when moving markers
+        this.resetHUD();
 
-        // Auto-collapse map toolbar for maximum field of view
-        if (window.UIInteractions && UIInteractions.toggleExtraCtrls) {
-            console.log("MarkerCard: Auto-collapsing toolbar");
-            UIInteractions.toggleExtraCtrls(true);
+        // Decoupling: Ensure map toolbars stay visible if we are in an active navigation flow
+        const navActive = window.MapNavigator && MapNavigator.visible;
+        if (!navActive && window.UIInteractions && UIInteractions.toggleExtraCtrls) {
+            // Only auto-collapse if NOT in navigation mode and sidebar is expanding
+            // UIInteractions.toggleExtraCtrls(true); // COMMMENTED OUT: prevents "hiding itself" regression
         }
 
-        const sidStr = String(sid);
-        const row = window.RAW_DATA.find(r => String(r[0]) === sidStr);
+        const sidStr = String(sid).trim();
+        const row = window.SID_MAP ? window.SID_MAP.get(sidStr) : null;
         if (!row) {
             console.warn(`Marker details not found for SID: ${sidStr}`);
             return;
@@ -16367,7 +16351,6 @@ const SpatialRouter = {
             }
         };
 
-        const btnVerify = document.getElementById('btn-verify-house');
         const cacheKey = `${sid}_${window.ACTIVE_BILLING_MONTH}`;
         let verifierInfo = this.verifiedSIDs.get(cacheKey);
 
@@ -16380,47 +16363,43 @@ const SpatialRouter = {
             }
         }
 
-        const btnVerifyText = document.getElementById('btn-verify-text');
-        if (verifierInfo) {
-            btnVerify.innerHTML = '<span class="material-icons-round">check_circle</span>';
-            if (btnVerifyText) btnVerifyText.innerText = 'Verified';
-            btnVerify.disabled = true;
-            btnVerify.style.background = '#475569';
-
-            // Show verifier ID
-            const verifierDisplay = document.getElementById('marker-card-verifier');
-            if (verifierDisplay) {
-                verifierDisplay.innerText = `by ${verifierInfo.verified_by || 'Unknown'}`;
-                verifierDisplay.style.display = 'block';
-            }
-        } else {
-            btnVerify.innerHTML = '<span class="material-icons-round">my_location</span>';
-            if (btnVerifyText) btnVerifyText.innerText = 'Verify House';
-            btnVerify.disabled = false;
-            btnVerify.style.background = '#f97316';
-            btnVerify.onclick = () => {
-                ViewSwitcher.toList();
-                setTimeout(() => {
-                    ListView.jumpToID(sid);
-                    ListView.toggleActionPanel(sid, true);
-                }, 300);
-            };
-
-            const verifierDisplay = document.getElementById('marker-card-verifier');
-            if (verifierDisplay) verifierDisplay.style.display = 'none';
-        }
-
         const btnManual = document.getElementById('btn-manual-pin');
         if (btnManual) {
-            btnManual.onclick = () => this.startManualPin(sid);
+            // TOOLBAR MODE: View Only (non-interactive)
+            btnManual.onclick = () => this.startManualPin(sid, false);
+            btnManual.disabled = false;
+            btnManual.style.opacity = '1';
+            btnManual.style.background = '#8b5cf6';
+        }
+
+        // ACCOUNTABILITY BADGE SYNC
+        const statusBadge = document.getElementById('marker-card-status-badge');
+        const statusText = document.getElementById('marker-status-text');
+        if (statusBadge && statusText) {
             if (verifierInfo) {
-                btnManual.disabled = true;
-                btnManual.style.opacity = '0.5';
-                btnManual.style.background = '#475569';
+                statusBadge.classList.add('verified');
+                statusText.innerHTML = `Verified by ${verifierInfo.verified_by || 'Unknown'} <small style="display:block; opacity:0.7; font-size:9px;">@ ${verifierInfo.verified_at?.split('T')[0] || '-'}</small>`;
+                statusBadge.querySelector('.material-icons-round').innerText = 'verified';
             } else {
-                btnManual.disabled = false;
-                btnManual.style.opacity = '1';
-                btnManual.style.background = '#8b5cf6';
+                statusBadge.classList.remove('verified');
+                statusText.innerText = 'Unverified';
+                statusBadge.querySelector('.material-icons-round').innerText = 'history';
+            }
+        }
+
+        // STATIC DELIVERY INDICATOR SYNC
+        const deliveryIndicator = document.getElementById('btn-delivery-modal');
+        if (deliveryIndicator) {
+            const staging = State.unsavedChanges[sidStr];
+            const isDeliveredStaged = staging && staging.is_delivered;
+            const isDeliveredCommitted = verifierInfo && verifierInfo.is_delivered;
+            
+            if (isDeliveredStaged || isDeliveredCommitted) {
+                deliveryIndicator.classList.add('active');
+                deliveryIndicator.title = "Marked as Delivered";
+            } else {
+                deliveryIndicator.classList.remove('active');
+                deliveryIndicator.title = "Not Delivered";
             }
         }
 
@@ -16431,7 +16410,6 @@ const SpatialRouter = {
                 if (window.ListView && ListView.jumpFromMap) {
                     ListView.jumpFromMap(sid);
                 } else {
-                    // Fallback logic
                     const sidIdx = State.filtered.findIndex(r => String(r[0]) === String(sid));
                     if (sidIdx !== -1) State.currentIdx = sidIdx;
                     if (typeof ViewSwitcher !== 'undefined') ViewSwitcher.toList(false);
@@ -16446,7 +16424,6 @@ const SpatialRouter = {
         modal.style.visibility = 'visible';
 
         if (!isActive) {
-            // Only apply entry animation if not already active to prevent "jumping"
             const content = modal.querySelector('.marker-card-content');
             if (content) content.style.transform = 'translateY(-10px) scale(0.98)';
 
@@ -16455,7 +16432,6 @@ const SpatialRouter = {
                 if (content) content.style.transform = 'translateY(0) scale(1)';
             }, 10);
         } else {
-            // Already active, just ensure class is there
             modal.classList.add('active');
         }
 
@@ -16464,8 +16440,6 @@ const SpatialRouter = {
             const lat = parseFloat(row[1]);
             const lng = parseFloat(row[2]);
             const center = window.map.getCenter();
-
-            // Proximity Check: If already centered on this spot, don't flyTo (prevents jitter)
             const dist = Math.sqrt(Math.pow(center.lat - lat, 2) + Math.pow(center.lng - lng, 2));
             if (dist > 0.0001 || window.map.getZoom() < 19) {
                 window.map.flyTo([lat, lng], 19, { padding: [50, 50], duration: 0.4 });
@@ -16478,7 +16452,29 @@ const SpatialRouter = {
             const sIdx = State.filtered.findIndex(record => record[0]?.toString() === sidStr);
             if (sIdx !== -1) {
                 State.currentIdx = sIdx;
-                if (window.MapNavigator) MapNavigator.show();
+                
+                // TOOLTIP ENHANCEMENT: Maintain persistent tooltip for the active marker
+                if (window.State && State.markerLayer) {
+                    State.markerLayer.eachLayer(layer => {
+                        if (layer.options.id === sidStr) {
+                            if (State.activeMarker && State.activeMarker !== layer) {
+                                // Revert previous marker to hover-only mode
+                                const prevRow = window.SID_MAP.get(String(State.activeMarker.options.id));
+                                if (prevRow) {
+                                    App.bindCustomTooltip(State.activeMarker, `<b>#${prevRow[0]}</b><br>${decodePII(prevRow[4]) || 'House'}`, false);
+                                }
+                                State.activeMarker.closeTooltip();
+                            }
+                            // Forced persistent style for active interaction
+                            const content = `<b>#${sidStr}</b><br>${decodePII(row[4]) || 'House'}`;
+                            App.bindCustomTooltip(layer, content, true);
+                            State.activeMarker = layer;
+                        }
+                    });
+                }
+
+                // If Navigator was visible, make sure it updates its UI
+                if (window.MapNavigator && MapNavigator.visible) MapNavigator.updateUI();
             }
         }
     },
@@ -16500,33 +16496,75 @@ const SpatialRouter = {
         setTimeout(() => {
             if (!modal.classList.contains('active')) {
                 modal.style.display = 'none';
+                // TOOLTIP SYNC: Close active persistent tooltip when card is closed
+                if (window.State && State.activeMarker) {
+                    State.activeMarker.closeTooltip();
+                    State.activeMarker = null;
+                }
             }
         }, 300);
+    },
+
+    refreshToolbar(sid) {
+        const modal = document.getElementById('modal-marker-card');
+        if (!modal || !modal.classList.contains('active')) return;
+        
+        // Only refresh if the card is showing this specific record
+        const title = document.getElementById('marker-card-title')?.innerText || '';
+        if (title !== `#${sid}`) return;
+
+        const sidStr = String(sid).trim();
+        const verifierInfo = this.verifiedSIDs.get(`${sidStr}_${window.ACTIVE_BILLING_MONTH}`) || (window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr));
+
+        // REFLEX: Static Delivery Indicator
+        const deliveryIndicator = document.getElementById('btn-delivery-modal');
+        if (deliveryIndicator) {
+            const staging = State.unsavedChanges[sidStr];
+            const isDeliveredStaged = staging && staging.is_delivered;
+            const isDeliveredCommitted = verifierInfo && verifierInfo.is_delivered;
+            
+            if (isDeliveredStaged || isDeliveredCommitted) {
+                deliveryIndicator.classList.add('active');
+            } else {
+                deliveryIndicator.classList.remove('active');
+            }
+        }
     },
     async saveHouseIntelligence(sid, options = {}) {
         try {
             if (!window._supabase) throw new Error("Supabase client not found.");
 
-            const row = window.RAW_DATA.find(r => String(r[0]) === String(sid));
-            const surveyorName = row ? (row[6] || 'Unknown Surveyor') : 'Unknown Surveyor';
+            const sidStr = String(sid).trim();
+            const row = window.SID_MAP ? window.SID_MAP.get(sidStr) : null;
+            if (!row) throw new Error("Survey record not found in SID_MAP.");
+            
+            const surveyorName = row[6] || 'Unknown Surveyor';
             const currentRoute = this.editingRouteName || (this.activeDisplayRoutes && this.activeDisplayRoutes.length > 0 ? this.activeDisplayRoutes[0] : 'Unknown Route');
 
             // Use pending pins if they exist, otherwise fallback to existing verified data or survey data
-            const pin = State.pendingPin || {};
-            const existing = (window.ALL_VERIFIED_DATA || []).find(v => String(v.survey_id) === String(sid));
+            const staging = State.unsavedChanges[sidStr];
+            const pin = staging || {};
+            const existing = (window.ALL_VERIFIED_DATA || []).find(v => String(v.survey_id) === sidStr);
 
-            const finalLat = pin.lat || (existing ? existing.latitude : parseFloat(row[1]));
-            const finalLng = pin.lng || (existing ? existing.longitude : parseFloat(row[2]));
+            const finalLat = pin.lat || (existing && existing.latitude !== undefined ? existing.latitude : parseFloat(row[1]));
+            const finalLng = pin.lng || (existing && existing.longitude !== undefined ? existing.longitude : parseFloat(row[2]));
+
+            // Final Validation Layer: Street and Sequence are mandatory
+            const streetVal = options.street_no;
+            const seqVal = parseInt(options.sequence_no);
+            if (!streetVal || isNaN(seqVal) || seqVal <= 0) {
+                throw new Error("Missing mandatory house intelligence data (Street/Sequence).");
+            }
 
             const payload = {
-                survey_id: String(sid),
+                survey_id: sidStr,
                 latitude: finalLat,
                 longitude: finalLng,
                 surveyor_name: surveyorName,
                 route_name: currentRoute,
                 default_lat: parseFloat(row[1]),
                 default_lng: parseFloat(row[2]),
-                billing_month: ACTIVE_BILLING_MONTH,
+                billing_month: window.ACTIVE_BILLING_MONTH,
                 street_no: options.street_no || null,
                 is_right: options.is_right === true,
                 sequence_no: parseInt(options.sequence_no) || 0,
@@ -16536,8 +16574,18 @@ const SpatialRouter = {
                 verified_at: new Date().toISOString()
             };
 
+            // CRITICAL: Clear existing record first to ensure clean state and avoid constraint errors
+            await window._supabase
+                .from('verified_houses')
+                .delete()
+                .eq('survey_id', sidStr)
+                .eq('billing_month', window.ACTIVE_BILLING_MONTH);
+
             const { error } = await window._supabase.from('verified_houses').upsert([payload]);
-            if (error) throw error;
+            if (error) {
+                console.error("Supabase Save Error:", error);
+                throw error;
+            }
 
             // Update Local Cache
             const verInfo = {
@@ -16549,7 +16597,8 @@ const SpatialRouter = {
                 street_no: payload.street_no,
                 sequence_no: payload.sequence_no,
                 is_right: payload.is_right,
-                is_delivered: payload.is_delivered
+                is_delivered: payload.is_delivered,
+                isLocked: true // CRITICAL: Lock fields after successful save
             };
 
             const cacheKey = `${sid}_${ACTIVE_BILLING_MONTH}`;
@@ -16560,7 +16609,9 @@ const SpatialRouter = {
                 window.ALL_VERIFIED_DATA.push(verInfo);
             }
 
-            State.pendingPin = null; // Clear pinning state after successful save
+            // Clear pinning state after successful save
+            if (State.unsavedChanges[sidStr]) delete State.unsavedChanges[sidStr];
+            if (State.pendingPin) State.pendingPin = null;
             if (App.showToast) App.showToast("Intelligence Saved Successfully!");
             return true;
         } catch (e) {
@@ -16754,71 +16805,187 @@ const SpatialRouter = {
         }
     },
 
-    startManualPin(sid) {
-        const row = window.RAW_DATA.find(r => String(r[0]) === String(sid));
-        if (!row) return;
+    startManualPin(sid, isInteractive = true) {
+        if (!sid) return;
+        const sidStr = String(sid).trim();
+        const row = window.SID_MAP ? window.SID_MAP.get(sidStr) : null;
+        if (!row) {
+            console.error("Record not found in SID_MAP for manual pinning:", sidStr);
+            return;
+        }
 
-        // NEW: Capture dirty fields before view context switch
-        const streetVal = document.getElementById(`intel-street-${sid}`)?.value;
-        const seqVal = document.getElementById(`intel-seq-${sid}`)?.value;
-        const sideR = document.getElementById(`intel-side-r-${sid}`)?.checked;
-        const delivered = document.getElementById(`intel-delivered-${sid}`)?.checked;
+        // NEW: Capture dirty fields before view context switch (Only if interactive)
+        if (isInteractive) {
+            const streetVal = document.getElementById(`intel-street-${sid}`)?.value;
+            const seqVal = document.getElementById(`intel-seq-${sid}`)?.value;
+            const sideR = document.getElementById(`intel-side-r-${sid}`)?.checked;
+            const delivered = document.getElementById(`intel-delivered-${sid}`)?.checked;
 
-        if (streetVal !== undefined || seqVal !== undefined) {
-             State.pendingHouseIntel[sid] = {
-                 street_no: streetVal,
-                 sequence_no: seqVal,
-                 is_right: sideR,
-                 is_delivered: delivered
-             };
+            if (streetVal !== undefined || seqVal !== undefined) {
+                 State.pendingHouseIntel[sid] = {
+                     street_no: streetVal,
+                     sequence_no: seqVal,
+                     is_right: sideR,
+                     is_delivered: delivered
+                 };
+            }
         }
 
         State.pinningOrigin = document.getElementById('list-view-stage').classList.contains('active') ? 'list' : 'map';
+        State.pinningViewSid = sidStr; // Store SID for return navigation
 
-        this.closeMarkerCard();
-        if (window.MapNavigator) MapNavigator.toggle(false);
+        if (isInteractive) this.closeMarkerCard();
+        this.resetHUD(); // Clear any existing HUDs
+        
         if (window.ViewSwitcher && typeof ViewSwitcher.toMap === 'function') ViewSwitcher.toMap();
 
-        // New Drop Pin Enhancements
+        // Switch to satellite for visual clarity during pin operations
         if (window.App && App.setLayer) App.setLayer('sat');
-        
-        const lat = parseFloat(row[1]);
-        const lng = parseFloat(row[2]);
-        if (State.map) {
-            State.map.flyTo([lat, lng], 19, { duration: 0.5 });
+
+        // NEW: Sync current form state to staging before leaving list view to prevent data loss on render() rebuild
+        if (isInteractive) {
+            if (!State.unsavedChanges[sidStr]) State.unsavedChanges[sidStr] = {};
+            const streetEl = document.getElementById(`intel-street-${sidStr}`);
+            const seqEl = document.getElementById(`intel-seq-${sidStr}`);
+            const rightEl = document.getElementById(`intel-side-r-${sidStr}`);
+            const delivEl = document.getElementById(`intel-delivered-${sidStr}`);
+            
+            if (streetEl && streetEl.value) State.unsavedChanges[sidStr].street_no = streetEl.value;
+            if (seqEl && seqEl.value !== undefined && seqEl.value !== "") State.unsavedChanges[sidStr].sequence_no = parseInt(seqEl.value) || 0;
+            if (rightEl) State.unsavedChanges[sidStr].is_right = rightEl.checked;
+            if (delivEl) State.unsavedChanges[sidStr].is_delivered = delivEl.checked;
         }
 
-        State.isPinning = true;
+        const staging = State.unsavedChanges[sidStr] || {};
+        const existing = window.ALL_VERIFIED_DATA ? window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr) : null;
+        
+        const targetLat = staging.lat || (existing && existing.latitude !== undefined ? existing.latitude : parseFloat(row[1]));
+        const targetLng = staging.lng || (existing && existing.longitude !== undefined ? existing.longitude : parseFloat(row[2]));
+
+        // VIEW MODE: Show cancel button and pin markers (non-interactive)
+        if (!isInteractive) {
+            // Create connection line from portal to manual pin
+            const portalLat = parseFloat(row[1]);
+            const portalLng = parseFloat(row[2]);
+            
+            State.manualPinLine = L.polyline([[portalLat, portalLng], [targetLat, targetLng]], {
+                color: '#3b82f6',
+                weight: 4,
+                dashArray: '8, 4',
+                opacity: 0.9
+            }).addTo(State.map);
+            
+            // Portal location marker (Red circle)
+            State.pinningRefMarker = L.circleMarker([portalLat, portalLng], {
+                radius: 10,
+                fillColor: '#ef4444',
+                color: '#ef4444',
+                weight: 2,
+                fillOpacity: 0.4
+            }).addTo(State.map);
+            App.bindCustomTooltip(State.pinningRefMarker, `Portal: ${sidStr}`);
+            
+            // Manual pin location marker (Green circle)
+            State.manualPinMarker = L.circleMarker([targetLat, targetLng], {
+                radius: 10,
+                fillColor: '#22c55e',
+                color: '#22c55e',
+                weight: 2,
+                fillOpacity: 0.4
+            }).addTo(State.map);
+            App.bindCustomTooltip(State.manualPinMarker, `Manual Pin: ${sidStr}`);
+
+            const mapContainer = document.getElementById('main-stage');
+            if (mapContainer) {
+                // Create cancel button
+                const viewCancelBtn = document.createElement('button');
+                viewCancelBtn.id = 'btn-view-pin-cancel';
+                viewCancelBtn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">arrow_back</span> Back`;
+                viewCancelBtn.style.cssText = `
+                    position: absolute;
+                    bottom: 80px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    z-index: 10000;
+                    background: #1e293b;
+                    color: white;
+                    border: none;
+                    border-radius: 24px;
+                    padding: 10px 20px;
+                    font-size: 13px;
+                    font-weight: 800;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                    cursor: pointer;
+                    white-space: nowrap;
+                `;
+                viewCancelBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    this.returnFromViewPin(sidStr);
+                };
+                mapContainer.appendChild(viewCancelBtn);
+                viewCancelBtn.style.display = 'flex';
+            }
+            
+            // Fly to show both markers
+            const bounds = L.latLngBounds([[portalLat, portalLng], [targetLat, targetLng]]);
+            State.map.flyToBounds(bounds, { padding: [50, 50], duration: 0.5 });
+            return;
+        }
+
+        if (State.map) {
+            State.map.flyTo([targetLat, targetLng], 19, { duration: 0.5 });
+        }
+
+        State.isPinning = isInteractive;
         State.pinningSID = sid;
-        State.pinningOrigLat = lat;
-        State.pinningOrigLng = lng;
+        State.pinningOrigLat = targetLat;
+        State.pinningOrigLng = targetLng;
 
         // NEW: Add reference marker for portal location on a high-visibility pane
         if (State.map) {
             if (State.pinningRefMarker) State.map.removeLayer(State.pinningRefMarker);
-            State.pinningRefMarker = L.circleMarker([lat, lng], {
+            
+            // Draw a prominent connecting line if we have an offset from the original
+            const origLat = parseFloat(row[1]);
+            const origLng = parseFloat(row[2]);
+            if (State.pinningRefLine) State.map.removeLayer(State.pinningRefLine);
+            if (Math.abs(origLat - targetLat) > 0.00001 || Math.abs(origLng - targetLng) > 0.00001) {
+                State.pinningRefLine = L.polyline([[origLat, origLng], [targetLat, targetLng]], {
+                    color: '#f43f5e', weight: 4, dashArray: '5, 8', opacity: 0.85, interactive: false // Bright rose, obvious dash
+                }).addTo(State.map);
+            }
+
+            State.pinningRefMarker = L.circleMarker([origLat, origLng], {
                 radius: 12,
-                color: '#0ea5e9',
-                fillColor: '#0ea5e9',
-                fillOpacity: 0.4,
+                color: '#f43f5e',
+                fillColor: '#f43f5e',
+                fillOpacity: 0.7,
                 weight: 3,
-                dashArray: '5, 5',
+                dashArray: '4, 4',
                 pane: 'routingMarkerPane' // High Z-index pane (660)
             }).addTo(State.map)
                 .bindTooltip("Portal Position", { permanent: true, direction: 'top', className: 'portal-ref-tooltip' });
         }
 
-        // Show HUD and Crosshair
-        const hud = document.getElementById('pinning-hud');
-        const crosshair = document.getElementById('map-crosshair');
-        const sidDisplay = document.getElementById('pinning-sid-display');
-        
-        if (hud) hud.style.display = 'flex';
-        if (crosshair) crosshair.style.display = 'flex';
-        if (sidDisplay) sidDisplay.innerText = `House #${sid}`;
+        if (isInteractive) {
+            // Show HUD and Crosshair only in interactive mode
+            const hud = document.getElementById('pinning-hud');
+            const crosshair = document.getElementById('map-crosshair');
+            const sidDisplay = document.getElementById('pinning-sid-display');
+            
+            if (hud) hud.style.display = 'flex';
+            if (crosshair) crosshair.style.display = 'flex';
+            if (sidDisplay) sidDisplay.innerText = `House #${sid}`;
 
-        if (App.showToast) App.showToast("Target the house with the crosshair and click Confirm");
+            if (App.showToast) App.showToast("Target the house with the crosshair and click Confirm");
+        } else if (App.showToast) {
+            App.showToast(`Viewing Verified Location for #${sid}`);
+        }
     },
+
 
     confirmManualPin() {
         if (!State.isPinning || !State.pinningSID) return;
@@ -16826,12 +16993,30 @@ const SpatialRouter = {
         const center = State.map.getCenter();
         const sid = State.pinningSID;
 
-        // Store as pending, don't save yet (Wait for 'Save' in Action Panel)
-        State.pendingPin = { lat: center.lat, lng: center.lng };
+        // Create or reuse the unsavedChanges object for this record
+        if (!State.unsavedChanges[sid]) State.unsavedChanges[sid] = {};
+        
+        // CRITICAL: Merge from pendingHouseIntel (ONLY data source that survives DOM destruction)
+        // When switching to map, DOM elements are destroyed, so only this object survives
+        if (State.pendingHouseIntel && State.pendingHouseIntel[sid]) {
+            const p = State.pendingHouseIntel[sid];
+            State.unsavedChanges[sid].street_no = p.street_no || State.unsavedChanges[sid].street_no;
+            State.unsavedChanges[sid].sequence_no = (p.sequence_no !== undefined) ? p.sequence_no : State.unsavedChanges[sid].sequence_no;
+            State.unsavedChanges[sid].is_right = (p.is_right !== undefined) ? p.is_right : State.unsavedChanges[sid].is_right;
+            State.unsavedChanges[sid].is_delivered = (p.is_delivered !== undefined) ? p.is_delivered : State.unsavedChanges[sid].is_delivered;
+        }
+        
+        // Now update coordinates (this is the main purpose of this function)
+        State.unsavedChanges[sid].lat = center.lat;
+        State.unsavedChanges[sid].lng = center.lng;
+        State.unsavedChanges[sid].isLocked = false; // Allow editing fields after pinning
+        State.unsavedChanges[sid].isManualPinned = true; // Flag for UI feedback
+        
+        // DO NOT clear pendingHouseIntel here - ListView.render() needs it to populate inputs on return
 
         // Return to source view to complete the workflow
         const origin = State.pinningOrigin;
-        this.cancelManualPin(true); 
+        this.resetHUD(); 
         
         if (App.showToast) App.showToast("Location Locked! Now fill details and click SAVE in the card.");
         
@@ -16848,13 +17033,66 @@ const SpatialRouter = {
     },
 
     cancelManualPin(isSilent = false) {
+        this.resetHUD();
+        if (State.pinningOrigin === 'list' && !isSilent) {
+            if (window.ViewSwitcher) ViewSwitcher.toList(false);
+        }
+        State.pinningOrigin = null;
+        if (!isSilent && App.showToast) App.showToast("Pinning canceled");
+    },
+
+    returnFromViewPin(sid) {
+        // Remove view cancel button
+        const cancelBtn = document.getElementById('btn-view-pin-cancel');
+        if (cancelBtn) cancelBtn.remove();
+        
+        // Clean up all markers and line
+        if (State.map) {
+            if (State.pinningRefMarker) {
+                State.map.removeLayer(State.pinningRefMarker);
+                State.pinningRefMarker = null;
+            }
+            if (State.manualPinMarker) {
+                State.map.removeLayer(State.manualPinMarker);
+                State.manualPinMarker = null;
+            }
+            if (State.manualPinLine) {
+                State.map.removeLayer(State.manualPinLine);
+                State.manualPinLine = null;
+            }
+        }
+        
+        // Return to list view at the same record
+        if (window.ViewSwitcher) {
+            ViewSwitcher.toList(false);
+            // Find the index of the same record
+            const idx = State.filtered.findIndex(r => String(r[0]) === String(sid));
+            if (idx !== -1) {
+                State.currentIdx = idx;
+            }
+            // Re-render list to show the same record
+            if (window.ListView && ListView.render) ListView.render();
+        }
+    },
+
+    resetHUD(clearVerifiedFocus = false) {
         State.isPinning = false;
         State.pinningSID = null;
 
-        // NEW: Remove reference marker
+        // CRITICAL: We only clear focus if explicitly requested (e.g. starting a new pin/draw)
+        // prevents marker navigation from wiping connection lines/focus HUDs
+        if (clearVerifiedFocus && window.VerifiedLayer && typeof VerifiedLayer.clearFocus === 'function') {
+            VerifiedLayer.clearFocus();
+        }
+
+        // Remove reference marker
         if (State.pinningRefMarker && State.map) {
             State.map.removeLayer(State.pinningRefMarker);
             State.pinningRefMarker = null;
+        }
+        if (State.pinningRefLine && State.map) {
+            State.map.removeLayer(State.pinningRefLine);
+            State.pinningRefLine = null;
         }
 
         const hud = document.getElementById('pinning-hud');
@@ -16862,12 +17100,10 @@ const SpatialRouter = {
         if (hud) hud.style.display = 'none';
         if (crosshair) crosshair.style.display = 'none';
 
-        if (State.pinningOrigin === 'list' && !isSilent) {
-            if (window.ViewSwitcher) ViewSwitcher.toList(false);
+        // Ensure MapNavigator is visible if in navigation mode, but do NOT flip its state
+        if (window.MapNavigator && MapNavigator.visible) {
+            MapNavigator.updateUI();
         }
-
-        State.pinningOrigin = null;
-        if (!isSilent && App.showToast) App.showToast("Pinning canceled");
     },
 
     cleanMCName(name) {
@@ -18906,10 +19142,20 @@ window.SpatialRouter = SpatialRouter;
 
 const MapNavigator = {
     visible: false,
+    _initMapClickHandler() {
+        // MODIFICATION: Auto-hide on map click has been removed as it was causing 
+        // persistent regressions and accidental collapses on mobile devices.
+        // The pager must now be closed explicitly via the compass button or by 
+        // switching views.
+        this._mapClickBound = true;
+    },
     toggle(forceState) {
         this.visible = (forceState !== undefined) ? forceState : !this.visible;
         const btn = document.getElementById('btn-nav-toggle');
         if (btn) btn.classList.toggle('active', this.visible);
+
+        // GLOBAL GUARD: Prevent map interactions from hiding the pager while it's active
+        if (window.State) State.isMapPagerActive = this.visible;
 
         // Clean up Audit Mode if pager is closed
         if (!this.visible && window.VerifiedLayer && window.VerifiedLayer.auditMode) {
@@ -18925,13 +19171,21 @@ const MapNavigator = {
         this.updateUI();
     },
     show() {
+        // Initialize map click handler to hide navigator when clicking on map
+        this._initMapClickHandler();
+        
         // Decoupling: Do NOT open map pager if route pager is active
         if (window.SpatialRouter && typeof SpatialRouter.isRoutePagerActive === 'function' && SpatialRouter.isRoutePagerActive()) {
             console.log("MapNavigator: Suppressing show because RoutePager is active");
             return;
         }
 
+        // CRITICAL: Set move time immediately to lock the pager from auto-hiding logic in App.js
+        this._lastMoveTime = Date.now();
+
         this.visible = true;
+        if (window.State) State.isMapPagerActive = true;
+        
         const btn = document.getElementById('btn-nav-toggle');
         if (btn) btn.classList.add('active');
 
@@ -18940,10 +19194,29 @@ const MapNavigator = {
             UIInteractions.toggleExtraCtrls(true);
         }
 
+        // Auto-show marker card for first record when navigator is first opened
+        // Support for Audit Mode if active
+        setTimeout(() => {
+            const isAudit = window.VerifiedLayer && window.VerifiedLayer.auditMode;
+            const source = isAudit ? window.VerifiedLayer.auditData : State.filtered;
+            const idx = isAudit ? window.VerifiedLayer.auditIndex : State.currentIdx;
+
+            if (source && source.length > 0) {
+                const safeIdx = Math.max(0, Math.min(idx, source.length - 1));
+                const record = source[safeIdx];
+                if (record && window.SpatialRouter && typeof SpatialRouter.showMarkerCard === 'function') {
+                    SpatialRouter.showMarkerCard(record[0]);
+                }
+            }
+        }, 400);
+
         this.updateUI();
     },
     updateUI() {
-        setTimeout(() => {
+        // Clear any pending update to prevent race conditions during rapid moves
+        if (this._updateTimer) clearTimeout(this._updateTimer);
+
+        this._updateTimer = setTimeout(() => {
             const pager = document.getElementById('map-pager');
             if (!pager) return;
 
@@ -18952,17 +19225,24 @@ const MapNavigator = {
             const source = isAudit ? window.VerifiedLayer.auditData : State.filtered;
             const idx = isAudit ? window.VerifiedLayer.auditIndex : State.currentIdx;
 
+            // CRITICAL: Only hide if NOT meant to be visible or if no source exists.
+            // prevents "flicker" where navigator hides briefly during view transitions.
             if (!source || source.length === 0 || !this.visible) {
-                pager.style.setProperty('display', 'none', 'important');
+                if (pager.style.display !== 'none') {
+                    pager.style.setProperty('display', 'none', 'important');
+                }
                 return;
             }
 
-            pager.style.setProperty('display', 'flex', 'important');
+            if (pager.style.display !== 'flex') {
+                pager.style.setProperty('display', 'flex', 'important');
+            }
 
-            // Update index display
-            document.getElementById('map-nav-idx').innerText = idx + 1;
+            // Update index display with bounds safety
+            const safeIdx = Math.max(0, Math.min(idx, source.length - 1));
+            document.getElementById('map-nav-idx').innerText = safeIdx + 1;
             document.getElementById('map-nav-total').innerText = source.length;
-        }, 50);
+        }, 30);
     },
     move(dir) {
         const isAudit = window.VerifiedLayer && window.VerifiedLayer.auditMode;
@@ -18980,8 +19260,19 @@ const MapNavigator = {
         } else {
             State.currentIdx = newIdx;
             const record = State.filtered[State.currentIdx];
-            if (record) ListView.showOnMap(record[0], false);
+            if (record) {
+                const sid = record[0];
+                // Show marker card instead of gallery directly
+                if (window.SpatialRouter && typeof SpatialRouter.showMarkerCard === 'function') {
+                    SpatialRouter.showMarkerCard(sid);
+                }
+                // Also fly to the marker on map
+                if (record[1] && record[2] && window.State && State.map) {
+                    State.map.flyTo([record[1], record[2]], 19, { padding: [50, 50], duration: 0.4 });
+                }
+            }
         }
+        this._lastMoveTime = Date.now();
         this.updateUI();
     }
 };
