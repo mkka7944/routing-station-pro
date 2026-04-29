@@ -9688,7 +9688,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.04.29.0855</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.04.29.1045</span>
             </div>
         </div>
         
@@ -11208,7 +11208,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.04.29.0855";
+window.DATA_VERSION = "v2026.04.29.1045";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -14091,155 +14091,195 @@ const LocalCam = {
 // QR Scanner
 
 const QRScanner = {
-        html5QrCode: null,
-        availableCameras: [],
-        currentCameraIndex: 0,
+    html5QrCode: null,
+    availableCameras: [],
+    currentCameraIndex: 0,
+    currentFacingMode: "environment", // Track constraint mode
+    
+    async open() {
+        document.getElementById('modal-qr').style.display = 'flex';
         
-        async open() {
-            document.getElementById('modal-qr').style.display = 'flex';
-            
-            if (typeof Html5Qrcode === 'undefined') {
-                alert("QR Scanner Library failed to load. Please refresh.");
-                return;
-            }
+        if (typeof Html5Qrcode === 'undefined') {
+            alert("QR Scanner Library failed to load. Please refresh.");
+            return;
+        }
 
-            this.html5QrCode = new Html5Qrcode("qr-reader");
-            
-            // Get available cameras first
-            try {
-                this.availableCameras = await Html5Qrcode.getCameras();
-                if (this.availableCameras && this.availableCameras.length > 0) {
-                    console.log("Available cameras:", this.availableCameras.map(c => c.label));
+        this.html5QrCode = new Html5Qrcode("qr-reader");
+        this.currentFacingMode = "environment"; // Default to back camera
+        
+        // Get available cameras for telemetry / fallback if constraints fail
+        try {
+            this.availableCameras = await Html5Qrcode.getCameras();
+            if (this.availableCameras && this.availableCameras.length > 0) {
+                console.log("Available cameras:", this.availableCameras.map(c => c.label));
+                
+                // Keep index aligned to back camera if detected, as fallback
+                const backIndex = this.availableCameras.findIndex(c => 
+                    c.label.toLowerCase().includes('back') || 
+                    c.label.toLowerCase().includes('rear') || 
+                    c.label.toLowerCase().includes('environment')
+                );
+                if (backIndex !== -1) {
+                    this.currentCameraIndex = backIndex;
+                } else {
+                    this.currentCameraIndex = 0;
                 }
-            } catch(e) {
-                console.warn("Could not get camera list", e);
-                this.availableCameras = [];
             }
-            
+        } catch(e) {
+            console.warn("Could not get camera list", e);
+            this.availableCameras = [];
             this.currentCameraIndex = 0;
-            
-            // High Performance Config
-            const config = { 
-                fps: 30, // Increased for fluid tracking
-                qrbox: (viewfinderWidth, viewfinderHeight) => {
-                    const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                    const size = Math.floor(minEdge * 0.85); // 85% width
-                    return { width: size, height: size };
-                },
-                aspectRatio: 1.0
-            };
-            
-            // Prefer back camera with HD resolution
-            this.startCamera(this.currentCameraIndex, config);
-        },
+        }
         
-        startCamera(cameraIndex, config = null) {
-            if (!this.html5QrCode) return;
-            
-            // Default config if not provided
-            if (!config) {
-                config = { 
-                    fps: 30,
-                    qrbox: (viewfinderWidth, viewfinderHeight) => {
-                        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                        const size = Math.floor(minEdge * 0.85);
-                        return { width: size, height: size };
-                    },
-                    aspectRatio: 1.0
-                };
-            }
-            
-            // Stop current scanning if running
-            if (this.html5QrCode.isScanning) {
-                this.html5QrCode.stop().then(() => {
-                    this.startCameraInternal(cameraIndex, config);
-                }).catch(() => {
-                    this.startCameraInternal(cameraIndex, config);
-                });
-            } else {
-                this.startCameraInternal(cameraIndex, config);
-            }
-        },
+        // High Performance Config
+        const config = { 
+            fps: 20, // 20 FPS is more stable across mobile operating systems
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+                const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                const size = Math.floor(minEdge * 0.85); // 85% width
+                return { width: size, height: size };
+            },
+            aspectRatio: 1.0,
+            showZoomSliderIfSupported: true,
+            useBarCodeDetectorIfSupported: true
+        };
         
-        startCameraInternal(cameraIndex, config) {
-            const cameraId = this.availableCameras[cameraIndex]?.id || { facingMode: "environment" };
-            
+        // Attempt smart initialization with back constraint
+        this.startWithConstraint({ facingMode: "environment" }, config);
+    },
+    
+    startWithConstraint(constraint, config) {
+        if (!this.html5QrCode) return;
+        
+        const launch = () => {
             this.html5QrCode.start(
-                cameraId, 
+                constraint, 
                 config, 
                 (decodedText) => this.onScanSuccess(decodedText),
                 (errorMessage) => { /* ignore per-frame errors */ }
             ).catch(err => {
-                console.error("Camera start failed", err);
-                // Try next camera if available
-                if (this.availableCameras.length > cameraIndex + 1) {
-                    this.currentCameraIndex = cameraIndex + 1;
-                    this.startCamera(this.currentCameraIndex, config);
-                } else {
-                    alert("Could not start camera: " + err);
-                    this.close();
-                }
+                console.warn("Constraint start failed, falling back to ID mapping", err);
+                // If capability mapping fails, attempt strict hardware binding
+                this.startCamera(this.currentCameraIndex, config);
             });
-        },
+        };
+
+        if (this.html5QrCode.isScanning) {
+            this.html5QrCode.stop().then(() => {
+                launch();
+            }).catch(() => {
+                launch();
+            });
+        } else {
+            launch();
+        }
+    },
+    
+    startCamera(cameraIndex, config = null) {
+        if (!this.html5QrCode) return;
         
-        switchCamera() {
-            if (!this.availableCameras || this.availableCameras.length <= 1) {
-                if (App.showToast) App.showToast("No other camera available");
-                return;
-            }
-            
-            // Cycle to next camera
-            this.currentCameraIndex = (this.currentCameraIndex + 1) % this.availableCameras.length;
-            const cameraLabel = this.availableCameras[this.currentCameraIndex].label || `Camera ${this.currentCameraIndex + 1}`;
-            
-            // Show toast
-            if (App.showToast) App.showToast("Camera: " + cameraLabel.substring(0, 20));
-            
-            // Restart with new camera
-            this.startCamera(this.currentCameraIndex);
-        },
+        if (!config) {
+            config = { 
+                fps: 20,
+                qrbox: (viewfinderWidth, viewfinderHeight) => {
+                    const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                    const size = Math.floor(minEdge * 0.85);
+                    return { width: size, height: size };
+                },
+                aspectRatio: 1.0
+            };
+        }
         
-        onScanSuccess(decodedText) {
-            console.log(`Scan matched: ${decodedText}`);
-            this.close();
-            
-            // Handle URL or simple ID
-            // URLs might be like: https://mkka7944.github.io/billing-dept/scanner.html?sid=12345
-            let id = decodedText;
-            
-            if (decodedText.includes('sid=')) {
-                try {
-                    const url = new URL(decodedText);
-                    id = url.searchParams.get('sid');
-                } catch(e) {
-                    // Fallback regex if URL parsing fails
-                    const match = decodedText.match(/sid=([^&]+)/);
-                    if (match) id = match[1];
-                }
-            }
-            
-            if (id) {
-                // Remove any non-alphanumeric except underscore/hyphen if needed, 
-                // but survey IDs are usually numbers.
-                ListView.jumpFromMap(id);
+        if (this.html5QrCode.isScanning) {
+            this.html5QrCode.stop().then(() => {
+                this.startCameraInternal(cameraIndex, config);
+            }).catch(() => {
+                this.startCameraInternal(cameraIndex, config);
+            });
+        } else {
+            this.startCameraInternal(cameraIndex, config);
+        }
+    },
+    
+    startCameraInternal(cameraIndex, config) {
+        const cameraId = this.availableCameras[cameraIndex]?.id || { facingMode: "environment" };
+        
+        this.html5QrCode.start(
+            cameraId, 
+            config, 
+            (decodedText) => this.onScanSuccess(decodedText),
+            (errorMessage) => { /* ignore per-frame errors */ }
+        ).catch(err => {
+            console.error("Camera start failed", err);
+            if (this.availableCameras.length > cameraIndex + 1) {
+                this.currentCameraIndex = cameraIndex + 1;
+                this.startCamera(this.currentCameraIndex, config);
             } else {
-                alert("Could not parse Survey ID from: " + decodedText);
+                alert("Could not start camera: " + err);
+                this.close();
             }
-        },
+        });
+    },
+    
+    switchCamera() {
+        // Toggle between environment and user constraints rather than raw lenses
+        this.currentFacingMode = (this.currentFacingMode === "environment") ? "user" : "environment";
         
-        close() {
-            if (this.html5QrCode && this.html5QrCode.isScanning) {
-                this.html5QrCode.stop().then(() => {
-                    this.html5QrCode.clear();
-                    document.getElementById('modal-qr').style.display = 'none';
-                }).catch(err => {
-                    document.getElementById('modal-qr').style.display = 'none';
-                });
-            } else {
-                document.getElementById('modal-qr').style.display = 'none';
+        if (App.showToast) {
+            App.showToast("Camera: " + (this.currentFacingMode === "environment" ? "Back" : "Front"));
+        }
+        
+        const config = { 
+            fps: 20,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+                const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                const size = Math.floor(minEdge * 0.85);
+                return { width: size, height: size };
+            },
+            aspectRatio: 1.0,
+            showZoomSliderIfSupported: true,
+            useBarCodeDetectorIfSupported: true
+        };
+        
+        this.startWithConstraint({ facingMode: this.currentFacingMode }, config);
+    },
+    
+    onScanSuccess(decodedText) {
+        console.log(`Scan matched: ${decodedText}`);
+        this.close();
+        
+        let id = decodedText;
+        
+        if (decodedText.includes('sid=')) {
+            try {
+                const url = new URL(decodedText);
+                id = url.searchParams.get('sid');
+            } catch(e) {
+                const match = decodedText.match(/sid=([^&]+)/);
+                if (match) id = match[1];
             }
         }
-    };
+        
+        if (id) {
+            ListView.jumpFromMap(id);
+        } else {
+            alert("Could not parse Survey ID from: " + decodedText);
+        }
+    },
+    
+    close() {
+        if (this.html5QrCode && this.html5QrCode.isScanning) {
+            this.html5QrCode.stop().then(() => {
+                this.html5QrCode.clear();
+                document.getElementById('modal-qr').style.display = 'none';
+            }).catch(err => {
+                document.getElementById('modal-qr').style.display = 'none';
+            });
+        } else {
+            document.getElementById('modal-qr').style.display = 'none';
+        }
+    }
+};
 
 // === 11_verified_layer.js ===
 // === 11_verified_layer.js ===
