@@ -27,7 +27,7 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
-
+    
 /* === 00_extracted.css === */
 /* Force Scrollbar Visibility */
 .custom-scrollbar::-webkit-scrollbar {
@@ -3841,6 +3841,154 @@ body {
                 width: 44px !important;
                 height: 44px !important;
         }
+
+        #btn-cluster-toggle, #btn-show-all-markers {
+                bottom: 90px !important;
+                left: 16px !important;
+        }
+
+        #btn-cluster-toggle {
+                bottom: 90px !important;
+        }
+
+        #btn-show-all-markers {
+                bottom: 140px !important;
+        }
+
+        #btn-cluster-toggle, #btn-show-all-markers {
+                width: 40px !important;
+                height: 40px !important;
+                border-radius: 50% !important;
+                min-width: 0 !important;
+                padding: 0 !important;
+        }
+
+        #map-pager {
+                max-width: 180px !important;
+                padding: 6px 10px !important;
+                gap: 6px !important;
+        }
+
+        #map-pager .map-nav-text {
+                font-size: 11px !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+        }
+
+#nearby-markers-popup {
+                left: 360px !important;
+                right: auto !important;
+                top: 450px !important;
+                bottom: auto !important;
+                transform: none !important;
+                padding: 8px !important;
+                background: #f8fafc !important;
+                width: 90px !important;
+                min-width: 90px !important;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+                cursor: move !important;
+                z-index: 15001 !important;
+                opacity: 1 !important;
+                flex-direction: column !important;
+                box-sizing: border-box !important;
+        }
+
+        #nearby-markers-popup:active {
+                cursor: grabbing !important;
+        }
+
+        #nearby-markers-list {
+                display: flex !important;
+                flex-direction: column !important;
+                max-height: 80px !important;
+                overflow-y: auto !important;
+                gap: 3px !important;
+                box-sizing: border-box !important;
+                width: 100% !important;
+        }
+
+        #nearby-markers-list > div {
+                padding: 2px 4px !important;
+                background: #e0f2fe !important;
+                border-radius: 3px !important;
+                cursor: pointer !important;
+                font-size: 10px !important;
+                font-weight: 600 !important;
+                text-align: center !important;
+                white-space: nowrap !important;
+                box-sizing: border-box !important;
+                width: 100% !important;
+        }
+
+        #nearby-markers-list > div:hover {
+                background: #bae6fd !important;
+        }
+                font-size: 20px !important;
+        }
+
+/* Cluster Toggle Button - Left side with offset from sidebar */
+#btn-cluster-toggle {
+        display: flex !important;
+        position: fixed;
+        bottom: 12px;
+        left: 340px;
+        z-index: 10000;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+}
+
+/* Show All Markers Button */
+#btn-show-all-markers {
+        display: flex !important;
+        position: fixed;
+        bottom: 70px;
+        left: 340px;
+        z-index: 10000;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+}
+
+#btn-show-all-markers:active,
+#btn-cluster-toggle:active {
+        transform: scale(0.95);
+}
+
+#btn-cluster-toggle.active,
+#btn-show-all-markers.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+}
+
+/* Mobile styles - adjust left offset */
+@media (max-width: 768px) {
+        #btn-cluster-toggle,
+        #btn-show-all-markers {
+                left: 12px;
+                width: 44px;
+                height: 44px;
+        }
+        #btn-show-all-markers {
+                bottom: 120px;
+        }
+        #btn-cluster-toggle {
+                bottom: 65px;
+        }
 }
 
 .map-nav-text {
@@ -4018,6 +4166,25 @@ body {
         border: 1.5px solid #e2e8f0;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         cursor: default;
+}
+
+/* Mobile: Larger touch area and click-to-collapse */
+@media (max-width: 768px) {
+        .stat-badge {
+                padding: 16px 14px;
+                min-height: 50px;
+                cursor: pointer;
+        }
+        
+        .stat-badge:active {
+                background: #dbeafe;
+        }
+        
+        /* Expand touch zone to entire badge for collapsing */
+        .sidebar .stat-badge,
+        #sidebar .stat-badge {
+                padding: 20px;
+        }
 }
 
 .stat-badge:hover {
@@ -4640,6 +4807,157 @@ button {
 .float-btn.primary {
         background: var(--primary);
         color: white;
+}
+
+/* Nearby Markers Popup - Responsive */
+@media (max-width: 768px) {
+#nearby-markers-popup {
+                left: 12px !important;
+                right: auto !important;
+                top: 300px !important;
+                bottom: auto !important;
+                transform: none !important;
+                height: 200px !important;
+                padding: 8px !important;
+                background: rgba(255,255,255,0.95) !important;
+                width: 90px !important;
+                min-width: 80px !important;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+                cursor: move !important;
+                z-index: 15001 !important;
+                opacity: 1 !important;
+                flex-direction: column !important;
+                box-sizing: border-box !important;
+        }
+
+        #nearby-markers-popup:active {
+                cursor: grabbing !important;
+        }
+
+        #nearby-markers-list {
+                display: flex !important;
+                flex-direction: column !important;
+                flex: 1 !important;
+                overflow-y: auto !important;
+                gap: 3px !important;
+                box-sizing: border-box !important;
+                width: 100% !important;
+                max-height: 150px !important;
+        }
+
+#nearby-markers-popup:active {
+        cursor: grabbing !important;
+        }
+
+#nearby-markers-list {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 !important;
+        overflow-y: auto !important;
+        gap: 3px !important;
+        box-sizing: border-box !important;
+        width: 100% !important;
+        }
+
+#nearby-markers-list > div {
+                padding: 2px 4px !important;
+                background: #e0f2fe !important;
+                border-radius: 3px !important;
+                cursor: pointer !important;
+                font-size: 10px !important;
+                font-weight: 600 !important;
+                text-align: center !important;
+                white-space: nowrap !important;
+                box-sizing: border-box !important;
+                width: 100% !important;
+}
+
+        #nearby-markers-list > div:hover {
+        background: #bae6fd !important;
+        }
+}
+
+        #nearby-markers-popup:active {
+                cursor: grabbing !important;
+        }
+
+        #nearby-markers-list {
+                display: flex !important;
+                flex-direction: column !important;
+                flex-wrap: nowrap !important;
+                flex: 1 !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                gap: 2px !important;
+                box-sizing: border-box !important;
+                width: 100% !important;
+        }
+
+        #nearby-markers-list > div {
+                padding: 2px 4px !important;
+                background: #e0f2fe !important;
+                border-radius: 3px !important;
+                cursor: pointer !important;
+                font-size: 10px !important;
+                font-weight: 600 !important;
+                text-align: center !important;
+                white-space: nowrap !important;
+                box-sizing: border-box !important;
+                width: 100% !important;
+        }
+
+        #nearby-markers-list > div:hover {
+                background: #bae6fd !important;
+        }
+        #nearby-markers-list {
+                flex-direction: column !important;
+        }
+        #nearby-markers-list > div {
+                width: 100%;
+        }
+}
+
+        #nearby-markers-popup:active {
+                cursor: grabbing !important;
+        }
+
+        #nearby-markers-popup span {
+                font-size: 11px !important;
+                padding: 2px 6px !important;
+                background: #e0f2fe !important;
+                border-radius: 4px !important;
+                cursor: pointer !important;
+                display: inline-block !important;
+                white-space: nowrap !important;
+        }
+
+        #nearby-markers-list {
+                display: flex !important;
+                flex-direction: column !important;
+                flex-wrap: nowrap !important;
+                flex: 1 !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                gap: 4px !important;
+                scrollbar-width: thin !important;
+                box-sizing: border-box !important;
+        }
+
+        #nearby-markers-list > div {
+                flex-shrink: 0 !important;
+                box-sizing: border-box !important;
+        }
+}
+
+#nearby-markers-list > div {
+        padding: 8px 12px;
+        background: #f8fafc;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.2s;
+}
+#nearby-markers-list > div:hover {
+        background: #e2e8f0;
 }
 
 .float-btn .material-icons-round {
@@ -5602,36 +5920,7 @@ body.picking-point .leaflet-container {
 }
 
 #routing-resize-handle:hover {
-
-        background: linear-gradient(135deg, transparent 50%, #3b82f6 50%);
-
-        position: fixed;
-
-        bottom: 80px;
-
-        right: 20px;
-
-        width: 380px;
-
-        height: 600px;
-
-        background: white !important;
-
-        border-radius: 16px !important;
-
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2) !important;
-
-        z-index: 5000 !important;
-
-        display: none;
-
-        flex-direction: column;
-
-        overflow: hidden;
-        /* Enforce container boundary */
-
-        border: 1px solid #e2e8f0;
-
+    background: linear-gradient(135deg, transparent 50%, #3b82f6 50%);
 }
 
 #routing-body {
@@ -5662,18 +5951,27 @@ body.picking-point .leaflet-container {
 
 }
 
-#routing-editor-panel {
-
+#routing-editor-panel, #routing-manager-panel {
         flex: 1;
-
         overflow: hidden !important;
-
         display: flex;
-
         flex-direction: column;
-
         min-height: 0 !important;
+}
 
+#routing-editor-panel {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        display: none !important;
+}
+
+#routing-manager-panel {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+}
+        z-index: 1;
 }
 
 #route-list-container {
@@ -8224,6 +8522,8 @@ input[type=number] {
         border: 2px solid transparent;
         transition: all 0.2s;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
 }
 
 .gallery-thumb:hover {
@@ -8579,7 +8879,7 @@ input[type=number] {
 
 /* === 05_routing.css === */
 #routing-station-overlay {
-        display: none;
+        display: none !important;
         position: fixed !important;
         top: 20px !important;
         right: 20px !important;
@@ -8597,9 +8897,84 @@ input[type=number] {
 
 #routing-station-overlay.active {
         display: flex !important;
+}
+
+/* Keep children visible - but properly constrained */
+#routing-station-overlay > * {
+        display: flex !important;
         visibility: visible !important;
-        opacity: 1;
-        pointer-events: auto;
+}
+
+/* Tabs inside panel - explicit visibility but constrained to panel */
+#routing-tabs-container {
+        flex: 0 0 50px !important;
+        min-height: 50px !important;
+        height: 50px !important;
+        display: flex !important;
+        visibility: visible !important;
+        position: relative;
+}
+
+#routing-tabs-container .v6-tab {
+        visibility: visible !important;
+        height: 50px !important;
+        min-height: 50px !important;
+}
+
+/* Header area - ensure visible */
+#routing-header {
+        display: flex !important;
+        flex-direction: column !important;
+        visibility: visible !important;
+        flex: 0 0 auto;
+}
+
+/* Toolbar - ensure visible */
+#routing-toolbar-row {
+        display: flex !important;
+        visibility: visible !important;
+        flex: 0 0 auto;
+}
+
+/* Panels container */
+#v4-panels-container {
+        position: relative !important;
+}
+
+/* Tab structure override */
+.v6-tabs {
+    display: flex !important;
+    visibility: visible !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+    background: #f8fafc !important;
+    min-height: 44px !important;
+}
+
+.v6-tab {
+    display: flex !important;
+    visibility: visible !important;
+    flex: 1 !important;
+    padding: 10px 16px !important;
+    border: none !important;
+    background: transparent !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #64748b !important;
+    cursor: pointer !important;
+    text-align: center !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+.v6-tab:hover {
+    background: #e2e8f0 !important;
+    color: #334155 !important;
+}
+
+.v6-tab.active {
+    color: #2563eb !important;
+    background: white !important;
+    border-bottom: 3px solid #2563eb !important;
 }
 
 #route-pager-container {
@@ -8919,6 +9294,7 @@ input[type=number] {
         }
 
         #routing-station-overlay {
+                display: none !important;
                 top: 10px !important;
                 right: 10px !important;
                 left: 10px !important;
@@ -8928,6 +9304,10 @@ input[type=number] {
                 max-height: calc(100vh - 20px) !important;
                 margin: 0 !important;
                 z-index: 20000 !important; /* Ensure it stays above sidebar on mobile if needed */
+        }
+        
+        #routing-station-overlay.active {
+                display: flex !important;
         }
 
         /* Adjust toolbar row for better fit on very small screens */
@@ -9244,10 +9624,31 @@ input[type=number] {
         flex-direction: column;
         gap: 8px;
 }
-</style>
+    @media (max-width: 768px) {
+        #btn-cloud-sync-floating,
+        #btn-show-all-markers,
+        #btn-cluster-toggle {
+            left: 30px !important;
+            width: 40px !important;
+            height: 40px !important;
+            border-radius: 50% !important;
+            min-width: 0 !important;
+            padding: 0 !important;
+        }
+        #btn-cluster-toggle {
+            bottom: 90px !important;
+        }
+        #btn-cloud-sync-floating {
+            bottom: 135px !important;
+        }
+        #btn-show-all-markers {
+            bottom: 180px !important;
+        }
+    }
+    </style>
 </head>
 <body>
-    <script>window.DEV_MODE = false;</script> <!-- Handled via script injection -->
+     <!-- Handled via script injection -->
     <div id="login-overlay" style="position:fixed; inset:0; background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); z-index:999999; display:flex; align-items:center; justify-content:center; padding:20px; transition: opacity 0.5s ease;">
         <div style="background:white; padding:40px; border-radius:24px; width:100%; max-width:400px; text-align:center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
             <div style="background:linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); width:72px; height:72px; border-radius:20px; display:flex; align-items:center; justify-content:center; margin:0 auto 24px; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);">
@@ -9286,8 +9687,8 @@ input[type=number] {
         <div>
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
-                Updated: 21-Apr 04:30 PM 
-                <span style="color:var(--primary); margin-left:4px;">[v2026.04.21.1630]</span>
+                Updated: {{ LAST_UPDATED }} 
+                <span style="color:var(--primary); margin-left:4px;">v2026.04.29.0855</span>
             </div>
         </div>
         
@@ -9557,19 +9958,22 @@ input[type=number] {
                                 <span style="font-size:8px;">⏳ SYNC...</span>
                             </div>
                          </div>
-                         <div id="f-drive" class="multi-option" onclick="App.handleMultiClick(event, 'f-drive', 'apply')" style="margin:0; padding:12px; background:#ecfdf5; border:1px solid #d1fae5; border-radius:10px; width:100%; box-sizing:border-box;">
-                            <input type="checkbox" id="f-drive-only" onchange="App.handleMultiChange(event, 'f-drive', 'apply')" style="margin-right:10px;">
-                            <span style="font-weight:700; color:#065f46; font-size:12px;">Show Drive Images Only</span>
+                         <div id="f-drive" class="multi-option" onclick="App.handleMultiClick(event, 'f-drive', 'apply')" style="margin:0; padding:12px; background:#ecfdf5; border:1px solid #d1fae5; border-radius:10px; width:100%; box-sizing:border-box; display:flex; align-items:center; justify-content:space-between;">
+                            <div style="display:flex; align-items:center;">
+                                <input type="checkbox" id="f-drive-only" onchange="App.handleMultiChange(event, 'f-drive', 'apply')" style="margin-right:10px;">
+                                <span style="font-weight:700; color:#065f46; font-size:12px;">Show Drive Images Only</span>
+                            </div>
+                            <div class="selection-badge" id="badge-f-drive" style="display:none">0</div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            </div>
         </div>
+
+    </div>
     
     <!-- Live Totals badge (Repositioned above footer) -->
-    <div class="stat-badge">
+    <div class="stat-badge" onclick="Sidebar.close(); event.stopPropagation();">
         <small id="stat-label" style="font-weight:700; color:#64748b; text-transform:uppercase; font-size:9px;">Live Survey Data</small>
         <span id="stat-count" style="font-weight:800; color:var(--primary); font-size:14px;">0</span>
     </div>
@@ -9583,11 +9987,14 @@ input[type=number] {
             <span class="material-icons-round">refresh</span> Reset
         </div>
     </div>
-
-
 </div>
 
+
 <div id="main-stage">
+    <div id="mobile-unsent-banner" class="mobile-only" style="display:none; position:fixed; top:75px; left:50%; transform:translateX(-50%); z-index:1000; background:rgba(254, 243, 199, 0.65); backdrop-filter:blur(4px); color:#d97706; padding:6px 12px; border-radius:20px; border:1px solid rgba(252, 211, 77, 0.4); font-size:11px; font-weight:800; box-shadow:0 4px 12px rgba(217,119,6,0.1); align-items:center; gap:6px; cursor:pointer; flex-direction:row; white-space:nowrap; flex-wrap:nowrap;" onclick="DriveSync.openSyncModal()">
+        <span class="material-icons-round" style="font-size:14px; flex-shrink:0;">warning</span>
+        <span style="flex-shrink:0;">You have <span id="mobile-unsent-count" style="color:#dc2626; font-size:12px; font-weight:900;">0</span> Unsent images</span>
+    </div>
     <div id="map-pager" class="map-nav" style="display: none;">
         <button onclick="MapNavigator.move(-1)" class="gal-btn" style="background:white; color:var(--text); box-shadow:0 2px 4px rgba(0,0,0,0.05);"><span class="material-icons-round" style="font-size:20px;">chevron_left</span></button>
         <span class="map-nav-text">Record <span id="map-nav-idx">0</span> of <span id="map-nav-total">0</span></span>
@@ -9598,6 +10005,17 @@ input[type=number] {
     </button>
     <div id="info-card" class="minimized">
          <!-- Populated by JS -->
+    </div>
+
+    <!-- Nearby Markers Popup - Shows when multiple markers are close -->
+    <div id="nearby-markers-popup" style="display:none; position:fixed; z-index:15000; background:#f8fafc; padding:6px; box-shadow:0 4px 12px rgba(0,0,0,0.1); border:1px solid #e2e8f0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; border-bottom:1px solid #e2e8f0; padding-bottom:4px;">
+            <span style="font-weight:700; font-size:9px; color:#475569;">Nearby</span>
+            <button onclick="App.closeNearbyMarkersPopup()" title="Close" style="background:none; border:none; color:#64748b; cursor:pointer; padding:2px;">
+                <span class="material-icons-round" style="font-size:12px;">close</span>
+            </button>
+        </div>
+        <div id="nearby-markers-list" style="display:flex; flex-direction:column; gap:3px; max-height:180px; overflow-y:auto; overflow-x:hidden;"></div>
     </div>
 
 
@@ -9628,7 +10046,7 @@ input[type=number] {
         </div>
     </div>
         
-        <div class="map-controls">
+<div class="map-controls">
             <div id="extra-ctrls" class="control-group">
                 <button class="float-btn" onclick="ViewSwitcher.toList()" title="List View">
                     <span class="material-icons-round" style="color:#06b6d4">view_list</span>
@@ -9652,6 +10070,16 @@ input[type=number] {
                     <span class="material-icons-round" style="color:#6366f1">qr_code_scanner</span>
                 </button>
             </div>
+            <button id="btn-cloud-sync-floating" class="routing-tool-btn" onclick="DriveSync.openSyncModal()" title="Sync Offline Images" style="position:fixed; bottom:110px; left:calc(var(--sidebar-w, 320px) + 60px); z-index:1001; width:32px; height:32px; border-radius:50%; min-width:32px; background:#fef3c7; border:1px solid #fcd34d; display:flex; align-items:center; justify-content:center;">
+                <span class="material-icons-round" style="color:#d97706; font-size:18px;">cloud_off</span>
+                <span id="cloud-sync-dot-floating" style="display:none; position:absolute; top:2px; right:2px; width:6px; height:6px; background:#dc2626; border-radius:50%;"></span>
+            </button>
+            <button id="btn-cluster-toggle" class="routing-tool-btn" onclick="App.toggleClustering()" title="Toggle Marker Clustering" style="position:fixed; bottom:70px; left:calc(var(--sidebar-w, 320px) + 20px); z-index:1001; width:32px; height:32px; border-radius:50%; min-width:32px;">
+                <span class="material-icons-round" style="font-size:18px;">hub</span>
+            </button>
+            <button id="btn-show-all-markers" class="routing-tool-btn" onclick="App.showAllMarkersInView()" title="Show All Markers in Current View" style="position:fixed; bottom:70px; left:calc(var(--sidebar-w, 320px) + 60px); z-index:1001; width:32px; height:32px; border-radius:50%; min-width:32px;">
+                <span class="material-icons-round" style="font-size:18px;">visibility</span>
+            </button>
             <button class="float-btn mobile-only" onclick="Sidebar.toggle()" title="Menu">
                 <span class="material-icons-round">menu</span>
             </button>
@@ -9683,7 +10111,7 @@ input[type=number] {
     </div>
 
     <!-- Routing Station Pro Overlay -->
-        <div id="routing-station-overlay">
+        <div id="routing-station-overlay" style="display:none;">
                 <!-- Header Handle -->
                 <div id="routing-header" style="flex:0 0 auto;">
                     <div id="routing-drag-handle" style="padding:10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; background:#f8fafc; cursor:move;">
@@ -9706,9 +10134,9 @@ input[type=number] {
                     </div>
 
                     <!-- TAB NAVIGATION -->
-                    <div class="v6-tabs" style="border-bottom:1px solid #e2e8f0; background:white; flex: 0 0 auto;">
-                        <button onclick="SpatialRouter.switchTab('editor')" id="tab-editor" class="v6-tab active">EDITOR</button>
-                        <button onclick="SpatialRouter.switchTab('manager')" id="tab-manager" class="v6-tab">ROUTES</button>
+                    <div class="v6-tabs" id="routing-tabs-container" style="border-bottom:3px solid #22c55e; background:#fefce8; flex: 0 0 50px; display:flex; min-height:50px; width:100%;">
+                        <button onclick="SpatialRouter.switchTab('editor')" id="tab-editor" class="v6-tab active" style="display:flex; padding:12px 20px; flex:1; background:#22c55e; font-weight:800; color:#fff; border-radius:8px 8px 0 0;">EDITOR</button>
+                        <button onclick="SpatialRouter.switchTab('manager')" id="tab-manager" class="v6-tab" style="display:flex; padding:12px 20px; flex:1; background:#e2e8f0; font-weight:700; color:#475569; border-radius:8px 8px 0 0;">ROUTES</button>
                     </div>
 
                     <!-- Unified Action Toolbar (Persistent) -->
@@ -9787,7 +10215,7 @@ input[type=number] {
                 <div id="v4-panels-container" style="flex:1; overflow:hidden; background:white; display:flex; flex-direction:column; min-height: 0;">
                     
                     <!-- EDITOR TAB PANEL (Pure Flex Layout) -->
-                    <div id="routing-editor-panel" style="display:flex; flex-direction:column; background:white; height:100%; width:100%; overflow:hidden;">
+                    <div id="routing-editor-panel" style="display:none; flex-direction:column; background:white; height:100%; width:100%; overflow:hidden;">
                         
                         <!-- Header Area (Fixed Height) -->
                         <div style="flex:0 0 auto; background:white; border-bottom:1px solid #e2e8f0;">
@@ -9828,7 +10256,7 @@ input[type=number] {
                     </div>
 
                     <!-- MANAGER TAB PANEL -->
-                    <div id="routing-manager-panel" style="display:none; flex-direction:column; background:#f8fafc; height:100%; width:100%; overflow:hidden;">
+                    <div id="routing-manager-panel" style="display:flex; flex-direction:column; background:#f8fafc; height:100%; width:100%; overflow:hidden;">
                         <div style="flex:0 0 auto; padding:8px; background:white; border-bottom:1px solid #e2e8f0; display:flex; flex-direction:column; gap:6px;">
                             <!-- Row 1: Selection + Clean + Sync -->
                             <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
@@ -9988,6 +10416,34 @@ input[type=number] {
             </button>
         </div>
         <div id="stats-body" class="stats-table-container" style="flex:1; overflow-y:auto; padding:0;"></div>
+    </div>
+</div>
+
+<!-- Offline Image Sync Modal -->
+<div id="modal-offline-sync" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.8); z-index:30000; align-items:center; justify-content:center; padding:12px;">
+    <div style="background:white; border-radius:16px; width:100%; max-width:500px; max-height:80vh; display:flex; flex-direction:column; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); overflow:hidden;">
+        <div style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span class="material-icons-round" style="color:#d97706; font-size:24px;">cloud_off</span>
+                <h3 style="margin:0; font-size:16px; font-weight:700; color:#1e293b;">Offline Sync Queue</h3>
+            </div>
+            <button onclick="document.getElementById('modal-offline-sync').style.display='none'" style="background:#f1f5f9; border:none; border-radius:50%; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b;">
+                <span class="material-icons-round" style="font-size:18px;">close</span>
+            </button>
+        </div>
+        
+        <div id="offline-sync-gallery" style="flex:1; overflow-y:auto; padding:16px; display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; background:#f1f5f9;">
+        </div>
+
+        <div style="padding:16px; background:white; border-top:1px solid #e2e8f0; display:flex; flex-direction:column; gap:8px;">
+            <div id="bulk-sync-progress" style="display:none; text-align:center; font-size:12px; font-weight:800; color:#2563eb; padding:4px 0;">
+                <span id="bulk-sync-progress-text">Uploading...</span>
+            </div>
+            <button id="btn-execute-bulk-sync" onclick="DriveSync.startBulkUpload()" style="background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color:white; border:none; padding:14px; border-radius:12px; font-weight:800; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 12px rgba(37, 99, 235, 0.2);">
+                <span class="material-icons-round">cloud_upload</span>
+                <span>SYNC ALL IMAGES NOW</span>
+            </button>
+        </div>
     </div>
 </div>
 
@@ -10316,7 +10772,10 @@ input[type=number] {
 
 <!-- QR Scanner Modal -->
 <div id="modal-qr" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:30000; flex-direction:column; align-items:center; justify-content:center;">
-    <div style="position:absolute; top:20px; right:20px; z-index:12001;">
+    <div style="position:absolute; top:20px; right:20px; z-index:12001; display:flex; gap:12px;">
+        <button onclick="QRScanner.switchCamera()" title="Switch Camera" style="background:rgba(255,255,255,0.2); border:none; color:white; width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+            <span class="material-icons-round" style="font-size:28px">flip_camera_android</span>
+        </button>
         <button onclick="QRScanner.close()" style="background:rgba(255,255,255,0.2); border:none; color:white; width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer;">
             <span class="material-icons-round" style="font-size:32px">close</span>
         </button>
@@ -10691,7 +11150,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 // State object
 
 const State = {
-    savedRoutes: [{"name": "MC-1_Route_6", "sequence": [{"surveyId": "3350418", "lat": 32.0978141, "lng": 72.6804316, "name": "Usman"}, {"surveyId": "3350419", "lat": 32.0970542, "lng": 72.6795674, "name": "Shiekh"}, {"surveyId": "3350420", "lat": 32.0978691, "lng": 72.6784948, "name": "Shamshad"}, {"surveyId": "3350421", "lat": 32.0978457, "lng": 72.6785667, "name": "Tayyab"}, {"surveyId": "3350422", "lat": 32.0978691, "lng": 72.6784948, "name": "Muhammad khursheed"}, {"surveyId": "3350423", "lat": 32.0969923, "lng": 72.6796033, "name": "M.ameer"}, {"surveyId": "3350424", "lat": 32.0978691, "lng": 72.6784948, "name": "M.bilal"}, {"surveyId": "3350425", "lat": 32.0978691, "lng": 72.6784948, "name": "Ishtiaq"}, {"surveyId": "3350426", "lat": 32.0969923, "lng": 72.6796033, "name": "Ashraf"}, {"surveyId": "3350427", "lat": 32.0977857, "lng": 72.6786002, "name": "Ali"}, {"surveyId": "3350683", "lat": 32.0971255, "lng": 72.681465, "name": "Waqas"}, {"surveyId": "3350684", "lat": 32.0971795, "lng": 72.6814133, "name": "Sheikh ijaz"}, {"surveyId": "3350685", "lat": 32.0972325, "lng": 72.6813154, "name": "Mirza Anwar"}, {"surveyId": "3350686", "lat": 32.0972164, "lng": 72.6812974, "name": "Arshad iqbal"}, {"surveyId": "3350687", "lat": 32.0972112, "lng": 72.681296, "name": "Asgher"}, {"surveyId": "3350688", "lat": 32.0972277, "lng": 72.6812845, "name": "Sajid"}, {"surveyId": "3350689", "lat": 32.0972118, "lng": 72.6812841, "name": "Muhammad afazl"}, {"surveyId": "3350690", "lat": 32.09726, "lng": 72.6812344, "name": "Abdul wahid"}, {"surveyId": "3350691", "lat": 32.0973171, "lng": 72.6811748, "name": "Muhammad ramzan"}, {"surveyId": "3350692", "lat": 32.0974286, "lng": 72.6810516, "name": "Aman ullah"}, {"surveyId": "3350693", "lat": 32.0969923, "lng": 72.6796033, "name": "M.mahad"}, {"surveyId": "3351508", "lat": 32.0979596, "lng": 72.6808504, "name": "Basheer Ahmed"}, {"surveyId": "3351509", "lat": 32.0979627, "lng": 72.6808695, "name": "Muhammad waqas"}, {"surveyId": "3351510", "lat": 32.0979596, "lng": 72.6808458, "name": "Muhammad nouman"}, {"surveyId": "3351511", "lat": 32.0978325, "lng": 72.6809272, "name": "Shani"}, {"surveyId": "3351512", "lat": 32.0976694, "lng": 72.6810322, "name": "Akbar"}, {"surveyId": "3351513", "lat": 32.0977107, "lng": 72.6810483, "name": "Zahid"}, {"surveyId": "3351514", "lat": 32.0976083, "lng": 72.6809524, "name": "Abdur rehman"}, {"surveyId": "3351787", "lat": 32.0973596, "lng": 72.681539, "name": "Usama zia"}, {"surveyId": "3351788", "lat": 32.0973765, "lng": 72.6814836, "name": "Ali"}, {"surveyId": "3351789", "lat": 32.097447, "lng": 72.6814804, "name": "Ibrar Ahmed"}, {"surveyId": "3351790", "lat": 32.0975159, "lng": 72.6814418, "name": "Muhammad Afzal"}, {"surveyId": "3351896", "lat": 32.0979031, "lng": 72.6812651, "name": "Muhammad ishaaq"}, {"surveyId": "3352155", "lat": 32.0981946, "lng": 72.680905, "name": "Muhammad afzal"}, {"surveyId": "3352156", "lat": 32.098195, "lng": 72.6809259, "name": "Saeed Anwar"}, {"surveyId": "3352157", "lat": 32.0980194, "lng": 72.68108, "name": "Umer hayat"}, {"surveyId": "3352158", "lat": 32.0980272, "lng": 72.6810869, "name": "Malik house"}, {"surveyId": "3352159", "lat": 32.0980264, "lng": 72.681088, "name": "Muhammad Tanveer"}, {"surveyId": "3352160", "lat": 32.0980289, "lng": 72.6810932, "name": "Tanveer"}, {"surveyId": "3352161", "lat": 32.0980248, "lng": 72.6811015, "name": "Mirza"}, {"surveyId": "3352173", "lat": 32.0981901, "lng": 72.6809456, "name": "Abdur rehman"}, {"surveyId": "3352982", "lat": 32.0972964, "lng": 72.6817147, "name": "Toheed"}, {"surveyId": "3352984", "lat": 32.0973103, "lng": 72.6816992, "name": "Liaqat ali"}, {"surveyId": "3352986", "lat": 32.0975225, "lng": 72.6818087, "name": "Bhutta"}, {"surveyId": "3352988", "lat": 32.0975651, "lng": 72.6818972, "name": "Wens house"}, {"surveyId": "3352991", "lat": 32.097811, "lng": 72.682122, "name": "Dream cutting"}, {"surveyId": "3352994", "lat": 32.0980997, "lng": 72.6815285, "name": "Khuram"}, {"surveyId": "3352996", "lat": 32.0976584, "lng": 72.6817647, "name": "Muhammad afzal"}, {"surveyId": "3352998", "lat": 32.097706, "lng": 72.6816971, "name": "Alrehman model school"}, {"surveyId": "3352999", "lat": 32.0977502, "lng": 72.6816243, "name": "Abdullah mujahid"}, {"surveyId": "3353001", "lat": 32.0977367, "lng": 72.6816481, "name": "Naveed javed"}, {"surveyId": "3353004", "lat": 32.0977832, "lng": 72.6815673, "name": "Zeeshan"}, {"surveyId": "3353006", "lat": 32.0977722, "lng": 72.6815898, "name": "Syed Asad raza"}, {"surveyId": "3353009", "lat": 32.0977933, "lng": 72.6815293, "name": "Zafar ali"}, {"surveyId": "3353011", "lat": 32.0977895, "lng": 72.6815756, "name": "Malik atif"}, {"surveyId": "3353931", "lat": 32.0965361, "lng": 72.6813754, "name": "Malik hayat"}, {"surveyId": "3353932", "lat": 32.0965754, "lng": 72.6811845, "name": "Ali dogger"}, {"surveyId": "3353933", "lat": 32.0965644, "lng": 72.6811865, "name": "Maan dogger"}, {"surveyId": "3353935", "lat": 32.0965624, "lng": 72.6811786, "name": "Usman"}, {"surveyId": "3353936", "lat": 32.096603, "lng": 72.6811515, "name": "Shazad asgher"}, {"surveyId": "3353937", "lat": 32.0968565, "lng": 72.6812279, "name": "Abdul Rehman"}, {"surveyId": "3353938", "lat": 32.0968209, "lng": 72.6812576, "name": "Malik hayat"}, {"surveyId": "3353939", "lat": 32.0967266, "lng": 72.6815482, "name": "Zeeshan ali"}, {"surveyId": "3353940", "lat": 32.0967577, "lng": 72.6814454, "name": "Muhammad adnan"}, {"surveyId": "3353941", "lat": 32.0968386, "lng": 72.6813638, "name": "Chaudhary house"}, {"surveyId": "3353942", "lat": 32.0969359, "lng": 72.6813363, "name": "Abdul hameed"}, {"surveyId": "3353943", "lat": 32.0970835, "lng": 72.6814909, "name": "Muhammad awais"}, {"surveyId": "3353944", "lat": 32.0970656, "lng": 72.6814834, "name": "Imtiaz"}, {"surveyId": "3353945", "lat": 32.0971167, "lng": 72.6815561, "name": "Nadeem"}, {"surveyId": "3353946", "lat": 32.0970157, "lng": 72.6816525, "name": "Ali"}], "polygon": [[32.09900846295572, 72.6738739013672], [32.10206222548107, 72.68142700195314], [32.094645767953665, 72.68606185913087], [32.09246434232067, 72.6790237426758]], "timestamp": "21/02/2026, 12:21:32 pm", "area": "MC-1, New Satellite Town, Block Z, Sargodha"}, {"name": "MC-19_Route_1", "sequence": [{"surveyId": "3345938", "lat": 32.0706314, "lng": 72.6524629, "name": "Arshad"}, {"surveyId": "3345941", "lat": 32.0706588, "lng": 72.6524359, "name": "M Abubakar"}, {"surveyId": "3345943", "lat": 32.0706871, "lng": 72.6526133, "name": "Sheikh M Akbar"}, {"surveyId": "3345946", "lat": 32.0707709, "lng": 72.6527936, "name": "M yameen"}, {"surveyId": "3346145", "lat": 32.0707591, "lng": 72.652665, "name": "Qasim"}, {"surveyId": "3346146", "lat": 32.0707407, "lng": 72.6526073, "name": "M Rasheed"}, {"surveyId": "3346147", "lat": 32.0706885, "lng": 72.6527502, "name": "Ahsan"}, {"surveyId": "3347927", "lat": 32.0708823, "lng": 72.652295, "name": "Mistry Sattar"}, {"surveyId": "3347390", "lat": 32.070902, "lng": 72.6522857, "name": "Sah"}, {"surveyId": "3347926", "lat": 32.070931, "lng": 72.6523771, "name": "Baga"}, {"surveyId": "3347925", "lat": 32.0709523, "lng": 72.6523858, "name": "M Imtiaz"}, {"surveyId": "3347929", "lat": 32.070852, "lng": 72.6522248, "name": "Asghar Ali"}, {"surveyId": "3347928", "lat": 32.0708908, "lng": 72.6521914, "name": "Shan Ali"}, {"surveyId": "3347930", "lat": 32.0707314, "lng": 72.6521734, "name": "Tasawar"}, {"surveyId": "3347388", "lat": 32.0712426, "lng": 72.6521187, "name": "Waheed"}, {"surveyId": "3347391", "lat": 32.0714374, "lng": 72.6518701, "name": "Nasreen akhtar"}], "polygon": null, "timestamp": "21/02/2026, 11:22:16 am", "area": "MC-19, Old Civil Line, Sargodha"}, {"name": "MC-19_Route_2", "sequence": [{"surveyId": "3345948", "lat": 32.0708217, "lng": 72.6529338, "name": "Zulfiqar Ali"}, {"surveyId": "3345950", "lat": 32.0708326, "lng": 72.6529122, "name": "Abdul Shakoor"}, {"surveyId": "3345952", "lat": 32.0707276, "lng": 72.6529898, "name": "Shaffique"}, {"surveyId": "3345955", "lat": 32.0706651, "lng": 72.6532228, "name": "M Wahid"}, {"surveyId": "3346136", "lat": 32.0711363, "lng": 72.6531919, "name": "Aftab"}, {"surveyId": "3346137", "lat": 32.0710434, "lng": 72.6530042, "name": "Abid"}, {"surveyId": "3346140", "lat": 32.071018, "lng": 72.6529961, "name": "Asghar"}, {"surveyId": "3346143", "lat": 32.0710614, "lng": 72.653048, "name": "Rana munwar Hussain"}, {"surveyId": "3346144", "lat": 32.0710706, "lng": 72.6530304, "name": "Haji mushraf"}, {"surveyId": "3346148", "lat": 32.0707924, "lng": 72.6530061, "name": "M istkhar"}, {"surveyId": "3346149", "lat": 32.0707217, "lng": 72.6531081, "name": "Waqas"}, {"surveyId": "3346150", "lat": 32.0706768, "lng": 72.6531669, "name": "Zulfqar Ahmed"}, {"surveyId": "3346954", "lat": 32.0712937, "lng": 72.6528286, "name": "Yameen"}, {"surveyId": "3346955", "lat": 32.0710842, "lng": 72.6531524, "name": "Naveed"}, {"surveyId": "3346965", "lat": 32.0712747, "lng": 72.6527331, "name": "Shokat"}, {"surveyId": "3346966", "lat": 32.0710949, "lng": 72.6531694, "name": "Shabeer Ahmed"}, {"surveyId": "3346967", "lat": 32.0710839, "lng": 72.6531812, "name": "M Rafi"}, {"surveyId": "3346968", "lat": 32.0710315, "lng": 72.6532019, "name": "Shoaib"}, {"surveyId": "3346969", "lat": 32.0710008, "lng": 72.6532462, "name": "Tanveer"}, {"surveyId": "3346970", "lat": 32.0710233, "lng": 72.6532339, "name": "Amir"}, {"surveyId": "3347385", "lat": 32.0714542, "lng": 72.6529067, "name": "Irfan Ali"}, {"surveyId": "3347386", "lat": 32.071338, "lng": 72.6528576, "name": "Liaqat"}, {"surveyId": "3347387", "lat": 32.0709329, "lng": 72.6528621, "name": "Zeeshan"}, {"surveyId": "3347923", "lat": 32.0711197, "lng": 72.6526234, "name": "Afzal"}, {"surveyId": "3347924", "lat": 32.0715094, "lng": 72.6526736, "name": "Ghulam Rasool"}], "polygon": [[32.07134594757229, 72.6523232850038], [32.07052771050099, 72.65312794770827], [32.0706595380795, 72.65348736371627], [32.071491411174, 72.65297774400344], [32.0715959629948, 72.65242520894637]], "timestamp": "20/02/2026, 3:02:05 pm", "area": "MC-19, Old Civil Line, Sargodha"}, {"name": "MC-19_Route_3", "sequence": [{"surveyId": "3346128", "lat": 32.0713441, "lng": 72.6532456, "name": "Zahid"}, {"surveyId": "3346131", "lat": 32.0712453, "lng": 72.653227, "name": "M Wakeel"}, {"surveyId": "3346133", "lat": 32.0712055, "lng": 72.6532254, "name": "Kashif Maqbool"}, {"surveyId": "3346138", "lat": 32.0712401, "lng": 72.6532235, "name": "Abdul jabar Khan"}, {"surveyId": "3346141", "lat": 32.0712231, "lng": 72.6532037, "name": "M Ali Tahir"}, {"surveyId": "3346956", "lat": 32.0709764, "lng": 72.6533562, "name": "Rafique"}, {"surveyId": "3346957", "lat": 32.0709529, "lng": 72.6533823, "name": "Saleem"}, {"surveyId": "3346958", "lat": 32.0709407, "lng": 72.653399, "name": "Shahid"}, {"surveyId": "3346959", "lat": 32.0709262, "lng": 72.6534361, "name": "Zahid"}, {"surveyId": "3346960", "lat": 32.0709293, "lng": 72.6534176, "name": "M Boota"}, {"surveyId": "3346961", "lat": 32.0708789, "lng": 72.6535245, "name": "Ramzan"}, {"surveyId": "3346962", "lat": 32.070829, "lng": 72.6534968, "name": "M Akbar"}, {"surveyId": "3346963", "lat": 32.0707511, "lng": 72.6536805, "name": "Mazhar Hayat"}, {"surveyId": "3346964", "lat": 32.0707467, "lng": 72.6537327, "name": "Adeel"}, {"surveyId": "3346971", "lat": 32.0709046, "lng": 72.6534403, "name": "Ameer"}, {"surveyId": "3346972", "lat": 32.070807, "lng": 72.6534535, "name": "Arslan"}, {"surveyId": "3346973", "lat": 32.0708941, "lng": 72.6534105, "name": "Billa"}, {"surveyId": "3346974", "lat": 32.0708138, "lng": 72.6536204, "name": "Ali"}, {"surveyId": "3347381", "lat": 32.0716864, "lng": 72.6530125, "name": "M Iqbal"}, {"surveyId": "3347382", "lat": 32.0716999, "lng": 72.6530217, "name": "Haji Nawaz"}, {"surveyId": "3347383", "lat": 32.0716924, "lng": 72.6530124, "name": "Tayyab"}, {"surveyId": "3347384", "lat": 32.0716974, "lng": 72.653017, "name": "Rana Sajjad"}, {"surveyId": "3347916", "lat": 32.0716446, "lng": 72.6532294, "name": "Mukhtar"}, {"surveyId": "3347917", "lat": 32.0716235, "lng": 72.6532072, "name": "Kashif Nazeer"}, {"surveyId": "3347918", "lat": 32.0716037, "lng": 72.6531947, "name": "Mumtaz Tiwana"}, {"surveyId": "3347919", "lat": 32.0716443, "lng": 72.6529991, "name": "M Anwar"}, {"surveyId": "3347920", "lat": 32.071636, "lng": 72.6530552, "name": "Amjad Hussain"}, {"surveyId": "3347921", "lat": 32.0715979, "lng": 72.6530526, "name": "Shafqat Ali"}, {"surveyId": "3347922", "lat": 32.0715818, "lng": 72.6529173, "name": "Ata Muhammad"}], "polygon": [[32.07159141726595, 72.65274170961013], [32.07130958163572, 72.65314940538039], [32.07068681272717, 72.65349809255233], [32.07067317540434, 72.65388433065047], [32.07126866993976, 72.65334252442946], [32.07147777397117, 72.6532406004869], [32.071741426198756, 72.65328351583113], [32.07182324914928, 72.6529348286592]], "timestamp": "20/02/2026, 3:02:24 pm", "area": "MC-19, Old Civil Line, Sargodha"}, {"name": "MC-19_Route_4", "sequence": [{"surveyId": "3347915", "lat": 32.0719222, "lng": 72.6534634, "name": "Manzoor"}, {"surveyId": "3347380", "lat": 32.0720408, "lng": 72.6533898, "name": "M akhtar"}, {"surveyId": "3347979", "lat": 32.0719171, "lng": 72.6538394, "name": "Ali raza"}, {"surveyId": "3347909", "lat": 32.0718281, "lng": 72.653867, "name": "Amanat Ali"}, {"surveyId": "3347912", "lat": 32.0718661, "lng": 72.6538575, "name": "M Saeed"}, {"surveyId": "3347976", "lat": 32.0718572, "lng": 72.6538541, "name": "M Ali"}, {"surveyId": "3347914", "lat": 32.0718705, "lng": 72.6538535, "name": "Yaseen"}, {"surveyId": "3347977", "lat": 32.07186, "lng": 72.6538543, "name": "Umair Ali"}], "polygon": [[32.07195184998718, 72.65323698520662], [32.0721700438571, 72.65339791774751], [32.07187457286672, 72.65410065650941], [32.07170638126115, 72.65360176563264]], "timestamp": "20/02/2026, 3:28:00 pm", "area": "MC-19, Old Civil Line, Sargodha"}, {"name": "MC-19_Route_5", "sequence": [{"surveyId": "3347906", "lat": 32.0714196, "lng": 72.6540522, "name": "Mueez"}, {"surveyId": "3347907", "lat": 32.0713706, "lng": 72.6540763, "name": "Malik Naveed ul Hassan"}, {"surveyId": "3347970", "lat": 32.0714228, "lng": 72.6542199, "name": "Sheikh tswar"}, {"surveyId": "3347908", "lat": 32.0715047, "lng": 72.6541814, "name": "M aflaq"}, {"surveyId": "3367697", "lat": 32.0715593, "lng": 72.6541869, "name": "Naeem baloch"}, {"surveyId": "3347971", "lat": 32.0715472, "lng": 72.6542099, "name": "Malik gohar Abbas"}, {"surveyId": "3347969", "lat": 32.0715248, "lng": 72.6543518, "name": "Zahid"}, {"surveyId": "3347960", "lat": 32.0715115, "lng": 72.6543546, "name": "Naveed"}, {"surveyId": "3347965", "lat": 32.0714969, "lng": 72.6543902, "name": "Usman"}, {"surveyId": "3347964", "lat": 32.0714664, "lng": 72.6543783, "name": "Usman bhatti"}, {"surveyId": "3366162", "lat": 32.0714954, "lng": 72.6544112, "name": "M faisla Akash"}, {"surveyId": "3366138", "lat": 32.0714459, "lng": 72.6544504, "name": "Manzoor Hussain Shah"}], "polygon": null, "timestamp": "21/02/2026, 12:08:57 pm", "area": "MC-19, Old Civil Line, Sargodha"}],
+    savedRoutes: {"MC-19_Route_1": {"name": "MC-19_Route_1", "sequence": [{"surveyId": "3345938", "lat": 32.0706314, "lng": 72.6524629, "name": "Arshad"}, {"surveyId": "3345941", "lat": 32.0706588, "lng": 72.6524359, "name": "M Abubakar"}, {"surveyId": "3345943", "lat": 32.0706871, "lng": 72.6526133, "name": "Sheikh M Akbar"}, {"surveyId": "3345946", "lat": 32.0707709, "lng": 72.6527936, "name": "M yameen"}, {"surveyId": "3346145", "lat": 32.0707591, "lng": 72.652665, "name": "Qasim"}, {"surveyId": "3346146", "lat": 32.0707407, "lng": 72.6526073, "name": "M Rasheed"}, {"surveyId": "3346147", "lat": 32.0706885, "lng": 72.6527502, "name": "Ahsan"}, {"surveyId": "3347927", "lat": 32.0708823, "lng": 72.652295, "name": "Mistry Sattar"}, {"surveyId": "3347390", "lat": 32.070902, "lng": 72.6522857, "name": "Sah"}, {"surveyId": "3347926", "lat": 32.070931, "lng": 72.6523771, "name": "Baga"}, {"surveyId": "3347925", "lat": 32.0709523, "lng": 72.6523858, "name": "M Imtiaz"}, {"surveyId": "3347929", "lat": 32.070852, "lng": 72.6522248, "name": "Asghar Ali"}, {"surveyId": "3347928", "lat": 32.0708908, "lng": 72.6521914, "name": "Shan Ali"}, {"surveyId": "3347930", "lat": 32.0707314, "lng": 72.6521734, "name": "Tasawar"}, {"surveyId": "3347388", "lat": 32.0712426, "lng": 72.6521187, "name": "Waheed"}, {"surveyId": "3347391", "lat": 32.0714374, "lng": 72.6518701, "name": "Nasreen akhtar"}], "polygon": null, "timestamp": "21/02/2026, 11:22:16 am"}, "MC-19_Route_2": {"name": "MC-19_Route_2", "sequence": [{"surveyId": "3345948", "lat": 32.0708217, "lng": 72.6529338, "name": "Zulfiqar Ali"}, {"surveyId": "3345950", "lat": 32.0708326, "lng": 72.6529122, "name": "Abdul Shakoor"}, {"surveyId": "3345952", "lat": 32.0707276, "lng": 72.6529898, "name": "Shaffique"}, {"surveyId": "3345955", "lat": 32.0706651, "lng": 72.6532228, "name": "M Wahid"}, {"surveyId": "3346136", "lat": 32.0711363, "lng": 72.6531919, "name": "Aftab"}, {"surveyId": "3346137", "lat": 32.0710434, "lng": 72.6530042, "name": "Abid"}, {"surveyId": "3346140", "lat": 32.071018, "lng": 72.6529961, "name": "Asghar"}, {"surveyId": "3346143", "lat": 32.0710614, "lng": 72.653048, "name": "Rana munwar Hussain"}, {"surveyId": "3346144", "lat": 32.0710706, "lng": 72.6530304, "name": "Haji mushraf"}, {"surveyId": "3346148", "lat": 32.0707924, "lng": 72.6530061, "name": "M istkhar"}, {"surveyId": "3346149", "lat": 32.0707217, "lng": 72.6531081, "name": "Waqas"}, {"surveyId": "3346150", "lat": 32.0706768, "lng": 72.6531669, "name": "Zulfqar Ahmed"}, {"surveyId": "3346954", "lat": 32.0712937, "lng": 72.6528286, "name": "Yameen"}, {"surveyId": "3346955", "lat": 32.0710842, "lng": 72.6531524, "name": "Naveed"}, {"surveyId": "3346965", "lat": 32.0712747, "lng": 72.6527331, "name": "Shokat"}, {"surveyId": "3346966", "lat": 32.0710949, "lng": 72.6531694, "name": "Shabeer Ahmed"}, {"surveyId": "3346967", "lat": 32.0710839, "lng": 72.6531812, "name": "M Rafi"}, {"surveyId": "3346968", "lat": 32.0710315, "lng": 72.6532019, "name": "Shoaib"}, {"surveyId": "3346969", "lat": 32.0710008, "lng": 72.6532462, "name": "Tanveer"}, {"surveyId": "3346970", "lat": 32.0710233, "lng": 72.6532339, "name": "Amir"}, {"surveyId": "3347385", "lat": 32.0714542, "lng": 72.6529067, "name": "Irfan Ali"}, {"surveyId": "3347386", "lat": 32.071338, "lng": 72.6528576, "name": "Liaqat"}, {"surveyId": "3347387", "lat": 32.0709329, "lng": 72.6528621, "name": "Zeeshan"}, {"surveyId": "3347923", "lat": 32.0711197, "lng": 72.6526234, "name": "Afzal"}, {"surveyId": "3347924", "lat": 32.0715094, "lng": 72.6526736, "name": "Ghulam Rasool"}], "polygon": [[32.07134594757229, 72.6523232850038], [32.07052771050099, 72.65312794770827], [32.0706595380795, 72.65348736371627], [32.071491411174, 72.65297774400344], [32.0715959629948, 72.65242520894637]], "timestamp": "20/02/2026, 3:02:05 pm"}, "MC-19_Route_3": {"name": "MC-19_Route_3", "sequence": [{"surveyId": "3346128", "lat": 32.0713441, "lng": 72.6532456, "name": "Zahid"}, {"surveyId": "3346131", "lat": 32.0712453, "lng": 72.653227, "name": "M Wakeel"}, {"surveyId": "3346133", "lat": 32.0712055, "lng": 72.6532254, "name": "Kashif Maqbool"}, {"surveyId": "3346138", "lat": 32.0712401, "lng": 72.6532235, "name": "Abdul jabar Khan"}, {"surveyId": "3346141", "lat": 32.0712231, "lng": 72.6532037, "name": "M Ali Tahir"}, {"surveyId": "3346956", "lat": 32.0709764, "lng": 72.6533562, "name": "Rafique"}, {"surveyId": "3346957", "lat": 32.0709529, "lng": 72.6533823, "name": "Saleem"}, {"surveyId": "3346958", "lat": 32.0709407, "lng": 72.653399, "name": "Shahid"}, {"surveyId": "3346959", "lat": 32.0709262, "lng": 72.6534361, "name": "Zahid"}, {"surveyId": "3346960", "lat": 32.0709293, "lng": 72.6534176, "name": "M Boota"}, {"surveyId": "3346961", "lat": 32.0708789, "lng": 72.6535245, "name": "Ramzan"}, {"surveyId": "3346962", "lat": 32.070829, "lng": 72.6534968, "name": "M Akbar"}, {"surveyId": "3346963", "lat": 32.0707511, "lng": 72.6536805, "name": "Mazhar Hayat"}, {"surveyId": "3346964", "lat": 32.0707467, "lng": 72.6537327, "name": "Adeel"}, {"surveyId": "3346971", "lat": 32.0709046, "lng": 72.6534403, "name": "Ameer"}, {"surveyId": "3346972", "lat": 32.070807, "lng": 72.6534535, "name": "Arslan"}, {"surveyId": "3346973", "lat": 32.0708941, "lng": 72.6534105, "name": "Billa"}, {"surveyId": "3346974", "lat": 32.0708138, "lng": 72.6536204, "name": "Ali"}, {"surveyId": "3347381", "lat": 32.0716864, "lng": 72.6530125, "name": "M Iqbal"}, {"surveyId": "3347382", "lat": 32.0716999, "lng": 72.6530217, "name": "Haji Nawaz"}, {"surveyId": "3347383", "lat": 32.0716924, "lng": 72.6530124, "name": "Tayyab"}, {"surveyId": "3347384", "lat": 32.0716974, "lng": 72.653017, "name": "Rana Sajjad"}, {"surveyId": "3347916", "lat": 32.0716446, "lng": 72.6532294, "name": "Mukhtar"}, {"surveyId": "3347917", "lat": 32.0716235, "lng": 72.6532072, "name": "Kashif Nazeer"}, {"surveyId": "3347918", "lat": 32.0716037, "lng": 72.6531947, "name": "Mumtaz Tiwana"}, {"surveyId": "3347919", "lat": 32.0716443, "lng": 72.6529991, "name": "M Anwar"}, {"surveyId": "3347920", "lat": 32.071636, "lng": 72.6530552, "name": "Amjad Hussain"}, {"surveyId": "3347921", "lat": 32.0715979, "lng": 72.6530526, "name": "Shafqat Ali"}, {"surveyId": "3347922", "lat": 32.0715818, "lng": 72.6529173, "name": "Ata Muhammad"}], "polygon": [[32.07159141726595, 72.65274170961013], [32.07130958163572, 72.65314940538039], [32.07068681272717, 72.65349809255233], [32.07067317540434, 72.65388433065047], [32.07126866993976, 72.65334252442946], [32.07147777397117, 72.6532406004869], [32.071741426198756, 72.65328351583113], [32.07182324914928, 72.6529348286592]], "timestamp": "20/02/2026, 3:02:24 pm"}, "MC-19_Route_4": {"name": "MC-19_Route_4", "sequence": [{"surveyId": "3347915", "lat": 32.0719222, "lng": 72.6534634, "name": "Manzoor"}, {"surveyId": "3347380", "lat": 32.0720408, "lng": 72.6533898, "name": "M akhtar"}, {"surveyId": "3347979", "lat": 32.0719171, "lng": 72.6538394, "name": "Ali raza"}, {"surveyId": "3347909", "lat": 32.0718281, "lng": 72.653867, "name": "Amanat Ali"}, {"surveyId": "3347912", "lat": 32.0718661, "lng": 72.6538575, "name": "M Saeed"}, {"surveyId": "3347976", "lat": 32.0718572, "lng": 72.6538541, "name": "M Ali"}, {"surveyId": "3347914", "lat": 32.0718705, "lng": 72.6538535, "name": "Yaseen"}, {"surveyId": "3347977", "lat": 32.07186, "lng": 72.6538543, "name": "Umair Ali"}], "polygon": [[32.07195184998718, 72.65323698520662], [32.0721700438571, 72.65339791774751], [32.07187457286672, 72.65410065650941], [32.07170638126115, 72.65360176563264]], "timestamp": "20/02/2026, 3:28:00 pm"}, "MC-19_Route_5": {"name": "MC-19_Route_5", "sequence": [{"surveyId": "3347906", "lat": 32.0714196, "lng": 72.6540522, "name": "Mueez"}, {"surveyId": "3347907", "lat": 32.0713706, "lng": 72.6540763, "name": "Malik Naveed ul Hassan"}, {"surveyId": "3347970", "lat": 32.0714228, "lng": 72.6542199, "name": "Sheikh tswar"}, {"surveyId": "3347908", "lat": 32.0715047, "lng": 72.6541814, "name": "M aflaq"}, {"surveyId": "3367697", "lat": 32.0715593, "lng": 72.6541869, "name": "Naeem baloch"}, {"surveyId": "3347971", "lat": 32.0715472, "lng": 72.6542099, "name": "Malik gohar Abbas"}, {"surveyId": "3347969", "lat": 32.0715248, "lng": 72.6543518, "name": "Zahid"}, {"surveyId": "3347960", "lat": 32.0715115, "lng": 72.6543546, "name": "Naveed"}, {"surveyId": "3347965", "lat": 32.0714969, "lng": 72.6543902, "name": "Usman"}, {"surveyId": "3347964", "lat": 32.0714664, "lng": 72.6543783, "name": "Usman bhatti"}, {"surveyId": "3366162", "lat": 32.0714954, "lng": 72.6544112, "name": "M faisla Akash"}, {"surveyId": "3366138", "lat": 32.0714459, "lng": 72.6544504, "name": "Manzoor Hussain Shah"}], "polygon": null, "timestamp": "21/02/2026, 12:08:57 pm"}, "MC-1_Route_6": {"name": "MC-1_Route_6", "sequence": [{"surveyId": "3350418", "lat": 32.0978141, "lng": 72.6804316, "name": "Usman"}, {"surveyId": "3350419", "lat": 32.0970542, "lng": 72.6795674, "name": "Shiekh"}, {"surveyId": "3350420", "lat": 32.0978691, "lng": 72.6784948, "name": "Shamshad"}, {"surveyId": "3350421", "lat": 32.0978457, "lng": 72.6785667, "name": "Tayyab"}, {"surveyId": "3350422", "lat": 32.0978691, "lng": 72.6784948, "name": "Muhammad khursheed"}, {"surveyId": "3350423", "lat": 32.0969923, "lng": 72.6796033, "name": "M.ameer"}, {"surveyId": "3350424", "lat": 32.0978691, "lng": 72.6784948, "name": "M.bilal"}, {"surveyId": "3350425", "lat": 32.0978691, "lng": 72.6784948, "name": "Ishtiaq"}, {"surveyId": "3350426", "lat": 32.0969923, "lng": 72.6796033, "name": "Ashraf"}, {"surveyId": "3350427", "lat": 32.0977857, "lng": 72.6786002, "name": "Ali"}, {"surveyId": "3350683", "lat": 32.0971255, "lng": 72.681465, "name": "Waqas"}, {"surveyId": "3350684", "lat": 32.0971795, "lng": 72.6814133, "name": "Sheikh ijaz"}, {"surveyId": "3350685", "lat": 32.0972325, "lng": 72.6813154, "name": "Mirza Anwar"}, {"surveyId": "3350686", "lat": 32.0972164, "lng": 72.6812974, "name": "Arshad iqbal"}, {"surveyId": "3350687", "lat": 32.0972112, "lng": 72.681296, "name": "Asgher"}, {"surveyId": "3350688", "lat": 32.0972277, "lng": 72.6812845, "name": "Sajid"}, {"surveyId": "3350689", "lat": 32.0972118, "lng": 72.6812841, "name": "Muhammad afazl"}, {"surveyId": "3350690", "lat": 32.09726, "lng": 72.6812344, "name": "Abdul wahid"}, {"surveyId": "3350691", "lat": 32.0973171, "lng": 72.6811748, "name": "Muhammad ramzan"}, {"surveyId": "3350692", "lat": 32.0974286, "lng": 72.6810516, "name": "Aman ullah"}, {"surveyId": "3350693", "lat": 32.0969923, "lng": 72.6796033, "name": "M.mahad"}, {"surveyId": "3351508", "lat": 32.0979596, "lng": 72.6808504, "name": "Basheer Ahmed"}, {"surveyId": "3351509", "lat": 32.0979627, "lng": 72.6808695, "name": "Muhammad waqas"}, {"surveyId": "3351510", "lat": 32.0979596, "lng": 72.6808458, "name": "Muhammad nouman"}, {"surveyId": "3351511", "lat": 32.0978325, "lng": 72.6809272, "name": "Shani"}, {"surveyId": "3351512", "lat": 32.0976694, "lng": 72.6810322, "name": "Akbar"}, {"surveyId": "3351513", "lat": 32.0977107, "lng": 72.6810483, "name": "Zahid"}, {"surveyId": "3351514", "lat": 32.0976083, "lng": 72.6809524, "name": "Abdur rehman"}, {"surveyId": "3351787", "lat": 32.0973596, "lng": 72.681539, "name": "Usama zia"}, {"surveyId": "3351788", "lat": 32.0973765, "lng": 72.6814836, "name": "Ali"}, {"surveyId": "3351789", "lat": 32.097447, "lng": 72.6814804, "name": "Ibrar Ahmed"}, {"surveyId": "3351790", "lat": 32.0975159, "lng": 72.6814418, "name": "Muhammad Afzal"}, {"surveyId": "3351896", "lat": 32.0979031, "lng": 72.6812651, "name": "Muhammad ishaaq"}, {"surveyId": "3352155", "lat": 32.0981946, "lng": 72.680905, "name": "Muhammad afzal"}, {"surveyId": "3352156", "lat": 32.098195, "lng": 72.6809259, "name": "Saeed Anwar"}, {"surveyId": "3352157", "lat": 32.0980194, "lng": 72.68108, "name": "Umer hayat"}, {"surveyId": "3352158", "lat": 32.0980272, "lng": 72.6810869, "name": "Malik house"}, {"surveyId": "3352159", "lat": 32.0980264, "lng": 72.681088, "name": "Muhammad Tanveer"}, {"surveyId": "3352160", "lat": 32.0980289, "lng": 72.6810932, "name": "Tanveer"}, {"surveyId": "3352161", "lat": 32.0980248, "lng": 72.6811015, "name": "Mirza"}, {"surveyId": "3352173", "lat": 32.0981901, "lng": 72.6809456, "name": "Abdur rehman"}, {"surveyId": "3352982", "lat": 32.0972964, "lng": 72.6817147, "name": "Toheed"}, {"surveyId": "3352984", "lat": 32.0973103, "lng": 72.6816992, "name": "Liaqat ali"}, {"surveyId": "3352986", "lat": 32.0975225, "lng": 72.6818087, "name": "Bhutta"}, {"surveyId": "3352988", "lat": 32.0975651, "lng": 72.6818972, "name": "Wens house"}, {"surveyId": "3352991", "lat": 32.097811, "lng": 72.682122, "name": "Dream cutting"}, {"surveyId": "3352994", "lat": 32.0980997, "lng": 72.6815285, "name": "Khuram"}, {"surveyId": "3352996", "lat": 32.0976584, "lng": 72.6817647, "name": "Muhammad afzal"}, {"surveyId": "3352998", "lat": 32.097706, "lng": 72.6816971, "name": "Alrehman model school"}, {"surveyId": "3352999", "lat": 32.0977502, "lng": 72.6816243, "name": "Abdullah mujahid"}, {"surveyId": "3353001", "lat": 32.0977367, "lng": 72.6816481, "name": "Naveed javed"}, {"surveyId": "3353004", "lat": 32.0977832, "lng": 72.6815673, "name": "Zeeshan"}, {"surveyId": "3353006", "lat": 32.0977722, "lng": 72.6815898, "name": "Syed Asad raza"}, {"surveyId": "3353009", "lat": 32.0977933, "lng": 72.6815293, "name": "Zafar ali"}, {"surveyId": "3353011", "lat": 32.0977895, "lng": 72.6815756, "name": "Malik atif"}, {"surveyId": "3353931", "lat": 32.0965361, "lng": 72.6813754, "name": "Malik hayat"}, {"surveyId": "3353932", "lat": 32.0965754, "lng": 72.6811845, "name": "Ali dogger"}, {"surveyId": "3353933", "lat": 32.0965644, "lng": 72.6811865, "name": "Maan dogger"}, {"surveyId": "3353935", "lat": 32.0965624, "lng": 72.6811786, "name": "Usman"}, {"surveyId": "3353936", "lat": 32.096603, "lng": 72.6811515, "name": "Shazad asgher"}, {"surveyId": "3353937", "lat": 32.0968565, "lng": 72.6812279, "name": "Abdul Rehman"}, {"surveyId": "3353938", "lat": 32.0968209, "lng": 72.6812576, "name": "Malik hayat"}, {"surveyId": "3353939", "lat": 32.0967266, "lng": 72.6815482, "name": "Zeeshan ali"}, {"surveyId": "3353940", "lat": 32.0967577, "lng": 72.6814454, "name": "Muhammad adnan"}, {"surveyId": "3353941", "lat": 32.0968386, "lng": 72.6813638, "name": "Chaudhary house"}, {"surveyId": "3353942", "lat": 32.0969359, "lng": 72.6813363, "name": "Abdul hameed"}, {"surveyId": "3353943", "lat": 32.0970835, "lng": 72.6814909, "name": "Muhammad awais"}, {"surveyId": "3353944", "lat": 32.0970656, "lng": 72.6814834, "name": "Imtiaz"}, {"surveyId": "3353945", "lat": 32.0971167, "lng": 72.6815561, "name": "Nadeem"}, {"surveyId": "3353946", "lat": 32.0970157, "lng": 72.6816525, "name": "Ali"}], "polygon": [[32.09900846295572, 72.6738739013672], [32.10206222548107, 72.68142700195314], [32.094645767953665, 72.68606185913087], [32.09246434232067, 72.6790237426758]], "timestamp": "21/02/2026, 12:21:32 pm"}},
     hideStandardTooltips: false,
     filtered: [],
     masterFiltered: [], // Tracks sidebar filters independently of active route narrowing
@@ -10748,9 +11207,9 @@ const State = {
     }
 };
 
-window.KML_META = {"MC1": "<b>MC-01 District</b><br>Primary Industrial Zone", "MC 2": "<b>MC-02 District</b><br>Residential Hub", "MC3": "<b>MC-03 District</b><br>Commercial Core"};
-window.DATA_VERSION = "v2026.04.21.1630";
-window.DATA_CHUNKS_COUNT = 11;
+window.KML_META = {};
+window.DATA_VERSION = "v2026.04.29.0855";
+window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
 
@@ -10759,6 +11218,34 @@ window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were
 // App - filters & render
 
 const App = {
+    _markerHit: false,
+    
+    hideCardsOnMapClick() {
+        // Instant - no delay needed since we use _markerHit flag
+        if (!this._markerHit) {
+            // 1. Hide marker card (modal)
+            if (window.SpatialRouter) {
+                SpatialRouter.closeMarkerCard();
+            } else {
+                const modal = document.getElementById('modal-marker-card');
+                if (modal && modal.classList.contains('active')) {
+                    modal.classList.remove('active');
+                }
+            }
+
+            // 2. Hide map navigator pager if open
+            if (window.MapNavigator && MapNavigator.visible) {
+                MapNavigator.toggle(false);
+            }
+            
+            // 3. Collapse map toolbar
+            if (window.UIInteractions) {
+                UIInteractions.toggleExtraCtrls(true);
+            }
+        }
+        this._markerHit = false;
+    },
+    
     toggleQuickFilter(key, e) {
         // Determine the new state based on the checkbox or toggle
         let newState;
@@ -10820,6 +11307,23 @@ const App = {
             } else if (upd.id === 'f-drive') {
                 selected = document.getElementById('f-drive-only').checked ? 1 : 0;
                 total = 1;
+                
+                let driveImageCount = 0;
+                if (State.filtered && State.syncedData) {
+                    driveImageCount = State.filtered.reduce((sum, r) => sum + (State.syncedData[String(r[0]).replace(/\.0$/, '').trim()] || 0), 0);
+                }
+                let totalDriveImages = State.totalDriveImages || 0;
+                if (!totalDriveImages && State.syncedData) {
+                    totalDriveImages = Object.values(State.syncedData).reduce((sum, count) => sum + count, 0);
+                }
+                if (totalDriveImages > 0) {
+                    badge.innerText = `${driveImageCount} / ${totalDriveImages} Img`;
+                    badge.style.display = 'inline-flex';
+                    badge.style.background = '#f0fdf4';
+                    badge.style.color = '#15803d';
+                    badge.style.borderColor = '#bbf7d0';
+                    return; 
+                }
             } else {
                 selected = this.getSelected(upd.id).length;
                 total = this.getMultiSelectItems(upd.id).length;
@@ -10859,7 +11363,7 @@ const App = {
             }
         });
 
-        // Update Paid History Count
+        // Update Paid History Count        // Update Paid History Count
         const paidBadge = document.getElementById('badge-paid-count');
         if (paidBadge && typeof PAID_DATA !== 'undefined') {
             const count = Object.keys(PAID_DATA).length;
@@ -11082,44 +11586,21 @@ const App = {
         State.map.createPane('kmlPane');
         State.map.getPane('kmlPane').style.zIndex = 350;
 
-        // Auto collapse the right-side extra controls when user manually interacts with map
-        State.map.on('dragstart zoomstart click touchstart', (e) => {
-            // CRITICAL GUARD: If the map pager is active, do NOT allow map interactions to hide it.
-            // This prevents accidental collapses during transitions or navigation.
-            if (window.State && State.isMapPagerActive) return;
-
-            // CRITICAL: Prevent auto-hide if we are actively navigating (pager move)
-            const isNavigating = window.MapNavigator && MapNavigator._lastMoveTime && (Date.now() - MapNavigator._lastMoveTime < 2500);
-            if (isNavigating) return;
-
-            // NEW: Ignore if click target is within any UI container
-            if (e.originalEvent && (e.originalEvent.target.closest('#map-pager') || e.originalEvent.target.closest('#route-pager-container') || e.originalEvent.target.closest('.leaflet-control-container') || e.originalEvent.target.closest('.pop-card'))) {
-                return;
+        // Clear tooltips when clicking on map
+        State.map.on('click', (e) => {
+            // Clear active marker tooltip on map click
+            if (State.activeMarker) {
+                State.activeMarker.closeTooltip();
+                State.activeMarker = null;
             }
 
-            // Don't auto-collapse if clicking a marker - Leaflet handles marker clicks separately
-            if (e.type === 'click' || e.type === 'touchstart') {
-                const isMapContent = e.originalEvent && (e.originalEvent.target.classList.contains('leaflet-container') || e.originalEvent.target.id === 'map');
-                if (!isMapContent) return;
-            }
-
-            if (window.UIInteractions && typeof UIInteractions.toggleExtraCtrls === 'function') {
-                UIInteractions.toggleExtraCtrls(true);
-            }
-            // STREAMLINE: Hide overlays when clicking/dragging empty map space
-            if (window.MapNavigator && MapNavigator.visible) {
-                MapNavigator.toggle(false);
-            }
-            if (window.SpatialRouter && typeof SpatialRouter.closeMarkerCard === 'function') {
-                SpatialRouter.closeMarkerCard();
-            }
-        });
-
-        // Clear verified ghost layers ONLY on deliberate user click (not programmatic zoom/fly)
-        State.map.on('click', () => {
+            // Clear verified ghost layers
             if (window.VerifiedLayer && VerifiedLayer.focusLayer) {
                 VerifiedLayer.focusLayer.clearLayers();
             }
+            
+            // Auto-hide marker card and map pager on map click
+            App.hideCardsOnMapClick();
         });
 
         // Create a dedicated pane for Routing polygons
@@ -11158,6 +11639,91 @@ const App = {
         this.setLayer(isRoads ? 'sat' : 'roads');
     },
 
+    // Cluster Toggle - Enable/disable marker clustering
+    _clusterEnabled: false,
+    _clusterGroup: null,
+
+    toggleClustering() {
+        const btn = document.getElementById('btn-cluster-toggle');
+        
+        this._clusterEnabled = !this._clusterEnabled;
+        
+        if (btn) {
+            btn.classList.toggle('active', this._clusterEnabled);
+        }
+
+        if (this._clusterEnabled) {
+            // Enable clustering
+            this.enableClustering();
+            if (App.showToast) App.showToast('Clustering enabled');
+        } else {
+            // Disable clustering
+            this.disableClustering();
+            if (App.showToast) App.showToast('Clustering disabled');
+        }
+    },
+
+    enableClustering() {
+        // Remove individual markers
+        if (State.markerLayer) {
+            State.map.removeLayer(State.markerLayer);
+        }
+
+        // Create cluster group
+        if (!this._clusterGroup) {
+            this._clusterGroup = L.markerClusterGroup({
+                chunkedLoading: true,
+                maxClusterRadius: 60,
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true,
+                disableClusteringAtZoom: 19,
+                iconCreateFunction: (cluster) => {
+                    const count = cluster.getChildCount();
+                    let size = 'small';
+                    if (count > 50) size = 'large';
+                    else if (count > 10) size = 'medium';
+                    
+                    return L.divIcon({
+                        html: `<div style="background:var(--primary); color:white; border-radius:50%; width:36px; height:36px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; border:3px solid white; box-shadow:0 2px 8px rgba(0,0,0,0.3);">${count}</div>`,
+                        className: 'marker-cluster marker-cluster-' + size,
+                        iconSize: L.point(36, 36)
+                    });
+                }
+            });
+        }
+
+        // Add markers to cluster group
+        if (State.markers && State.markers.getLayers) {
+            this._clusterGroup.addLayers(State.markers.getLayers());
+        }
+
+        this._clusterGroup.addTo(State.map);
+    },
+
+    disableClustering() {
+        // Remove cluster group
+        if (this._clusterGroup) {
+            State.map.removeLayer(this._clusterGroup);
+        }
+
+        // Add back individual markers
+        if (State.markerLayer) {
+            State.markerLayer.addTo(State.map);
+            
+            // RESET TOOLTIPS: Prevent persistent tooltips when switching modes
+            State.markerLayer.eachLayer(m => {
+                if (m.getTooltip()) {
+                    m.unbindTooltip();
+                    const sid = m.options.id;
+                    const row = window.SID_MAP?.get(String(sid));
+                    const content = `${sid} | ${row ? row[4] : 'Unknown'}`;
+                    this.bindCustomTooltip(m, content);
+                }
+            });
+        }
+    },
+
     setLayer(name) {
         if (!State.layers[name]) return;
         
@@ -11175,6 +11741,160 @@ const App = {
         if (icon) {
             icon.innerText = (name === 'roads') ? 'satellite_alt' : 'map';
         }
+    },
+
+// Nearby Markers Popup
+    showNearbyMarkersPopup(markers, latlng) {
+        const popup = document.getElementById('nearby-markers-popup');
+        const list = document.getElementById('nearby-markers-list');
+        if (!popup || !list || !markers || markers.length === 0) return;
+
+        list.innerHTML = '';
+        markers.slice(0, 30).forEach(m => {
+            const item = document.createElement('div');
+            item.style.cssText = 'display:inline-flex; align-items:center; gap:2px; padding:3px 6px; background:#f1f5f9; border-radius:10px; cursor:pointer; font-size:10px; font-weight:600; white-space:nowrap; border:1px solid transparent;';
+            item.onclick = () => {
+                // Reset all items to default
+                Array.from(list.children).forEach(child => {
+                    child.style.background = '#f1f5f9';
+                    child.style.border = '1px solid transparent';
+                });
+                // Highlight clicked item
+                item.style.background = '#bfdbfe';
+                item.style.border = '1px solid #3b82f6';
+                
+                // Open marker card
+                if (window.SpatialRouter) SpatialRouter.showMarkerCard(m.id);
+            };
+            item.innerHTML = `<span style="color:var(--primary); font-size:9px;">#${m.id}</span>`;
+            list.appendChild(item);
+        });
+
+        popup.style.display = 'flex';
+        popup.style.flexDirection = 'column';
+        
+        // Animate in
+        popup.style.opacity = '0';
+        requestAnimationFrame(() => {
+            popup.style.transition = 'opacity 0.15s ease-in-out';
+            popup.style.opacity = '1';
+        });
+        
+        // Position: responsive - left side on desktop, safer position on mobile
+        const isMobile = window.innerWidth <= 768;
+        const sidebarW = isMobile ? 12 : 340;
+        popup.style.left = sidebarW + 'px';
+        popup.style.top = isMobile ? '280px' : '450px';
+
+        // Drag functionality
+        let isDragging = false;
+        let startX, startY, startLeft, startTop;
+        
+        const onStart = (e) => {
+            if (e.target.closest('#nearby-markers-list') || e.target.closest('button')) return;
+            e.preventDefault();
+            e.stopPropagation();
+            isDragging = true;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            startX = clientX;
+            startY = clientY;
+            const rect = popup.getBoundingClientRect();
+            startLeft = rect.left;
+            startTop = rect.top;
+            popup.style.cursor = 'grabbing';
+            popup.style.transition = 'none';
+        };
+        
+        const onMove = (e) => {
+            if (!isDragging) return;
+            // Only prevent default on touch to stop page scroll while dragging
+            if (e.touches) e.preventDefault();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+            const newLeft = Math.max(0, Math.min(window.innerWidth - 90, startLeft + dx));
+            const newTop = Math.max(0, Math.min(window.innerHeight - 120, startTop + dy));
+            popup.style.left = newLeft + 'px';
+            popup.style.top = newTop + 'px';
+        };
+        
+        const onEnd = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            popup.style.cursor = 'move';
+        };
+
+        popup.addEventListener('mousedown', onStart);
+        popup.addEventListener('touchstart', onStart, { passive: false });
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('touchmove', onMove, { passive: false });
+document.addEventListener('mouseup', onEnd);
+        document.addEventListener('touchend', onEnd);
+        // No auto-hide timer - popup stays open until user closes it
+    },
+
+closeNearbyMarkersPopup() {
+        const popup = document.getElementById('nearby-markers-popup');
+        if (popup) popup.style.display = 'none';
+        if (this._nearbyPopupTimer) {
+            clearTimeout(this._nearbyPopupTimer);
+            this._nearbyPopupTimer = null;
+        }
+},
+    
+    // Show all markers in current map view
+    showAllMarkersInView() {
+        if (!State.map || !window.RAW_DATA) return;
+        
+        const popup = document.getElementById('nearby-markers-popup');
+        const list = document.getElementById('nearby-markers-list');
+        
+        // Toggle: if popup is visible, close it
+        if (popup && popup.style.display === 'flex') {
+            popup.style.opacity = '0';
+            setTimeout(() => {
+                if (popup) popup.style.display = 'none';
+            }, 150);
+            return;
+        }
+        
+        const bounds = State.map.getBounds();
+        const visibleMarkers = [];
+        
+        RAW_DATA.forEach(r => {
+            if (!r[1] || !r[2]) return;
+            if (bounds.contains([r[1], r[2]])) {
+                visibleMarkers.push({ id: r[0], lat: r[1], lng: r[2], name: r[4] });
+            }
+        });
+        
+        if (visibleMarkers.length > 0) {
+            // Show popup with all visible markers
+            this.showNearbyMarkersPopup(visibleMarkers, State.map.getCenter());
+        } else {
+            if (App.showToast) App.showToast('No markers in current view');
+        }
+    },
+
+    // Find nearby markers within radius
+    findNearbyMarkers(lat, lng, radiusMeters = 30) {
+        if (!window.RAW_DATA || !State.map) return [];
+
+        const center = L.latLng(lat, lng);
+        const nearby = [];
+
+        RAW_DATA.forEach(r => {
+            if (!r[1] || !r[2]) return;
+            const markerPos = L.latLng(r[1], r[2]);
+            const dist = center.distanceTo(markerPos);
+            if (dist <= radiusMeters) {
+                nearby.push({ id: r[0], lat: r[1], lng: r[2], name: r[4] });
+            }
+        });
+
+        return nearby;
     },
 
     toggleFilterGroup(el) {
@@ -11221,6 +11941,7 @@ const App = {
 
     renderMultiSelect(id, items, onUpdate) {
         const container = document.getElementById(id);
+        if (!container) return;
         container.innerHTML = items.map(item => `
                 <div class="multi-option" data-value="${item.v}" onclick="App.handleMultiClick(event, '${id}', '${onUpdate}')">
                     <input type="checkbox" ${item.selected ? 'checked' : ''} onchange="App.handleMultiChange(event, '${id}', '${onUpdate}')">
@@ -11232,6 +11953,7 @@ const App = {
     // Dedicated robust MC/UC multi-select using DOM API
     renderMCUCSelect(items) {
         const container = document.getElementById('f-mc');
+        if (!container) return;
         container.innerHTML = ''; // Clear existing
 
         items.forEach(item => {
@@ -11279,12 +12001,12 @@ const App = {
     // Get selected MC/UC values
     getSelectedMCUC() {
         const container = document.getElementById('f-mc');
+        if (!container) return [];
         const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
         return Array.from(checkboxes).map(cb =>
             cb.closest('.multi-option').getAttribute('data-value')
         );
     },
-
 
     handleMultiClick(e, id, onUpdate) {
         if (e.target.tagName === 'INPUT') return;
@@ -11293,6 +12015,8 @@ const App = {
         cb.checked = !cb.checked;
         row.classList.toggle('selected', cb.checked);
         if (onUpdate && App[onUpdate]) App[onUpdate]();
+
+
     },
 
     handleMultiChange(e, id, onUpdate) {
@@ -11468,7 +12192,9 @@ const App = {
                     const status = r[16].toLowerCase().replace(' ', '-');
                     if (!pay.includes(status)) return;
                 }
-                if (driveOnly && !State.syncedData[r[0]]) return;
+                const sid = String(r[0]).replace(/\.0$/, '').trim();
+                if (driveOnly && !State.syncedData[sid]) return;
+
                 if (start || end) {
                     const dStr = r[7];
                     if (!dStr || dStr === '0000-00-00' || dStr === '-') return;
@@ -11758,6 +12484,33 @@ const App = {
                     id: r[0]?.toString()
                 });
 
+                // Invisible touch hitbox for easier mobile tap (25px radius)
+                // User can tap near marker, not exactly on it
+                const hitRadius = 25;
+                const mHit = L.circleMarker([r[1], r[2]], {
+                    radius: hitRadius,
+                    fillColor: 'transparent',
+                    color: 'transparent',
+                    weight: 0,
+                    fillOpacity: 0,
+                    bubblingMouseEvents: false,
+                    id: r[0]?.toString()
+                });
+                mHit.addTo(State.markerLayer);
+
+                // Hitbox click handler - same as marker click
+                mHit.on('click', (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    App._markerHit = true;
+                    console.log('[DEBUG mHit.on(click)] Calling showMarkerCard for:', r[0]);
+                    if (window.SpatialRouter) {
+                        SpatialRouter.showMarkerCard(r[0]);
+                    }
+                    if (State.activeMarker) State.activeMarker.closeTooltip();
+                    m.openTooltip();
+                    State.activeMarker = m;
+                });
+
                 // Bind Tooltip safely
                 this.bindCustomTooltip(m, `${r[0]} | ${r[4] || 'Unknown'}`);
 
@@ -11767,6 +12520,7 @@ const App = {
                     // Priority 1: Pickers (Start/End)
                     if (window.SpatialRouter && SpatialRouter.pickingMode) {
                         L.DomEvent.stopPropagation(e);
+                        App._markerHit = true;
                         SpatialRouter.handleMarkerClick(r[0]);
                         return;
                     }
@@ -11783,12 +12537,9 @@ const App = {
                     // Default Action: Show Image Modal
                     if (window.SpatialRouter) {
                         L.DomEvent.stopPropagation(e);
+                        App._markerHit = true;
+                        console.log('[DEBUG m.on(click)] Calling showMarkerCard for:', r[0]);
                         SpatialRouter.showMarkerCard(r[0]);
-                    }
-
-                    // Close Extra Controls unconditionally (auto-collapse)
-                    if (window.UIInteractions && window.UIInteractions.toggleExtraCtrls) {
-                        window.UIInteractions.toggleExtraCtrls(true);
                     }
 
                     // Manage Active Tooltip Focus (Keeps the standard hover tooltip open)
@@ -11797,6 +12548,17 @@ const App = {
                     }
                     m.openTooltip();
                     State.activeMarker = m;
+
+                    // Mobile Touch Enhancement: Ensure touch opens marker card
+                    m.on('touchend', (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        if (window.SpatialRouter) {
+                            SpatialRouter.showMarkerCard(r[0]);
+                        }
+                        if (State.activeMarker) State.activeMarker.closeTooltip();
+                        m.openTooltip();
+                        State.activeMarker = m;
+                    });
                 });
 
                 State.markers.addLayer(m);
@@ -12064,10 +12826,12 @@ const ListView = {
             }
         }
 
-        // Unified Unsaved Context: Check for unsaved local data or remote cloud data
-        const staging = State.unsavedChanges[sidStr] || null;
-        const p = staging || (State.pendingHouseIntel ? State.pendingHouseIntel[sidStr] : null);
+        // Priority: pendingHouseIntel (user's current edits) > unsavedChanges (after pin) > ALL_VERIFIED_DATA (saved)
+        const pending = State.pendingHouseIntel ? State.pendingHouseIntel[sidStr] : null;
+        const p = pending || State.unsavedChanges[sidStr] || null;
         const v = window.ALL_VERIFIED_DATA ? window.ALL_VERIFIED_DATA.find(i => String(i.survey_id) === sidStr) : null;
+        const staging = p; // For backward compatibility
+        const isLocked = staging ? staging.isLocked !== false : true;
 
         const isLeft = v ? v.is_right === false : false;
         const isRight = v ? v.is_right === true : false;
@@ -12171,7 +12935,7 @@ const ListView = {
                         <div style="display:flex; gap:8px; align-items:center;">
                             <div style="flex:1;">
                                 <label style="display:block; font-size:9px; font-weight:800; color:#94a3b8; margin-bottom:4px; text-transform:uppercase;">Street No</label>
-                                <select id="intel-street-${r[0]}" ${v && (!staging || staging.isLocked !== false) ? 'disabled' : ''} onchange="ListView.validateIntelInput('${r[0]}')" style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none;">
+                                <select id="intel-street-${r[0]}" onchange="ListView.validateIntelInput('${r[0]}')" ${isLocked ? 'disabled' : ''} style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none; opacity:${isLocked ? 0.6 : 1}; cursor:${isLocked ? 'not-allowed' : 'pointer'};">
                                     <option value="C">Commercial (C)</option>
                                     ${Array.from({length: 50}, (_, i) => {
                                         const val = `G${i+1}`;
@@ -12182,49 +12946,53 @@ const ListView = {
                             </div>
                             <div style="flex:0.8;">
                                 <label style="display:block; font-size:9px; font-weight:800; color:#94a3b8; margin-bottom:4px; text-transform:uppercase;">Sequence #</label>
-                                <input type="number" id="intel-seq-${r[0]}" ${v && (!staging || staging.isLocked !== false) ? 'disabled' : ''} oninput="ListView.validateIntelInput('${r[0]}')" value="${(p && p.sequence_no !== undefined) ? p.sequence_no : (v && v.sequence_no !== undefined ? v.sequence_no : (r[13] || ''))}" placeholder="0" style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none;">
+                                <input type="number" id="intel-seq-${r[0]}" oninput="ListView.validateIntelInput('${r[0]}')" ${isLocked ? 'disabled' : ''} value="${(p && p.sequence_no !== undefined) ? p.sequence_no : (v && v.sequence_no !== undefined ? v.sequence_no : (r[13] || ''))}" placeholder="0" style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none; opacity:${isLocked ? 0.6 : 1}; cursor:${isLocked ? 'not-allowed' : 'text'};">
                             </div>
                         </div>
 
                         <div style="display:flex; justify-content:space-between; align-items:center; background:white; padding:8px; border-radius:10px; border:1px solid #e2e8f0;">
                             <div style="display:flex; gap:12px;">
                                 <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                                    <input type="checkbox" id="intel-side-l-${r[0]}" ${v && (!staging || staging.isLocked !== false) ? 'disabled' : ''} ${((p && p.is_right !== undefined ? p.is_right === false : isLeft) ? 'checked' : '')} onchange="document.getElementById('intel-side-r-${r[0]}').checked = !this.checked; ListView.validateIntelInput('${r[0]}')" style="accent-color:var(--primary); width:16px; height:16px;">
+                                    <input type="checkbox" id="intel-side-l-${r[0]}" ${((p && p.is_right !== undefined ? p.is_right === false : isLeft) ? 'checked' : '')} ${isLocked ? 'disabled' : ''} onchange="document.getElementById('intel-side-r-${r[0]}').checked = !this.checked; ListView.validateIntelInput('${r[0]}')" style="accent-color:var(--primary); width:16px; height:16px; opacity:${isLocked ? 0.6 : 1}; cursor:${isLocked ? 'not-allowed' : 'pointer'};">
                                     <span style="font-size:11px; font-weight:800; color:#475569;">Left</span>
                                 </label>
                                 <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                                    <input type="checkbox" id="intel-side-r-${r[0]}" ${v && (!staging || staging.isLocked !== false) ? 'disabled' : ''} ${((p && p.is_right !== undefined ? p.is_right === true : isRight) ? 'checked' : '')} onchange="document.getElementById('intel-side-l-${r[0]}').checked = !this.checked; ListView.validateIntelInput('${r[0]}')" style="accent-color:var(--primary); width:16px; height:16px;">
+                                    <input type="checkbox" id="intel-side-r-${r[0]}" ${((p && p.is_right !== undefined ? p.is_right === true : isRight) ? 'checked' : '')} ${isLocked ? 'disabled' : ''} onchange="document.getElementById('intel-side-l-${r[0]}').checked = !this.checked; ListView.validateIntelInput('${r[0]}')" style="accent-color:var(--primary); width:16px; height:16px; opacity:${isLocked ? 0.6 : 1}; cursor:${isLocked ? 'not-allowed' : 'pointer'};">
                                     <span style="font-size:11px; font-weight:800; color:#475569;">Right</span>
                                 </label>
                             </div>
                             <label style="display:flex; align-items:center; gap:6px; cursor:pointer; background:#f0fdf4; padding:4px 8px; border-radius:6px; border:1px solid #dcfce7;">
-                                <input type="checkbox" id="intel-delivered-${r[0]}" ${v && (!staging || staging.isLocked !== false) ? 'disabled' : ''} ${((p && p.is_delivered !== undefined ? p.is_delivered : isDeliv) ? 'checked' : '')} 
+                                <input type="checkbox" id="intel-delivered-${r[0]}" ${((p && p.is_delivered !== undefined ? p.is_delivered : isDeliv) ? 'checked' : '')} ${isLocked ? 'disabled' : ''} 
                                        onchange="ListView.syncDeliveryState('${r[0]}')"
-                                       style="accent-color:#16a34a; width:16px; height:16px;">
+                                       style="accent-color:#16a34a; width:16px; height:16px; opacity:${isLocked ? 0.6 : 1}; cursor:${isLocked ? 'not-allowed' : 'pointer'};">
                                 <span style="font-size:11px; font-weight:800; color:#16a34a;">Mark Delivered</span>
                             </label>
                         </div>
 
-                        <div style="display:flex; gap:8px;">
-                             <button type="button" onclick="event.stopPropagation(); SpatialRouter.startManualPin('${r[0]}')" 
-                                     style="flex:1.2; background:${(staging && staging.isManualPinned) ? '#e0e7ff' : 'white'}; color:#2563eb; border:2px solid #dbeafe; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:800; font-size:11px; box-shadow:0 2px 4px rgba(37,99,235,0.05); pointer-events:auto !important; position:relative; z-index:1000;">
-                                 <span class="material-icons-round" style="font-size:18px;">${(staging && staging.isManualPinned) ? 'edit_location' : 'add_location_alt'}</span> ${(staging && staging.isManualPinned) ? 'Reposition' : 'Manual Pin'}
+                        <div style="display:flex; gap:4px; width:100%;">
+                             <button type="button" id="btn-edit-intel-${r[0]}" onclick="ListView.confirmEdit('${r[0]}')" ${!isLocked ? 'disabled' : ''}
+                                     style="flex:1; background:${isLocked ? '#f1f5f9' : '#e2e8f0'}; color:${isLocked ? '#475569' : '#94a3b8'}; border:2px solid ${isLocked ? '#e2e8f0' : '#cbd5e1'}; border-radius:8px; height:36px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:${isLocked ? 'pointer' : 'not-allowed'}; font-weight:800; font-size:10px; opacity:${isLocked ? 1 : 0.6};">
+                                 <span class="material-icons-round" style="font-size:14px;">${isLocked ? 'lock' : 'lock_open'}</span> Edit
                              </button>
 
-                            ${v && (!staging || staging.isLocked !== false) ? `
-                            <button type="button" onclick="ListView.unlockIntel('${r[0]}')" 
-                                    style="flex:1.5; background:#e0f2fe; color:#0369a1; border:none; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:900; font-size:11px; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
-                                <span class="material-icons-round" style="font-size:18px;">lock_open</span> EDIT DETAILS
+                             <button type="button" onclick="event.stopPropagation(); SpatialRouter.startManualPin('${r[0]}')" ${isLocked ? 'disabled' : ''}
+                                     style="flex:1; background:${(staging && staging.isManualPinned) ? '#e0e7ff' : 'white'}; color:#2563eb; border:2px solid #dbeafe; border-radius:8px; height:36px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:${isLocked ? 'not-allowed' : 'pointer'}; font-weight:800; font-size:10px; opacity:${isLocked ? 0.6 : 1}; pointer-events:auto !important; position:relative; z-index:1000;">
+                                 <span class="material-icons-round" style="font-size:14px;">${(staging && staging.isManualPinned) ? 'edit_location' : 'add_location_alt'}</span> Pin
+                             </button>
+
+                            <button type="button" id="btn-discard-intel-${r[0]}" onclick="ListView.discardIntel('${r[0]}')" ${isLocked ? 'disabled' : ''}
+                                    style="flex:1; background:#fef2f2; color:#ef4444; border:2px solid #fecaca; border-radius:8px; height:36px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:${isLocked ? 'not-allowed' : 'pointer'}; font-weight:800; font-size:10px; opacity:${isLocked ? 0.6 : 1}; pointer-events:auto !important; position:relative; z-index:1000;">
+                                <span class="material-icons-round" style="font-size:14px;">close</span> Discard
                             </button>
-                            ` : `
-                            <button type="button" id="btn-save-intel-${r[0]}" onclick="ListView.saveIntel('${r[0]}')" 
-                                    style="flex:1.5; background:#10b981; color:white; border:none; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:900; font-size:11px; box-shadow:0 4px 6px rgba(16, 185, 129, 0.2); transition: opacity 0.2s;">
-                                <span class="material-icons-round" style="font-size:18px;">cloud_upload</span> Save & Close
+
+                            <button type="button" id="btn-save-intel-${r[0]}" onclick="ListView.saveIntel('${r[0]}')" disabled
+                                    style="flex:1; background:#94a3b8; color:white; border:none; border-radius:8px; height:36px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:not-allowed; font-weight:900; font-size:10px; box-shadow:0 4px 6px rgba(16, 185, 129, 0.2); opacity:0.5; transition: all 0.2s;">
+                                <span class="material-icons-round" style="font-size:14px;">cloud_upload</span> Save
                             </button>
-                            `}
+                            </div>
                         </div>
                     </div>
-                </div>
+</div>
 
                 
                 <div class="card-gallery" id="gal-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}" style="margin-top:10px;">
@@ -12247,18 +13015,14 @@ const ListView = {
                     <input type="file" id="drive-input-gallery" accept="image/*" multiple style="display:none" onchange="DriveSync.handleFiles(this.files)">
                     <input type="file" id="local-cam-input" accept="image/*" capture="environment" style="display:none" onchange="LocalCam.handleCapture(this, '${r[0]}')">
                     
-                    <div class="sync-action-grid">
-                        <button onclick="document.getElementById('local-cam-input').click()" class="sync-action-btn" style="background:#6366f1; color:white; border:none;">
+                    <div id="offline-warning-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}" style="margin-bottom:8px;"></div>
+                    
+                    <div class="sync-action-grid" style="grid-template-columns: repeat(2, 1fr);">
+                        <button onclick="document.getElementById('drive-input-camera').click()" class="sync-action-btn camera" style="background:linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color:white; border:3px solid #b45309; box-shadow:0 4px 12px rgba(180,83,9,0.3); font-weight:900; font-size:13px;">
+                            <span class="material-icons-round" style="font-size:20px;">photo_camera</span> Direct Cloud
+                        </button>
+                        <button onclick="document.getElementById('local-cam-input').click()" class="sync-action-btn" style="background:#e0e7ff; color:#4338ca; border:1px solid #c7d2fe; font-weight:700;">
                             <span class="material-icons-round" style="font-size:16px;">camera_enhance</span> Save to Phone
-                        </button>
-                        <button onclick="document.getElementById('drive-input-camera').click()" class="sync-action-btn camera">
-                            <span class="material-icons-round" style="font-size:16px;">photo_camera</span> Direct Cloud
-                        </button>
-                        <button onclick="document.getElementById('drive-input-gallery').click()" class="sync-action-btn gallery">
-                            <span class="material-icons-round" style="font-size:16px;">photo_library</span> From Gallery
-                        </button>
-                        <button id="btn-sync-drive" onclick="DriveSync.upload('${r[0]}')" class="sync-action-btn upload">
-                            <span class="material-icons-round" style="font-size:16px;">cloud_upload</span> Commit to Cloud
                         </button>
                     </div>
                 </div>
@@ -12270,6 +13034,7 @@ const ListView = {
             DriveSync.fetchMetadata(r[0]);
             ListView.checkDeliveryStatus(r[0]);
             ListView.checkVerificationStatus(r[0]);
+            ListView.trackOriginalValues(r[0]);
         }, 100);
     },
 
@@ -12514,10 +13279,13 @@ const ListView = {
             });
         } else if (criteria === 'drive-desc') {
             State.filtered.sort((a, b) => {
-                const tA = State.syncedData[a[0]] ? new Date(State.syncedData[a[0]]).getTime() : 0;
-                const tB = State.syncedData[b[0]] ? new Date(State.syncedData[b[0]]).getTime() : 0;
+                const sidA = String(a[0]).replace(/\.0$/, '').trim();
+                const sidB = String(b[0]).replace(/\.0$/, '').trim();
+                const tA = State.syncedData[sidA] ? new Date(State.syncedData[sidA]).getTime() : 0;
+                const tB = State.syncedData[sidB] ? new Date(State.syncedData[sidB]).getTime() : 0;
                 return tB - tA;
             });
+
         }
         State.currentIdx = 0;
         this.render();
@@ -12592,44 +13360,8 @@ const ListView = {
             if (icon) icon.innerText = isOpening ? 'expand_less' : 'edit_note';
         }
 
-        // Pre-fill if we have cached data
-        if (isOpening && window.ALL_VERIFIED_DATA) {
-            const info = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === String(sid));
-            if (info) {
-                const streetEl = document.getElementById(`intel-street-${sid}`);
-                const seqEl = document.getElementById(`intel-seq-${sid}`);
-                const sideLEl = document.getElementById(`intel-side-l-${sid}`);
-                const sideREl = document.getElementById(`intel-side-r-${sid}`);
-                const delivEl = document.getElementById(`intel-delivered-${sid}`);
-
-                if (streetEl) streetEl.value = info.street_no || 'C';
-                if (seqEl) seqEl.value = info.sequence_no || '';
-                if (sideLEl) sideLEl.checked = info.is_right === false;
-                if (sideREl) sideREl.checked = info.is_right === true;
-                if (delivEl) delivEl.checked = info.is_delivered === true;
-
-                const staging = State.unsavedChanges[sid] || {};
-                const shouldLock = staging.isLocked !== false;
-                if (shouldLock) {
-                    if (streetEl) streetEl.disabled = true;
-                    if (seqEl) seqEl.disabled = true;
-                    if (sideLEl) sideLEl.disabled = true;
-                    if (sideREl) sideREl.disabled = true;
-                    if (delivEl) delivEl.disabled = true;
-                    
-                    const btnSave = document.getElementById(`btn-save-intel-${sid}`);
-                    if (btnSave) {
-                        const parent = btnSave.parentElement;
-                        btnSave.remove();
-                        parent.insertAdjacentHTML('beforeend', `
-                            <button type="button" onclick="ListView.unlockIntel('${sid}')" 
-                                    style="flex:1.5; background:#e0f2fe; color:#0369a1; border:none; border-radius:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; font-weight:900; font-size:11px; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
-                                <span class="material-icons-round" style="font-size:18px;">lock_open</span> EDIT DETAILS
-                            </button>
-                        `);
-                    }
-                }
-            }
+        if (isOpening) {
+            this.validateIntelInput(sid);
         }
     },
     
@@ -12638,13 +13370,14 @@ const ListView = {
         const seqInput = document.getElementById(`intel-seq-${sid}`);
         const seqStr = seqInput?.value;
         const btn = document.getElementById(`btn-save-intel-${sid}`);
+        const discardBtn = document.getElementById(`btn-discard-intel-${sid}`);
         if (!btn) return;
 
         const seq = (seqStr !== "" && !isNaN(parseInt(seqStr))) ? parseInt(seqStr) : -1;
-        const isSeqValid = seqStr !== "" && seq >= 0;
+        const isSeqValid = seqStr !== "" && seq > 0;
         const isStreetValid = !!street && street !== "";
 
-        if (isSeqValid && isStreetValid) {
+        if (isSeqValid && isStreetValid && this.hasIntelChanged(sid)) {
             btn.disabled = false;
             btn.style.opacity = '1';
             btn.style.cursor = 'pointer';
@@ -12655,16 +13388,94 @@ const ListView = {
             btn.style.cursor = 'not-allowed';
             btn.style.background = '#94a3b8';
         }
+
+        if (discardBtn) {
+            discardBtn.disabled = !this.hasIntelChanged(sid);
+            discardBtn.style.opacity = this.hasIntelChanged(sid) ? '1' : '0.5';
+            discardBtn.style.cursor = this.hasIntelChanged(sid) ? 'pointer' : 'not-allowed';
+        }
+    },
+
+    _originalIntelValues: {},
+
+    trackOriginalValues(sid) {
+        const streetEl = document.getElementById(`intel-street-${sid}`);
+        const seqEl = document.getElementById(`intel-seq-${sid}`);
+        const sideREl = document.getElementById(`intel-side-r-${sid}`);
+        const sideLEl = document.getElementById(`intel-side-l-${sid}`);
+        const delivEl = document.getElementById(`intel-delivered-${sid}`);
+
+        this._originalIntelValues[sid] = {
+            street: streetEl ? streetEl.value : null,
+            sequence: seqEl ? seqEl.value : '',
+            is_right: sideREl ? sideREl.checked : false,
+            is_left: sideLEl ? sideLEl.checked : false,
+            is_delivered: delivEl ? delivEl.checked : false
+        };
+    },
+
+    hasIntelChanged(sid) {
+        const orig = this._originalIntelValues[sid];
+        if (!orig) return false;
+
+        const streetEl = document.getElementById(`intel-street-${sid}`);
+        const seqEl = document.getElementById(`intel-seq-${sid}`);
+        const sideREl = document.getElementById(`intel-side-r-${sid}`);
+        const sideLEl = document.getElementById(`intel-side-l-${sid}`);
+        const delivEl = document.getElementById(`intel-delivered-${sid}`);
+
+        const current = {
+            street: streetEl ? streetEl.value : null,
+            sequence: seqEl ? seqEl.value : '',
+            is_right: sideREl ? sideREl.checked : false,
+            is_left: sideLEl ? sideLEl.checked : false,
+            is_delivered: delivEl ? delivEl.checked : false
+        };
+
+        const hasUnsavedPin = !!(State.unsavedChanges && State.unsavedChanges[sid] && State.unsavedChanges[sid].isManualPinned);
+
+        return (
+            hasUnsavedPin ||
+            orig.street !== current.street ||
+            orig.sequence !== current.sequence ||
+            orig.is_right !== current.is_right ||
+            orig.is_left !== current.is_left ||
+            orig.is_delivered !== current.is_delivered
+        );
+    },
+
+    discardIntel(sid) {
+        const sidStr = String(sid);
+        
+        if (confirm('Discard all pending changes for this house?')) {
+            if (State.pendingHouseIntel) delete State.pendingHouseIntel[sidStr];
+            
+            if (!State.unsavedChanges) State.unsavedChanges = {};
+            State.unsavedChanges[sidStr] = { isLocked: true };
+
+            this.render();
+            this.toggleActionPanel(sidStr, true);
+
+            if (App.showToast) App.showToast('Changes discarded');
+        }
     },
 
     async saveIntel(sid) {
-        if (!window.SpatialRouter) return;
+        console.log("[ListView.saveIntel] Starting for sid:", sid);
+        
+        if (!window.SpatialRouter) {
+            console.error("[ListView.saveIntel] SpatialRouter not found!");
+            return;
+        }
 
         const street = document.getElementById(`intel-street-${sid}`)?.value;
         const seqInput = document.getElementById(`intel-seq-${sid}`)?.value;
         const seq = parseInt(seqInput || 0);
         
+        console.log("[ListView.saveIntel] Input values - street:", street, "seqInput:", seqInput, "seq:", seq);
+        
         if (!street || !seqInput || seq <= 0) {
+            console.error("[ListView.saveIntel] Validation failed - street:", street, "seq:", seq);
             return App.showToast ? App.showToast("Please enter Street No and a valid Sequence #") : alert("Please enter Street No and a valid Sequence #");
         }
         
@@ -12677,6 +13488,7 @@ const ListView = {
             is_right: isRight,
             is_delivered: isDelivered
         };
+        console.log("[ListView.saveIntel] Options prepared:", options);
 
         const btn = document.getElementById(`btn-save-intel-${sid}`);
         if (btn) {
@@ -12684,18 +13496,25 @@ const ListView = {
             btn.innerHTML = '<span class="material-icons-round spinning">hourglass_top</span> Saving...';
         }
 
+        console.log("[ListView.saveIntel] Calling SpatialRouter.saveHouseIntelligence...");
         const success = await SpatialRouter.saveHouseIntelligence(sid, options);
+        console.log("[ListView.saveIntel] saveHouseIntelligence returned:", success);
         
         if (success) {
-            if (State.pendingHouseIntel) delete State.pendingHouseIntel[sid];
-            if (State.unsavedChanges) delete State.unsavedChanges[sid];
-            this.toggleActionPanel(sid, false);
+            console.log("[ListView.saveIntel] Save successful, cleaning up...");
+            const sidStr = String(sid);
+            if (State.pendingHouseIntel) delete State.pendingHouseIntel[sidStr];
+            if (State.unsavedChanges) delete State.unsavedChanges[sidStr];
+            this.toggleActionPanel(sidStr, false);
             this.checkVerificationStatus(sid);
             this.render();
-        } else if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<span class="material-icons-round">cloud_upload</span> Try Again';
-            this.validateIntelInput(sid);
+        } else {
+            console.error("[ListView.saveIntel] Save failed!");
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="material-icons-round">cloud_upload</span> Try Again';
+                this.validateIntelInput(sid);
+            }
         }
     },
 
@@ -12728,6 +13547,13 @@ const ListView = {
         
         if (window.SpatialRouter) {
             SpatialRouter.refreshToolbar(sid);
+        }
+    },
+
+    confirmEdit(sid) {
+        const isConfirmed = window.confirm("Are you sure you want to edit this record's House Intel? Any saved changes will alter the permanent database.");
+        if (isConfirmed) {
+            this.unlockIntel(sid);
         }
     },
 
@@ -12977,6 +13803,10 @@ const Gallery = {
     startX: 0, startY: 0,
 
     open(src, surveyId) {
+        if (!src || typeof src !== 'string' || !src.startsWith('http')) {
+            return;
+        }
+        
         // State Reset: Clear previous rotation/zoom/position
         this.reset();
 
@@ -13262,8 +14092,10 @@ const LocalCam = {
 
 const QRScanner = {
         html5QrCode: null,
+        availableCameras: [],
+        currentCameraIndex: 0,
         
-        open() {
+        async open() {
             document.getElementById('modal-qr').style.display = 'flex';
             
             if (typeof Html5Qrcode === 'undefined') {
@@ -13272,6 +14104,19 @@ const QRScanner = {
             }
 
             this.html5QrCode = new Html5Qrcode("qr-reader");
+            
+            // Get available cameras first
+            try {
+                this.availableCameras = await Html5Qrcode.getCameras();
+                if (this.availableCameras && this.availableCameras.length > 0) {
+                    console.log("Available cameras:", this.availableCameras.map(c => c.label));
+                }
+            } catch(e) {
+                console.warn("Could not get camera list", e);
+                this.availableCameras = [];
+            }
+            
+            this.currentCameraIndex = 0;
             
             // High Performance Config
             const config = { 
@@ -13285,16 +14130,73 @@ const QRScanner = {
             };
             
             // Prefer back camera with HD resolution
+            this.startCamera(this.currentCameraIndex, config);
+        },
+        
+        startCamera(cameraIndex, config = null) {
+            if (!this.html5QrCode) return;
+            
+            // Default config if not provided
+            if (!config) {
+                config = { 
+                    fps: 30,
+                    qrbox: (viewfinderWidth, viewfinderHeight) => {
+                        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                        const size = Math.floor(minEdge * 0.85);
+                        return { width: size, height: size };
+                    },
+                    aspectRatio: 1.0
+                };
+            }
+            
+            // Stop current scanning if running
+            if (this.html5QrCode.isScanning) {
+                this.html5QrCode.stop().then(() => {
+                    this.startCameraInternal(cameraIndex, config);
+                }).catch(() => {
+                    this.startCameraInternal(cameraIndex, config);
+                });
+            } else {
+                this.startCameraInternal(cameraIndex, config);
+            }
+        },
+        
+        startCameraInternal(cameraIndex, config) {
+            const cameraId = this.availableCameras[cameraIndex]?.id || { facingMode: "environment" };
+            
             this.html5QrCode.start(
-                { facingMode: "environment" }, 
+                cameraId, 
                 config, 
                 (decodedText) => this.onScanSuccess(decodedText),
                 (errorMessage) => { /* ignore per-frame errors */ }
             ).catch(err => {
                 console.error("Camera start failed", err);
-                alert("Could not start camera: " + err);
-                this.close();
+                // Try next camera if available
+                if (this.availableCameras.length > cameraIndex + 1) {
+                    this.currentCameraIndex = cameraIndex + 1;
+                    this.startCamera(this.currentCameraIndex, config);
+                } else {
+                    alert("Could not start camera: " + err);
+                    this.close();
+                }
             });
+        },
+        
+        switchCamera() {
+            if (!this.availableCameras || this.availableCameras.length <= 1) {
+                if (App.showToast) App.showToast("No other camera available");
+                return;
+            }
+            
+            // Cycle to next camera
+            this.currentCameraIndex = (this.currentCameraIndex + 1) % this.availableCameras.length;
+            const cameraLabel = this.availableCameras[this.currentCameraIndex].label || `Camera ${this.currentCameraIndex + 1}`;
+            
+            // Show toast
+            if (App.showToast) App.showToast("Camera: " + cameraLabel.substring(0, 20));
+            
+            // Restart with new camera
+            this.startCamera(this.currentCameraIndex);
         },
         
         onScanSuccess(decodedText) {
@@ -13627,6 +14529,7 @@ const VerifiedLayer = {
 
             m.on('click', (e) => {
                 L.DomEvent.stopPropagation(e);
+                App._markerHit = true;
                 this.focusHouse(v.survey_id);
             });
 
@@ -13650,11 +14553,13 @@ window.VerifiedLayer = VerifiedLayer;
 const DriveSync = {
         files: [],
         MAX: 999, // Effectively Unlimited
-        APP_URL: 'https://script.google.com/macros/s/AKfycbxKdvyJf00rvveSyqPVMvk1iNSq_gbmFAHKkk51utr0Ptaoetqwyu_ftwritA-W06VmLw/exec', 
+        APP_URL: 'https://script.google.com/macros/s/AKfycbwo43vViNLE6J-7sR2a4qSRITregNzBwS8kscnz4GG2JZ6zBBo23ciNIw5gdLyFqgmB/exec', 
         whitelist: null,
         currentDriveCount: 0,
         _lastSync: 0,
         _cacheExpiry: 3600000, // 1 hour reliability cache
+        offlineQueue: [], 
+        db: null,
         
         _safeId(id) { return id.toString().replace(/[^a-z0-9]/gi, '_'); },
 
@@ -13663,14 +14568,108 @@ const DriveSync = {
         },
 
         getEmail() {
-            return localStorage.getItem('surveyor_email') || '';
+            return localStorage.getItem('surveyor_email') || (window.USER ? window.USER.email : '');
         },
 
         init() {
+            if (this._initialized) {
+                // Already running — just refresh the whitelist dropdown
+                if (this.whitelist) this.renderWhitelist(this.whitelist);
+                return;
+            }
+            this._initialized = true;
+            this._isUploading = false;
+            this.openIndexedDB();
             if (this.whitelist) {
                 this.renderWhitelist(this.whitelist);
             } else {
                 this.fetchWhitelist();
+            }
+            window.addEventListener('focus', () => this.loadOfflineQueue());
+            window.addEventListener('hashchange', () => this.loadOfflineQueue());
+            // Simple count refresh every 15 seconds — no uploading
+            setInterval(() => this.loadOfflineQueue(), 15000);
+        },
+
+        openIndexedDB() {
+            const request = indexedDB.open('OfflineImageStore', 1);
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('images')) {
+                    db.createObjectStore('images', { keyPath: 'id', autoIncrement: true });
+                }
+            };
+            request.onsuccess = (e) => {
+                this.db = e.target.result;
+                this.loadOfflineQueue();
+            };
+            request.onerror = (e) => console.error("IndexedDB error:", e);
+        },
+
+        loadOfflineQueue() {
+            if (!this.db || this._isUploading) return;
+            const transaction = this.db.transaction(['images'], 'readonly');
+            const store = transaction.objectStore('images');
+            const request = store.getAll();
+            request.onsuccess = (e) => {
+                this.offlineQueue = e.target.result || [];
+                this.updateGlobalIndicator();
+            };
+        },
+
+        async saveOfflineImage(surveyId, file) {
+            if (!this.db) return alert("Storage initialization failed. Check local state.");
+            
+            const compressed = await this.compressImage(file);
+            const base64 = await this.toBase64(compressed);
+            
+            const transaction = this.db.transaction(['images'], 'readwrite');
+            const store = transaction.objectStore('images');
+            const item = {
+                surveyId: String(surveyId),
+                name: file.name,
+                data: base64,
+                timestamp: new Date().toISOString()
+            };
+            
+            store.add(item);
+            transaction.oncomplete = () => {
+                this.loadOfflineQueue();
+                if (window.App && App.showToast) App.showToast("Staged securely offline.");
+            };
+        },
+
+        updateGlobalIndicator() {
+            const btnFloating = document.getElementById('btn-cloud-sync-floating');
+            const dotFloating = document.getElementById('cloud-sync-dot-floating');
+            const count = this.offlineQueue.length;
+            
+            if (btnFloating) {
+                btnFloating.style.display = 'flex';
+                if (dotFloating) dotFloating.style.display = count > 0 ? 'block' : 'none';
+                
+                const icon = btnFloating.querySelector('.material-icons-round');
+                if (icon) {
+                    icon.textContent = count > 0 ? 'cloud_off' : 'cloud_done';
+                    icon.style.color = count > 0 ? '#d97706' : '#64748b';
+                }
+                btnFloating.style.background = count > 0 ? '#fef3c7' : '#ffffff';
+                btnFloating.style.borderColor = count > 0 ? '#fcd34d' : '#e2e8f0';
+                btnFloating.style.boxShadow = count > 0 ? '0 2px 8px rgba(217, 119, 6, 0.2)' : '0 2px 8px rgba(0,0,0,0.1)';
+            }
+
+            // Update Mobile Unsent Banner
+            const mobileBanner = document.getElementById('mobile-unsent-banner');
+            const mobileCountSpan = document.getElementById('mobile-unsent-count');
+            const isMobile = window.innerWidth <= 768;
+
+            if (mobileBanner) {
+                if (count > 0 && isMobile) {
+                    mobileBanner.style.setProperty('display', 'flex', 'important');
+                    if (mobileCountSpan) mobileCountSpan.innerText = count;
+                } else {
+                    mobileBanner.style.setProperty('display', 'none', 'important');
+                }
             }
         },
 
@@ -13753,8 +14752,7 @@ const DriveSync = {
                 return;
             }
 
-            const url = `${this.APP_URL.trim()}?action=get_all_synced_ids`;
-            console.log(`[DriveSync] fetchAllSyncedData started. force=${force}`);
+            console.log(`[DriveSync] fetchAllSyncedData via Supabase started. force=${force}`);
             
             const badges = [
                 document.getElementById('sync-server-badge'),
@@ -13766,48 +14764,68 @@ const DriveSync = {
             });
 
             try {
-                // TIMEOUT SAFETY: Abort fetch after 15 seconds
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000);
+                if (!window._supabase) throw new Error("Supabase Client Not Initialized");
 
-                const resp = await fetch(url, {
-                    mode: 'cors',
-                    cache: 'no-cache',
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-                
-                if (!resp.ok) {
-                    if (resp.status === 401 || resp.status === 403) throw new Error("LOGIN_REQUIRED");
-                    throw new Error(`HTTP ${resp.status}`);
+                // 1. Instantly fetch fast global pre-computed summaries via PostgreSQL RPC
+                try {
+                    const { data: summary, error: rpcError } = await window._supabase.rpc('get_drive_image_summary');
+                    if (!rpcError && summary) {
+                        State.totalDriveImages = summary.total_images || 0;
+                        console.log(`[DriveSync] RPC pre-computed total loaded: ${State.totalDriveImages} images`);
+                    }
+                } catch (rpcFail) {
+                    console.warn("[DriveSync] Summary RPC failed, proceeding to manual row tallies", rpcFail);
                 }
-                
-                const res = await resp.json();
-                if (res.status === 'success' && res.data) {
+
+                // 2. Fetch directly from Supabase iteratively with pagination
+                let allData = [];
+                let page = 0;
+                const pageSize = 1000;
+                let hasMore = true;
+
+                while (hasMore) {
+                    const { data: pageData, error } = await window._supabase
+                        .from('drive_images')
+                        .select('survey_id, image_count')
+                        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                    if (error) throw error;
+                    if (pageData && pageData.length > 0) {
+                        allData = allData.concat(pageData);
+                        page++;
+                    } else {
+                        hasMore = false;
+                    }
+                }
+
+                if (allData.length > 0) {
                     const normalized = {};
-                    let count = 0;
+                    let totalImages = 0;
                     
-                    const dataArray = Array.isArray(res.data) ? res.data : Object.keys(res.data);
-                    dataArray.forEach(id => {
-                        if (id) {
-                            normalized[String(id).trim()] = true;
-                            count++;
+                    allData.forEach(row => {
+                        if (row.image_count > 0) {
+                            normalized[String(row.survey_id).replace(/\.0$/, '').trim()] = row.image_count;
+                            totalImages += (row.image_count || 0);
                         }
                     });
+
+                    // Ensure aggregate falls back safely if RPC encountered errors
+                    if (!State.totalDriveImages) {
+                        State.totalDriveImages = totalImages;
+                    }
 
                     State.syncedData = normalized;
                     this._lastSync = now;
                     
-                    // PERSISTENCE: Save to localStorage for offline/quota fallback
                     localStorage.setItem('drive_sync_cache', JSON.stringify({
                         timestamp: now,
                         data: normalized
                     }));
 
-                    console.log(`[DriveSync] Synced data loaded: ${count} records`);
+                    console.log(`[DriveSync] Supabase counts loaded: ${count} records with images`);
                     
                     badges.forEach(b => {
-                        b.innerHTML = '<span class="material-icons-round" style="font-size:10px;">cached</span> <span style="font-size:8px;">🟢 CLOUD</span>';
+                        b.innerHTML = '<span class="material-icons-round" style="font-size:10px;">cached</span> <span style="font-size:8px;">🟢 DB SYNCED</span>';
                         b.style.background = '#f0fdf4';
                         b.style.color = '#15803d';
                         b.style.borderColor = '#bbf7d0';
@@ -13821,7 +14839,7 @@ const DriveSync = {
                     }
                     App.apply();
                 } else {
-                    throw new Error(res.message || "EMPTY_RESPONSE");
+                    throw new Error("EMPTY_RESPONSE");
                 }
             } catch (e) {
                 console.error("[DriveSync] fetchAllSyncedData error:", e);
@@ -13890,16 +14908,27 @@ const DriveSync = {
             const gal = document.getElementById(`synced-gallery-${sid}`);
             if (!gal) return;
             
+            // Check if active session user possesses administrator rights
+            const isAdmin = window.USER && window.USER.role === 'admin';
+            
             gal.innerHTML = images.map(img => {
-                // Use the thumbnail endpoint for better direct embedding support
                 const url = `https://drive.google.com/thumbnail?id=${img.id}&sz=w1000`;
                 const date = new Date(img.timestamp).toLocaleString();
                 const meta = `Uploaded by: ${img.uploader}\nTime: ${date}`;
-                console.log("Rendering synced image:", img.name, url);
+                
                 return `
-                    <div class="gallery-thumb synced" onclick="Gallery.open('${url}', '${surveyId}')" title="${meta}" style="position:relative; border:2px solid #10b981; overflow:hidden; background:#f8fafc;">
-                        <img src="${url}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src='https://placehold.co/100x100?text=Private+Image'; console.warn('Image private or missing');">
-                        <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(16,185,129,0.9); color:white; font-size:9px; padding:2px 4px; font-weight:800; text-align:center; transform:translateY(0); transition:transform 0.2s;">
+                    <div class="gallery-thumb synced" title="${meta}" style="position:relative; border:2px solid #10b981; overflow:hidden; background:#f8fafc; cursor:pointer;">
+                        <img src="${url}" onclick="Gallery.open('${url}', '${surveyId}')" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src='https://placehold.co/100x100?text=Private+Image';">
+                        
+                        ${isAdmin ? `
+                            <button onclick="event.stopPropagation(); if(confirm('Are you sure you want to delete this image?')) DriveSync.deleteImage('${img.id}', '${surveyId}')" 
+                                    style="position:absolute; top:4px; right:4px; background:#ef4444; color:white; border:none; border-radius:50%; width:24px; height:24px; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.2); z-index:10;" 
+                                    title="Delete Image (Admin Only)">
+                                <span class="material-icons-round" style="font-size:16px;">delete</span>
+                            </button>
+                        ` : ''}
+                        
+                        <div style="position:absolute; bottom:0; left:0; right:0; background:rgba(16,185,129,0.9); color:white; font-size:9px; padding:2px 4px; font-weight:800; text-align:center;">
                             SYNCED
                         </div>
                     </div>
@@ -13907,12 +14936,64 @@ const DriveSync = {
             }).join('');
         },
 
+        async deleteImage(fileId, surveyId) {
+            const email = this.getEmail();
+            if (!email) return alert("Email verification required before deletion sequences.");
+            
+            try {
+                const resp = await fetch(this.APP_URL, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'delete', fileId, email })
+                });
+                
+                const result = await resp.json();
+                if (result.status === 'success') {
+                    alert("Image successfully removed from Drive!");
+                    
+                    // Decrement Supabase counts
+                    const sidStr = String(surveyId).replace(/\.0$/, '').trim();
+                    const current = State.syncedData[sidStr] || 1;
+                    if (current <= 1) delete State.syncedData[sidStr];
+                    else State.syncedData[sidStr] = current - 1;
+                    
+                    // Update database
+                    await window._supabase.from('drive_images')
+                        .upsert({ survey_id: sidStr, image_count: Math.max(0, current - 1) });
+                    
+                    this.fetchMetadata(surveyId);
+                    App.apply();
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (e) {
+                alert("Deletion error: " + e.message);
+            }
+        },
+
         updateStatus(surveyId, errorState = null) {
             const sid = this._safeId(surveyId);
             const statusBadge = document.getElementById(`drive-status-${sid}`);
+            const offlineWarning = document.getElementById(`offline-warning-${sid}`);
             const syncBtn = document.getElementById('btn-sync-drive');
             const actionBtns = document.querySelectorAll('.sync-action-btn:not(.upload)');
             
+            if (offlineWarning) {
+                const count = this.offlineQueue.filter(item => String(item.surveyId) === String(surveyId)).length;
+                if (count > 0) {
+                    offlineWarning.innerHTML = `
+                        <div style="background:#fef3c7; color:#d97706; padding:10px; border-radius:8px; border:1px solid #fcd34d; font-size:11px; font-weight:700; display:flex; align-items:center; gap:6px;">
+                            <span class="material-icons-round" style="font-size:16px;">cloud_off</span>
+                            <span>You have <strong>${count}</strong> unsent image${count > 1 ? 's' : ''}.</span>
+                        </div>
+                    `;
+                    offlineWarning.style.display = 'block';
+                } else {
+                    offlineWarning.style.display = 'none';
+                }
+            }
+
             if (!statusBadge) return;
             
             if (errorState) {
@@ -13954,11 +15035,15 @@ const DriveSync = {
         // Legacy compatibility: ensure background calls don't crash
         updateHub() { this.updateStatus(State.filtered[State.currentIdx][0]); },
 
-        handleFiles(fileList) {
+        async handleFiles(fileList) {
+            const currentSid = State.filtered && State.filtered[State.currentIdx] ? State.filtered[State.currentIdx][0] : null;
+            if (!currentSid) return;
+
             const newFiles = Array.from(fileList);
-            this.files = [...this.files, ...newFiles];
-            this.renderPreview();
-            this.updateStatus(State.filtered[State.currentIdx][0]);
+            for (let file of newFiles) {
+                await this.saveOfflineImage(currentSid, file);
+            }
+            this.updateStatus(currentSid);
         },
         
         renderPreview() {
@@ -14027,7 +15112,6 @@ const DriveSync = {
             btn.innerHTML = '<span class="material-icons-round rotate">sync</span> Processing...';
             
             try {
-                // Parallelized Compression & Upload
                 const uploadPromises = this.files.map(async (file, i) => {
                     const compressed = await this.compressImage(file);
                     const base64 = await this.toBase64(compressed);
@@ -14037,7 +15121,7 @@ const DriveSync = {
                         method: 'POST',
                         mode: 'cors', 
                         headers: { 'Content-Type': 'text/plain' }, 
-                        body: JSON.stringify({ name, data: base64, surveyId, email, timestamp: new Date().toISOString() })
+                        body: JSON.stringify({ action: 'upload', name, data: base64, surveyId, email, timestamp: new Date().toISOString() })
                     });
                     
                     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -14048,15 +15132,25 @@ const DriveSync = {
 
                 await Promise.all(uploadPromises);
                 
-                alert(`Successfully synced ${this.files.length} images to Google Drive!`);
+                // Increment Supabase Count
+                const addedCount = this.files.length;
+                const sidStr = String(surveyId).replace(/\.0$/, '').trim();
+                const existingCount = State.syncedData[sidStr] || 0;
+                const newCount = existingCount + addedCount;
+                
+                State.syncedData[sidStr] = newCount;
+                if (window._supabase) {
+                    await window._supabase.from('drive_images').upsert({ survey_id: sidStr, image_count: newCount });
+                }
+                
+                alert(`Successfully synced ${addedCount} images to Google Drive!`);
                 this.files = [];
                 this.renderPreview();
-                this.fetchMetadata(surveyId); 
+                this.fetchMetadata(surveyId);
+                App.apply();
             } catch (e) {
                 console.error("Upload error:", e);
-                let msg = e.message;
-                if (msg === "Failed to fetch") msg = "Check Connection or Blockers";
-                alert("Sync failed: " + msg);
+                alert("Sync failed: " + e.message);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalHtml;
@@ -14070,6 +15164,150 @@ const DriveSync = {
                 reader.onload = () => resolve(reader.result.split(',')[1]);
                 reader.onerror = error => reject(error);
             });
+        },
+        openSyncModal() {
+            const modal = document.getElementById('modal-offline-sync');
+            const gallery = document.getElementById('offline-sync-gallery');
+            if (!modal || !gallery) return;
+
+            if (this.offlineQueue.length === 0) {
+                alert("You don't have any unsent images in the offline queue.");
+                return;
+            }
+
+            gallery.innerHTML = this.offlineQueue.map((item, index) => `
+                <div style="background:white; border-radius:8px; border:1px solid #cbd5e1; overflow:hidden; position:relative; box-shadow:0 2px 4px rgba(0,0,0,0.05); display:flex; flex-direction:column;">
+                    <div style="height:100px; background:#f8fafc; position:relative;">
+                        <img src="data:image/webp;base64,${item.data}" style="width:100%; height:100%; object-fit:cover;">
+                        <button onclick="event.stopPropagation(); DriveSync.removeOfflineItem(${item.id})" style="position:absolute; top:4px; right:4px; background:rgba(239, 68, 68, 0.9); color:white; border:none; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                            <span class="material-icons-round" style="font-size:12px;">close</span>
+                        </button>
+                    </div>
+                    <div style="padding:6px; font-size:10px; font-weight:800; text-align:center; color:#475569; background:#fff; border-top:1px solid #e2e8f0;">
+                        ID: ${item.surveyId}
+                    </div>
+                </div>
+            `).join('');
+
+            modal.style.display = 'flex';
+        },
+
+        async removeOfflineItem(id) {
+            if (!this.db || !confirm("Discard this unsent photo?")) return;
+            const transaction = this.db.transaction(['images'], 'readwrite');
+            const store = transaction.objectStore('images');
+            store.delete(id);
+            transaction.oncomplete = () => {
+                this.loadOfflineQueue();
+                setTimeout(() => this.openSyncModal(), 200); 
+            };
+        },
+
+        // Auto-sync removed — manual bulk upload only via cloud button
+
+        async startBulkUpload() {
+            if (!this.db) return alert("Offline storage not connected. Please open an address first.");
+            if (this._isUploading) return alert("Upload already in progress. Please wait.");
+            this._isUploading = true;
+            
+            const btn = document.getElementById('btn-execute-bulk-sync');
+            const originalHtml = btn ? btn.innerHTML : 'Sync';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="material-icons-round spinning" style="font-size:18px;">sync</span> Uploading...';
+            }
+
+            try {
+                const transaction = this.db.transaction(['images'], 'readonly');
+                const store = transaction.objectStore('images');
+                const snapshot = await new Promise((resolve, reject) => {
+                    const req = store.getAll();
+                    req.onsuccess = (e) => resolve(e.target.result || []);
+                    req.onerror = (e) => reject(e);
+                });
+
+                if (snapshot.length === 0) {
+                    alert("Nothing to sync.");
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = originalHtml;
+                    }
+                    return;
+                }
+
+                const email = this.getEmail();
+                let successCount = 0;
+                const uploadedIds = [];
+                const progressDiv = document.getElementById('bulk-sync-progress');
+                const progressText = document.getElementById('bulk-sync-progress-text');
+                if (progressDiv) progressDiv.style.display = 'block';
+
+                for (let i = 0; i < snapshot.length; i++) {
+                    const item = snapshot[i];
+                    if (progressText) progressText.innerText = `Uploading ${i + 1} of ${snapshot.length}...`;
+                    try {
+                        const sidStr = String(item.surveyId).replace(/\.0$/, '').trim();
+                        const existingCount = State.syncedData[sidStr] || 0;
+                        const name = `${sidStr}_img${existingCount + 1}.webp`; 
+
+                        const response = await fetch(this.APP_URL, {
+                            method: 'POST',
+                            mode: 'cors', 
+                            headers: { 'Content-Type': 'text/plain' }, 
+                            body: JSON.stringify({ action: 'upload', name, data: item.data, surveyId: item.surveyId, email, timestamp: item.timestamp })
+                        });
+
+                        if (response.ok) {
+                            const result = await response.json();
+                            if (result.status === "success") {
+                                const newCount = existingCount + 1;
+                                State.syncedData[sidStr] = newCount;
+                                
+                                if (window._supabase) {
+                                    await window._supabase.from('drive_images').upsert({ survey_id: sidStr, image_count: newCount });
+                                }
+
+                                uploadedIds.push(item.id);
+                                successCount++;
+                            }
+                        }
+                    } catch (e) {
+                        console.error("[BulkUpload] Item failure:", e);
+                    }
+                }
+
+                if (uploadedIds.length > 0) {
+                    const deleteTx = this.db.transaction(['images'], 'readwrite');
+                    const deleteStore = deleteTx.objectStore('images');
+                    uploadedIds.forEach(id => deleteStore.delete(id));
+                    await new Promise(resolve => deleteTx.oncomplete = resolve);
+                }
+
+                const finalTx = this.db.transaction(['images'], 'readonly');
+                const finalStore = finalTx.objectStore('images');
+                this.offlineQueue = await new Promise(resolve => {
+                    const finalReq = finalStore.getAll();
+                    finalReq.onsuccess = (e) => resolve(e.target.result || []);
+                });
+                this.updateGlobalIndicator();
+
+                alert(`Finished bulk sync. Successfully uploaded ${successCount} out of ${snapshot.length} items.`);
+                if (document.getElementById('modal-offline-sync')) {
+                    document.getElementById('modal-offline-sync').style.display = 'none';
+                }
+                App.apply();
+            } catch (err) {
+                console.error("Bulk upload error:", err);
+                alert("Bulk sync failed: " + err.message);
+            } finally {
+                this._isUploading = false;
+                const pd = document.getElementById('bulk-sync-progress');
+                if (pd) pd.style.display = 'none';
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }
         }
     };
 
@@ -14799,7 +16037,7 @@ const Settings = {
             while (hasMore) {
                 const { data, error } = await window._supabase
                     .from('verified_houses')
-                    .select('survey_id, verified_by, verified_at, street_no, sequence_no, is_right, is_delivered')
+                    .select('*')
                     .eq('billing_month', window.ACTIVE_BILLING_MONTH)
                     .gt('verified_at', latestTime)
                     .range(from, from + step - 1);
@@ -14817,6 +16055,13 @@ const Settings = {
                 const existingSIDs = new Set((window.ALL_VERIFIED_DATA || []).map(v => String(v.survey_id)));
                 const uniqueNew = newRecords.filter(v => !existingSIDs.has(String(v.survey_id)));
                 window.ALL_VERIFIED_DATA = (window.ALL_VERIFIED_DATA || []).concat(uniqueNew);
+                // Update existing records that were modified
+                newRecords.forEach(newRec => {
+                    const idx = window.ALL_VERIFIED_DATA.findIndex(v => String(v.survey_id) === String(newRec.survey_id));
+                    if (idx >= 0) {
+                        window.ALL_VERIFIED_DATA[idx] = { ...window.ALL_VERIFIED_DATA[idx], ...newRec };
+                    }
+                });
                 
                 // Persist to LocalStorage
                 localStorage.setItem(cacheKey, JSON.stringify(window.ALL_VERIFIED_DATA));
@@ -16154,6 +17399,9 @@ const UniversalSearch = {
             this.performSearch(document.getElementById('universal-search-input').value);
         },
         open() {
+            // First: hide any open marker card + pager before showing search
+            App.hideCardsOnMapClick();
+            
             const modal = document.getElementById('modal-search');
             modal.style.display = 'flex';
             const input = document.getElementById('universal-search-input');
@@ -16261,6 +17509,7 @@ const UniversalSearch = {
             }
 
             if (mode === 'map') {
+                App._markerHit = true; // Keep toolbar collapsed when going to map
                 ListView.showOnMap(id);
             } else {
                 ListView.jumpFromMap(id);
@@ -16289,7 +17538,7 @@ const SpatialRouter = {
     backgroundLayers: [],
     drawnPolygons: [],
     currentDrawLayer: null,
-    activeTab: 'manager',
+    activeTab: 'editor',
     isEditing: false,
     pickingMode: null,
     activePolygon: null,
@@ -16309,14 +17558,20 @@ const SpatialRouter = {
     async showMarkerCard(sid) {
         if (!sid) return;
         
+        console.log('[DEBUG showMarkerCard] Called with sid:', sid);
+        
         // SAFETY: Always clear any contextual HUDs (Pinning, Crosshair) when moving markers
         this.resetHUD();
+
+        // Open Map Navigator when marker is clicked
+        if (window.MapNavigator && typeof MapNavigator.show === 'function') {
+            MapNavigator.show();
+        }
 
         // Decoupling: Ensure map toolbars stay visible if we are in an active navigation flow
         const navActive = window.MapNavigator && MapNavigator.visible;
         if (!navActive && window.UIInteractions && UIInteractions.toggleExtraCtrls) {
-            // Only auto-collapse if NOT in navigation mode and sidebar is expanding
-            // UIInteractions.toggleExtraCtrls(true); // COMMMENTED OUT: prevents "hiding itself" regression
+            // UIInteractions.toggleExtraCtrls(true);
         }
 
         const sidStr = String(sid).trim();
@@ -16485,6 +17740,8 @@ const SpatialRouter = {
 
         modal.classList.remove('active');
 
+        modal.style.pointerEvents = 'none';
+
         // Immediate visual reset to prevent "empty panel" flicker
         const content = modal.querySelector('.marker-card-content');
         if (content) {
@@ -16496,6 +17753,8 @@ const SpatialRouter = {
         setTimeout(() => {
             if (!modal.classList.contains('active')) {
                 modal.style.display = 'none';
+                modal.style.visibility = '';
+                modal.style.pointerEvents = '';
                 // TOOLTIP SYNC: Close active persistent tooltip when card is closed
                 if (window.State && State.activeMarker) {
                     State.activeMarker.closeTooltip();
@@ -16531,12 +17790,16 @@ const SpatialRouter = {
         }
     },
     async saveHouseIntelligence(sid, options = {}) {
+        console.log("[SaveIntel] Starting save for:", sid, options);
+        
         try {
             if (!window._supabase) throw new Error("Supabase client not found.");
+            console.log("[SaveIntel] Supabase client found");
 
             const sidStr = String(sid).trim();
             const row = window.SID_MAP ? window.SID_MAP.get(sidStr) : null;
             if (!row) throw new Error("Survey record not found in SID_MAP.");
+            console.log("[SaveIntel] SID_MAP row found:", row ? "yes" : "no");
             
             const surveyorName = row[6] || 'Unknown Surveyor';
             const currentRoute = this.editingRouteName || (this.activeDisplayRoutes && this.activeDisplayRoutes.length > 0 ? this.activeDisplayRoutes[0] : 'Unknown Route');
@@ -16545,16 +17808,23 @@ const SpatialRouter = {
             const staging = State.unsavedChanges[sidStr];
             const pin = staging || {};
             const existing = (window.ALL_VERIFIED_DATA || []).find(v => String(v.survey_id) === sidStr);
+            console.log("[SaveIntel] staging:", staging, "existing:", existing ? "yes" : "no");
 
             const finalLat = pin.lat || (existing && existing.latitude !== undefined ? existing.latitude : parseFloat(row[1]));
             const finalLng = pin.lng || (existing && existing.longitude !== undefined ? existing.longitude : parseFloat(row[2]));
+            console.log("[SaveIntel] finalLat:", finalLat, "finalLng:", finalLng);
 
             // Final Validation Layer: Street and Sequence are mandatory
             const streetVal = options.street_no;
             const seqVal = parseInt(options.sequence_no);
+            console.log("[SaveIntel] streetVal:", streetVal, "seqVal:", seqVal, "isNaN(seqVal):", isNaN(seqVal));
+            
             if (!streetVal || isNaN(seqVal) || seqVal <= 0) {
-                throw new Error("Missing mandatory house intelligence data (Street/Sequence).");
+                const errMsg = "Missing mandatory house intelligence data (Street/Sequence > 0). street=" + streetVal + ", seq=" + seqVal;
+                console.error("[SaveIntel] VALIDATION FAILED:", errMsg);
+                throw new Error(errMsg);
             }
+            console.log("[SaveIntel] Validation passed");
 
             const payload = {
                 survey_id: sidStr,
@@ -16573,49 +17843,46 @@ const SpatialRouter = {
                 verified_by: window.USER ? window.USER.email : 'anonymous',
                 verified_at: new Date().toISOString()
             };
+            console.log("[SaveIntel] Payload prepared:", payload);
 
             // CRITICAL: Clear existing record first to ensure clean state and avoid constraint errors
-            await window._supabase
+            console.log("[SaveIntel] Deleting existing record...");
+            const delResult = await window._supabase
                 .from('verified_houses')
                 .delete()
                 .eq('survey_id', sidStr)
                 .eq('billing_month', window.ACTIVE_BILLING_MONTH);
+            console.log("[SaveIntel] Delete result:", delResult);
 
-            const { error } = await window._supabase.from('verified_houses').upsert([payload]);
+            console.log("[SaveIntel] Upserting new record...");
+            const { data: upsertData, error } = await window._supabase.from('verified_houses').upsert([payload]);
+            console.log("[SaveIntel] Upsert result. error:", error, "data:", upsertData);
+            
             if (error) {
                 console.error("Supabase Save Error:", error);
                 throw error;
             }
 
-            // Update Local Cache
-            const verInfo = {
-                survey_id: String(sid),
-                verified_by: payload.verified_by,
-                verified_at: payload.verified_at,
-                latitude: finalLat,
-                longitude: finalLng,
-                street_no: payload.street_no,
-                sequence_no: payload.sequence_no,
-                is_right: payload.is_right,
-                is_delivered: payload.is_delivered,
-                isLocked: true // CRITICAL: Lock fields after successful save
-            };
+            // Update Local Cache with FULL payload
+            if (!window.ALL_VERIFIED_DATA) window.ALL_VERIFIED_DATA = [];
+            window.ALL_VERIFIED_DATA = window.ALL_VERIFIED_DATA.filter(v => String(v.survey_id) !== sidStr);
+            window.ALL_VERIFIED_DATA.push({...payload});
+            localStorage.setItem('verified_houses_cache', JSON.stringify(window.ALL_VERIFIED_DATA));
+            console.log("[SaveIntel] Local cache updated with", payload.survey_id);
 
-            const cacheKey = `${sid}_${ACTIVE_BILLING_MONTH}`;
-            this.verifiedSIDs.set(cacheKey, { verified_by: payload.verified_by });
-
-            if (window.ALL_VERIFIED_DATA) {
-                window.ALL_VERIFIED_DATA = window.ALL_VERIFIED_DATA.filter(v => String(v.survey_id) !== String(sid));
-                window.ALL_VERIFIED_DATA.push(verInfo);
-            }
-
-            // Clear pinning state after successful save
+            // Clear staging state after successful save
             if (State.unsavedChanges[sidStr]) delete State.unsavedChanges[sidStr];
-            if (State.pendingPin) State.pendingPin = null;
+            
             if (App.showToast) App.showToast("Intelligence Saved Successfully!");
+            
+            // Close panel and re-render list to show saved data immediately
+            if (window.ListView) {
+                ListView.toggleActionPanel(sidStr, false);
+                ListView.render();
+            }
             return true;
         } catch (e) {
-            console.error("[SaveIntel] Error:", e);
+            console.error("[SaveIntel] ERROR:", e);
             if (App.showToast) App.showToast(`Error Saving: ${e.message}`);
             return false;
         }
@@ -16660,6 +17927,30 @@ const SpatialRouter = {
         }
 
         return { lat: null, lng: null };
+    },
+
+    async fetchVerifiedData() {
+        // Fetch all verified data from Supabase to ensure local cache is up-to-date
+        try {
+            if (!window._supabase) return;
+            const { data, error } = await window._supabase
+                .from('verified_houses')
+                .select('*')
+                .eq('billing_month', window.ACTIVE_BILLING_MONTH);
+            
+            if (error) {
+                console.warn("[VerifiedData] Fetch error:", error);
+                return;
+            }
+            
+            if (data && Array.isArray(data)) {
+                window.ALL_VERIFIED_DATA = data;
+                localStorage.setItem('verified_houses_cache', JSON.stringify(data));
+                console.log("[VerifiedData] Refreshed local cache with", data.length, "records");
+            }
+        } catch (e) {
+            console.warn("[VerifiedData] Failed to refresh:", e);
+        }
     },
 
     async verifyHouseLocation(sid, origLat, origLng, options = {}) {
@@ -16814,21 +18105,25 @@ const SpatialRouter = {
             return;
         }
 
-        // NEW: Capture dirty fields before view context switch (Only if interactive)
+        // Capture dirty fields before view context switch (Only if interactive)
         if (isInteractive) {
-            const streetVal = document.getElementById(`intel-street-${sid}`)?.value;
-            const seqVal = document.getElementById(`intel-seq-${sid}`)?.value;
-            const sideR = document.getElementById(`intel-side-r-${sid}`)?.checked;
-            const delivered = document.getElementById(`intel-delivered-${sid}`)?.checked;
+            const streetEl = document.getElementById(`intel-street-${sid}`);
+            const seqEl = document.getElementById(`intel-seq-${sid}`);
+            const sideR = document.getElementById(`intel-side-r-${sid}`);
+            const delivered = document.getElementById(`intel-delivered-${sid}`);
+            
+            const streetVal = streetEl ? streetEl.value : null;
+            const seqVal = seqEl ? parseInt(seqEl.value) : 0;
+            const sideRVal = sideR ? sideR.checked : false;
+            const deliveredVal = delivered ? delivered.checked : false;
 
-            if (streetVal !== undefined || seqVal !== undefined) {
-                 State.pendingHouseIntel[sid] = {
-                     street_no: streetVal,
-                     sequence_no: seqVal,
-                     is_right: sideR,
-                     is_delivered: delivered
-                 };
-            }
+            // Save to unsavedChanges (STAGING AREA)
+            if (!State.unsavedChanges[sidStr]) State.unsavedChanges[sidStr] = {};
+            State.unsavedChanges[sidStr].street_no = streetVal;
+            State.unsavedChanges[sidStr].sequence_no = seqVal;
+            State.unsavedChanges[sidStr].is_right = sideRVal;
+            State.unsavedChanges[sidStr].is_delivered = deliveredVal;
+            console.log("[startManualPin] Saved to staging:", State.unsavedChanges[sidStr]);
         }
 
         State.pinningOrigin = document.getElementById('list-view-stage').classList.contains('active') ? 'list' : 'map';
@@ -16841,20 +18136,6 @@ const SpatialRouter = {
 
         // Switch to satellite for visual clarity during pin operations
         if (window.App && App.setLayer) App.setLayer('sat');
-
-        // NEW: Sync current form state to staging before leaving list view to prevent data loss on render() rebuild
-        if (isInteractive) {
-            if (!State.unsavedChanges[sidStr]) State.unsavedChanges[sidStr] = {};
-            const streetEl = document.getElementById(`intel-street-${sidStr}`);
-            const seqEl = document.getElementById(`intel-seq-${sidStr}`);
-            const rightEl = document.getElementById(`intel-side-r-${sidStr}`);
-            const delivEl = document.getElementById(`intel-delivered-${sidStr}`);
-            
-            if (streetEl && streetEl.value) State.unsavedChanges[sidStr].street_no = streetEl.value;
-            if (seqEl && seqEl.value !== undefined && seqEl.value !== "") State.unsavedChanges[sidStr].sequence_no = parseInt(seqEl.value) || 0;
-            if (rightEl) State.unsavedChanges[sidStr].is_right = rightEl.checked;
-            if (delivEl) State.unsavedChanges[sidStr].is_delivered = delivEl.checked;
-        }
 
         const staging = State.unsavedChanges[sidStr] || {};
         const existing = window.ALL_VERIFIED_DATA ? window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr) : null;
@@ -16991,28 +18272,14 @@ const SpatialRouter = {
         if (!State.isPinning || !State.pinningSID) return;
 
         const center = State.map.getCenter();
-        const sid = State.pinningSID;
+        const sidStr = String(State.pinningSID);
 
-        // Create or reuse the unsavedChanges object for this record
-        if (!State.unsavedChanges[sid]) State.unsavedChanges[sid] = {};
-        
-        // CRITICAL: Merge from pendingHouseIntel (ONLY data source that survives DOM destruction)
-        // When switching to map, DOM elements are destroyed, so only this object survives
-        if (State.pendingHouseIntel && State.pendingHouseIntel[sid]) {
-            const p = State.pendingHouseIntel[sid];
-            State.unsavedChanges[sid].street_no = p.street_no || State.unsavedChanges[sid].street_no;
-            State.unsavedChanges[sid].sequence_no = (p.sequence_no !== undefined) ? p.sequence_no : State.unsavedChanges[sid].sequence_no;
-            State.unsavedChanges[sid].is_right = (p.is_right !== undefined) ? p.is_right : State.unsavedChanges[sid].is_right;
-            State.unsavedChanges[sid].is_delivered = (p.is_delivered !== undefined) ? p.is_delivered : State.unsavedChanges[sid].is_delivered;
-        }
-        
-        // Now update coordinates (this is the main purpose of this function)
-        State.unsavedChanges[sid].lat = center.lat;
-        State.unsavedChanges[sid].lng = center.lng;
-        State.unsavedChanges[sid].isLocked = false; // Allow editing fields after pinning
-        State.unsavedChanges[sid].isManualPinned = true; // Flag for UI feedback
-        
-        // DO NOT clear pendingHouseIntel here - ListView.render() needs it to populate inputs on return
+        // MERGE new coordinates into existing staging (preserve user's edits)
+        if (!State.unsavedChanges[sidStr]) State.unsavedChanges[sidStr] = {};
+        State.unsavedChanges[sidStr].lat = center.lat;
+        State.unsavedChanges[sidStr].lng = center.lng;
+        State.unsavedChanges[sidStr].isManualPinned = true;
+        console.log("[confirmManualPin] Updated staging with pin:", State.unsavedChanges[sidStr]);
 
         // Return to source view to complete the workflow
         const origin = State.pinningOrigin;
@@ -17025,7 +18292,7 @@ const SpatialRouter = {
             
             // Ensure Action Panel for this house is open
             setTimeout(() => {
-                if (window.ListView) ListView.toggleActionPanel(sid, true);
+                if (window.ListView) ListView.toggleActionPanel(sidStr, true);
             }, 300);
         } else if (App.showToast) {
              App.showToast("Pin Saved! Return to List to complete other details.");
@@ -17315,9 +18582,11 @@ const SpatialRouter = {
         if (!overlay) return;
 
         const isActive = overlay.classList.toggle('active');
+        overlay.style.display = isActive ? 'flex' : 'none';
 
         if (isActive) {
-            this.switchTab(this.activeTab);
+            this.activeTab = 'editor';
+            this.switchTab('editor');
         } else {
             this.cancelDrawing();
             this.setEditMode(false);
@@ -17359,7 +18628,7 @@ const SpatialRouter = {
         if (App.showToast) App.showToast('Routing displays cleared.');
     },
 
-    switchTab(tab) {
+switchTab(tab) {
         this.activeTab = tab;
         const pEditor = document.getElementById('routing-editor-panel');
         const pManager = document.getElementById('routing-manager-panel');
@@ -17373,7 +18642,6 @@ const SpatialRouter = {
         if (tManager) tManager.classList.toggle('active', tab === 'manager');
         if (toolbar) toolbar.style.display = tab === 'editor' ? 'flex' : 'none';
 
-        // Handle Active Routes Info Display
         const info = document.getElementById('active-routes-info');
         if (info) info.style.display = (tab === 'editor' && this.activeDisplayRoutes.length > 0) ? 'flex' : 'none';
 
@@ -17582,6 +18850,7 @@ const SpatialRouter = {
                 App.bindCustomTooltip(m, `#${p.surveyId || p.id}`);
                 m.on('click', (e) => {
                     L.DomEvent.stopPropagation(e);
+                    App._markerHit = true;
                     this.highlightMarker(String(p.surveyId || p.id), lat, lng);
                 });
             });
@@ -18246,6 +19515,7 @@ const SpatialRouter = {
 
             m.bindTooltip(`#${sid}`, { permanent: false, direction: 'top', offset: [0, -10] });
             m.on('click', () => { 
+                App._markerHit = true;
                 m.closeTooltip(); 
                 if (!this.isMarkingMode()) {
                     this.showMarkerCard(sid); 
@@ -18523,6 +19793,7 @@ const SpatialRouter = {
 
                     m.on('click', (e) => {
                         L.DomEvent.stopPropagation(e);
+                        App._markerHit = true;
                         this.highlightMarker(p.id, p.lat, p.lng);
                         this.highlightListItem(p.id);
                     });
@@ -18561,6 +19832,7 @@ const SpatialRouter = {
 
             m.on('click', (e) => {
                 L.DomEvent.stopPropagation(e);
+                App._markerHit = true;
                 const currentIdx = this.sequence.findIndex(p => String(p.id) === String(sid));
                 if (currentIdx === -1) this.addToSequence(sid);
                 else this.removeFromSequence(sid);
@@ -18999,6 +20271,7 @@ const SpatialRouter = {
             m.off('click');
             m.on('click', (e) => {
                 L.DomEvent.stopPropagation(e);
+                App._markerHit = true;
                 const sidStr = String(sid).replace(/\.0$/, '').trim();
                 const currentIdx = this.sequence.findIndex(p => String(p.id) === sidStr);
                 if (currentIdx === -1) this.addToSequence(sidStr);
@@ -19193,22 +20466,6 @@ const MapNavigator = {
         if (window.UIInteractions && typeof UIInteractions.toggleExtraCtrls === 'function') {
             UIInteractions.toggleExtraCtrls(true);
         }
-
-        // Auto-show marker card for first record when navigator is first opened
-        // Support for Audit Mode if active
-        setTimeout(() => {
-            const isAudit = window.VerifiedLayer && window.VerifiedLayer.auditMode;
-            const source = isAudit ? window.VerifiedLayer.auditData : State.filtered;
-            const idx = isAudit ? window.VerifiedLayer.auditIndex : State.currentIdx;
-
-            if (source && source.length > 0) {
-                const safeIdx = Math.max(0, Math.min(idx, source.length - 1));
-                const record = source[safeIdx];
-                if (record && window.SpatialRouter && typeof SpatialRouter.showMarkerCard === 'function') {
-                    SpatialRouter.showMarkerCard(record[0]);
-                }
-            }
-        }, 400);
 
         this.updateUI();
     },
@@ -19517,6 +20774,13 @@ window.onload = () => {
     const handle = document.getElementById('routing-drag-handle');
     const resize = document.getElementById('routing-resize-handle');
 
+    // FORCE HIDE: Ensure routing overlay is hidden on initial load - do this FIRST before anything else
+    if (overlay) {
+        overlay.style.display = 'none';
+        overlay.classList.remove('active');
+        console.log('[INIT] Routing overlay forced to hidden');
+    }
+
     if (overlay && handle && window.UIInteractions && typeof UIInteractions.setupDraggable === 'function') {
         UIInteractions.setupDraggable(overlay, handle);
     }
@@ -19541,6 +20805,11 @@ window.onload = () => {
     };
 };
 
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            if (window.DriveSync) DriveSync.loadOfflineQueue();
+        }, 1500); 
+    });
 </script>
 
 <!-- Safe PWA Service Worker Registration -->
