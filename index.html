@@ -9688,7 +9688,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.04.29.1045</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.05.02.1201</span>
             </div>
         </div>
         
@@ -10925,6 +10925,9 @@ async function handleCredentialResponse(response) {
         const rolesRes = await fetch('roles.json');
         if (!rolesRes.ok) throw new Error("Could not load roles database.");
         const roles = await rolesRes.json();
+        
+        // Store for global use (e.g. Sync Monitor dropdown)
+        window.USER_DB = roles;
 
         const isAuthorized = roles.admins.includes(payload.email) || roles.field_staff.includes(payload.email);
         if (!isAuthorized) throw new Error("Unauthorized User Email.");
@@ -11208,7 +11211,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.04.29.1045";
+window.DATA_VERSION = "v2026.05.02.1201";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -11444,7 +11447,8 @@ const App = {
         if (el) el.innerText = `Z: ${State.map.getZoom()}`;
 
         // Handle URL Params (QR Code Link)
-        setTimeout(() => this.handleUrlParams(), 1000);
+        // Handle URL parameters for direct linking
+        this.handleUrlParams();
     },
 
     handleUrlParams() {
@@ -11760,8 +11764,8 @@ const App = {
                     child.style.border = '1px solid transparent';
                 });
                 // Highlight clicked item
-                item.style.background = '#bfdbfe';
-                item.style.border = '1px solid #3b82f6';
+                item.style.background = '#f1f5f9';
+                item.style.border = '1px solid red';
                 
                 // Open marker card
                 if (window.SpatialRouter) SpatialRouter.showMarkerCard(m.id);
@@ -11863,7 +11867,8 @@ closeNearbyMarkersPopup() {
         const bounds = State.map.getBounds();
         const visibleMarkers = [];
         
-        RAW_DATA.forEach(r => {
+        if (!State.filtered) return;
+        State.filtered.forEach(r => {
             if (!r[1] || !r[2]) return;
             if (bounds.contains([r[1], r[2]])) {
                 visibleMarkers.push({ id: r[0], lat: r[1], lng: r[2], name: r[4] });
@@ -11885,7 +11890,8 @@ closeNearbyMarkersPopup() {
         const center = L.latLng(lat, lng);
         const nearby = [];
 
-        RAW_DATA.forEach(r => {
+        if (!State.filtered) return [];
+        State.filtered.forEach(r => {
             if (!r[1] || !r[2]) return;
             const markerPos = L.latLng(r[1], r[2]);
             const dist = center.distanceTo(markerPos);
@@ -12354,11 +12360,25 @@ closeNearbyMarkersPopup() {
             result.push(r);
         }
 
+        // INDEX STICKINESS: Preserve focus on the current record if it still exists in the new filter
+        const currentSID = State.filtered && State.filtered[State.currentIdx] ? String(State.filtered[State.currentIdx][0]) : null;
+        
         State.filtered = result;
-        State.masterFiltered = [...result]; // Sync master filter pool
+        State.masterFiltered = [...result]; 
         State.availableSurveyors = Array.from(availableSurvSet).sort();
 
-        if (!isInitial) State.currentIdx = 0;
+        if (currentSID) {
+            const newIdx = result.findIndex(r => String(r[0]) === currentSID);
+            if (newIdx !== -1) {
+                State.currentIdx = newIdx;
+            } else if (!isInitial && !window._preserveIdx) {
+                State.currentIdx = 0;
+            }
+        } else if (!isInitial && !window._preserveIdx) {
+            State.currentIdx = 0;
+        }
+        
+        window._preserveIdx = false; 
         State.payColorMode = pay.length > 0;
 
         this.updateSidebarStatus();
@@ -12376,12 +12396,9 @@ closeNearbyMarkersPopup() {
                     }
                 }
             }
-            if (!document.getElementById('list-view-stage')?.classList.contains('active')) {
-                ViewSwitcher.toMap();
-            }
         }
 
-        // State Persistence disabled for performance
+        // Session persistence disabled per user request to prioritize stability
     },
 
     triggerInstall() {
@@ -12623,15 +12640,42 @@ closeNearbyMarkersPopup() {
                  this.bindCustomTooltip(marker, content, true);
              }
         });
+    },
+
+    saveSession() {
+        return;
+    },
+
+    resumeSession() {
+        return;
+    },
+
+    showToast(msg, duration = 2000) {
+        const toast = document.createElement('div');
+        toast.className = 'rsp-toast';
+        toast.style.cssText = `
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.9); color: white; padding: 8px 16px;
+            border-radius: 20px; font-size: 12px; font-weight: 700; z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2); animation: fadeInUp 0.3s ease;
+        `;
+        toast.innerText = msg;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => toast.remove(), 500);
+        }, duration);
     }
 };
+
 
 // === 05_view_switcher.js ===
 // === 05_view_switcher.js ===
 // ViewSwitcher
 
 const ViewSwitcher = {
-        toList(resetIdx = true) {
+        toList(resetIdx = false) {
             try {
                 if(window.SpatialRouter && window.SpatialRouter.closeMarkerCard) {
                     SpatialRouter.closeMarkerCard();
@@ -12693,7 +12737,8 @@ const ViewSwitcher = {
             // Priority 1: Check History Stack (Multi-level back)
             if (State.history && State.history.length > 0) {
                 const prev = State.history.pop();
-                State.filtered = prev.filtered;
+                // FALLBACK: If filtered is null (optimized), restore from masterFiltered
+                State.filtered = prev.filtered || [...State.masterFiltered];
                 State.currentIdx = prev.idx;
                 
                 // Clear search box on back
@@ -12863,7 +12908,7 @@ const ListView = {
                             <button type="button" onclick="ListView.toggleSortDropdown()" title="Sort Records" class="lv-sort-btn">
                                 <span class="material-icons-round" style="font-size:18px;">sort</span>
                             </button>
-                            <div id="lv-sort-dropdown" class="lv-sort-dropdown">
+                            <div id="lv-sort-dropdown" class="lv-sort-dropdown" style="display:none;">
                                 <div onclick="ListView.sort('id-desc'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Newest first (ID)</div>
                                 <div onclick="ListView.sort('id-asc'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Oldest first (ID)</div>
                                 <div onclick="ListView.sort('drive-desc'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Synced Recently</div>
@@ -12946,7 +12991,12 @@ const ListView = {
                             </div>
                             <div style="flex:0.8;">
                                 <label style="display:block; font-size:9px; font-weight:800; color:#94a3b8; margin-bottom:4px; text-transform:uppercase;">Sequence #</label>
-                                <input type="number" id="intel-seq-${r[0]}" oninput="ListView.validateIntelInput('${r[0]}')" ${isLocked ? 'disabled' : ''} value="${(p && p.sequence_no !== undefined) ? p.sequence_no : (v && v.sequence_no !== undefined ? v.sequence_no : (r[13] || ''))}" placeholder="0" style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none; opacity:${isLocked ? 0.6 : 1}; cursor:${isLocked ? 'not-allowed' : 'text'};">
+                                <input type="number" id="intel-seq-${r[0]}" oninput="ListView.validateIntelInput('${r[0]}')" ${isLocked ? 'disabled' : ''} 
+                                       value="${(() => {
+                                            const val = (p && p.sequence_no !== undefined) ? p.sequence_no : (v && v.sequence_no !== undefined ? v.sequence_no : (r[13] || ''));
+                                            return (!val || isNaN(val)) ? '' : val;
+                                       })()}" 
+                                       placeholder="0" style="width:100%; height:36px; border-radius:8px; border:1px solid #cbd5e1; background:white; font-weight:700; font-size:12px; padding:0 8px; outline:none; opacity:${isLocked ? 0.6 : 1}; cursor:${isLocked ? 'not-allowed' : 'text'};">
                             </div>
                         </div>
 
@@ -12995,8 +13045,28 @@ const ListView = {
 </div>
 
                 
-                <div class="card-gallery" id="gal-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}" style="margin-top:10px;">
-                    ${r[9].map(url => `<img src="${url}" class="gallery-thumb" onclick="Gallery.open('${url}', '${r[0]}')">`).join('')}
+                <style>
+                    .responsive-gallery {
+                        display: grid;
+                        grid-template-columns: repeat(3, 1fr);
+                        gap: 10px;
+                        margin-top: 10px;
+                    }
+                    .gallery-item {
+                        width: 100%;
+                        aspect-ratio: 1 / 1;
+                        object-fit: cover;
+                        border-radius: 8px;
+                        cursor: pointer;
+                    }
+                    @media (max-width: 600px) {
+                        .responsive-gallery {
+                            grid-template-columns: repeat(2, 1fr);
+                        }
+                    }
+                </style>
+                <div class="card-gallery responsive-gallery" id="gal-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}">
+                    ${r[9].map(url => `<img src="${url}" class="gallery-item" onclick="Gallery.open('${url}', '${r[0]}')">`).join('')}
                     <div id="synced-gallery-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}" style="display:contents;"></div>
                 </div>
 
@@ -13006,7 +13076,9 @@ const ListView = {
                             <span class="material-icons-round" style="font-size:16px; color:#4285f4; flex-shrink:0;">account_circle</span>
                             <select id="drive-email" style="border:none; background:transparent; font-weight:850; font-size:11px; color:#1e293b; padding:0; cursor:pointer; outline:none; width:100%;"></select>
                         </div>
-                        <div class="sync-status-badge" id="drive-status-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}" style="margin:0; font-size:9px; font-weight:800; padding:2px 6px;">Checking...</div>
+                        <div class="sync-status-badge" id="drive-status-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}" style="margin:0; font-size:9px; font-weight:800; padding:2px 6px;">
+                            ${State.syncedData[String(r[0]).replace(/\.0$/, '').trim()] ? `<span class="material-icons-round" style="font-size:12px; vertical-align:middle;">sync</span> ${State.syncedData[String(r[0]).replace(/\.0$/, '').trim()]} Synced` : 'No Images Synced'}
+                        </div>
                     </div>
 
                     <div id="drive-preview" class="sync-preview-strip" style="margin-bottom:4px;"></div>
@@ -13185,7 +13257,7 @@ const ListView = {
     },
 
 
-    showOnMap(id, isolate = true) {
+    showOnMap(id, isolate = false) {
         const sidStr = String(id).trim();
         const record = window.SID_MAP ? window.SID_MAP.get(sidStr) : null;
         if (!record) return;
@@ -13246,10 +13318,16 @@ const ListView = {
         ViewSwitcher.back();
     },
 
-    toggleSortDropdown() {
+    toggleSortDropdown(forceState = null) {
         const dd = document.getElementById('lv-sort-dropdown');
         if (!dd) return;
-        dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+        
+        if (forceState !== null) {
+            dd.style.display = forceState ? 'block' : 'none';
+        } else {
+            const isHidden = dd.style.display === 'none';
+            dd.style.display = isHidden ? 'block' : 'none';
+        }
     },
 
     sort(criteria) {
@@ -13303,8 +13381,10 @@ const ListView = {
         );
 
         // Always push context before a search jump (even if in same list)
+        // MEMORY OPTIMIZATION: Do not copy the filtered array if it's large (e.g. 65k records).
+        // Instead, ViewSwitcher.back will handle 'null' by falling back to State.masterFiltered.
         State.history.push({
-            filtered: [...State.filtered],
+            filtered: (State.filtered.length > 500) ? null : [...State.filtered],
             idx: State.currentIdx,
             label: document.getElementById('stat-label').innerText
         });
@@ -13564,6 +13644,17 @@ const ListView = {
         this.toggleActionPanel(sid, true);
     }
 };
+
+// Global click listener to close sort dropdown when clicking outside
+document.addEventListener('mousedown', (e) => {
+    const dd = document.getElementById('lv-sort-dropdown');
+    const btn = document.querySelector('.lv-sort-btn');
+    if (dd && dd.style.display === 'block') {
+        if (!dd.contains(e.target) && (!btn || !btn.contains(e.target))) {
+            ListView.toggleSortDropdown(false);
+        }
+    }
+});
 
 window.ListView = ListView;
 
@@ -14305,14 +14396,6 @@ const VerifiedLayer = {
         this.lineLayer = L.layerGroup();
         this.focusLayer = L.layerGroup();
         this.updateList();
-
-        // Watch for global data updates
-        setInterval(() => {
-            if (window.ALL_VERIFIED_DATA && !this.syncTimer) {
-                this.updateList();
-                this.syncTimer = true;
-            }
-        }, 5000);
     },
 
     updateList() {
@@ -14591,373 +14674,497 @@ window.VerifiedLayer = VerifiedLayer;
 // DriveSync / Google Drive
 
 const DriveSync = {
-        files: [],
-        MAX: 999, // Effectively Unlimited
-        APP_URL: 'https://script.google.com/macros/s/AKfycbwo43vViNLE6J-7sR2a4qSRITregNzBwS8kscnz4GG2JZ6zBBo23ciNIw5gdLyFqgmB/exec', 
-        whitelist: null,
-        currentDriveCount: 0,
-        _lastSync: 0,
-        _cacheExpiry: 3600000, // 1 hour reliability cache
-        offlineQueue: [], 
-        db: null,
+    files: [],
+    MAX: 999, // Effectively Unlimited
+    APP_URL: 'https://script.google.com/macros/s/AKfycbwo43vViNLE6J-7sR2a4qSRITregNzBwS8kscnz4GG2JZ6zBBo23ciNIw5gdLyFqgmB/exec',
+    currentDriveCount: 0,
+    _lastSync: 0,
+    _cacheExpiry: 3600000, // 1 hour reliability cache
+    offlineQueue: [],
+    db: null,
+
+    _safeId(id) { return id.toString().replace(/[^a-z0-9]/gi, '_'); },
+    _cleanId(id) {
+        if (!id) return '';
+        return String(id).replace(/\.0$/, '').trim();
+    },
+
+    saveEmail(email) {
+        localStorage.setItem('surveyor_email', email);
+    },
+
+    getEmail() {
+        return localStorage.getItem('surveyor_email') || (window.USER ? window.USER.email : '');
+    },
+
+    init() {
+        if (this._initialized) {
+            // Already running — just refresh the whitelist dropdown
+            this.renderWhitelist();
+            return;
+        }
+        this._initialized = true;
+        this._isUploading = false;
+        this.openIndexedDB();
+
+        // Auto-Identity Binding: If logged-in user is in roles.json, select them automatically
+        this.autoBindIdentity();
+
+        // Pull exclusively from local roles.json (window.USER_DB)
+        this.renderWhitelist();
+        window.addEventListener('focus', () => this.loadOfflineQueue());
+        window.addEventListener('hashchange', () => this.loadOfflineQueue());
+    },
+
+    autoBindIdentity() {
+        if (window.USER && window.USER.email && window.USER_DB) {
+            const email = window.USER.email.toLowerCase();
+            const admins = (window.USER_DB.admins || []).map(e => e.toLowerCase());
+            const staff = (window.USER_DB.field_staff || []).map(e => e.toLowerCase());
+
+            if (admins.includes(email) || staff.includes(email)) {
+                const saved = localStorage.getItem('surveyor_email');
+                if (saved !== email) {
+                    console.log("[DriveSync] Binding identity to currently logged-in user:", email);
+                    this.saveEmail(email);
+                }
+            }
+        }
+    },
+
+    openIndexedDB() {
+        const request = indexedDB.open('OfflineImageStore', 1);
+        request.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains('images')) {
+                db.createObjectStore('images', { keyPath: 'id', autoIncrement: true });
+            }
+        };
+        request.onsuccess = (e) => {
+            this.db = e.target.result;
+            this.loadOfflineQueue();
+        };
+        request.onerror = (e) => console.error("IndexedDB error:", e);
+    },
+
+    loadOfflineQueue() {
+        if (!this.db || this._isUploading) return;
+        const transaction = this.db.transaction(['images'], 'readonly');
+        const store = transaction.objectStore('images');
         
-        _safeId(id) { return id.toString().replace(/[^a-z0-9]/gi, '_'); },
-
-        saveEmail(email) {
-            localStorage.setItem('surveyor_email', email);
-        },
-
-        getEmail() {
-            return localStorage.getItem('surveyor_email') || (window.USER ? window.USER.email : '');
-        },
-
-        init() {
-            if (this._initialized) {
-                // Already running — just refresh the whitelist dropdown
-                if (this.whitelist) this.renderWhitelist(this.whitelist);
-                return;
-            }
-            this._initialized = true;
-            this._isUploading = false;
-            this.openIndexedDB();
-            if (this.whitelist) {
-                this.renderWhitelist(this.whitelist);
-            } else {
-                this.fetchWhitelist();
-            }
-            window.addEventListener('focus', () => this.loadOfflineQueue());
-            window.addEventListener('hashchange', () => this.loadOfflineQueue());
-            // Simple count refresh every 15 seconds — no uploading
-            setInterval(() => this.loadOfflineQueue(), 15000);
-        },
-
-        openIndexedDB() {
-            const request = indexedDB.open('OfflineImageStore', 1);
-            request.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains('images')) {
-                    db.createObjectStore('images', { keyPath: 'id', autoIncrement: true });
-                }
-            };
-            request.onsuccess = (e) => {
-                this.db = e.target.result;
-                this.loadOfflineQueue();
-            };
-            request.onerror = (e) => console.error("IndexedDB error:", e);
-        },
-
-        loadOfflineQueue() {
-            if (!this.db || this._isUploading) return;
-            const transaction = this.db.transaction(['images'], 'readonly');
-            const store = transaction.objectStore('images');
-            const request = store.getAll();
-            request.onsuccess = (e) => {
-                this.offlineQueue = e.target.result || [];
-                this.updateGlobalIndicator();
-            };
-        },
-
-        async saveOfflineImage(surveyId, file) {
-            if (!this.db) return alert("Storage initialization failed. Check local state.");
-            
-            const compressed = await this.compressImage(file);
-            const base64 = await this.toBase64(compressed);
-            
-            const transaction = this.db.transaction(['images'], 'readwrite');
-            const store = transaction.objectStore('images');
-            const item = {
-                surveyId: String(surveyId),
-                name: file.name,
-                data: base64,
-                timestamp: new Date().toISOString()
-            };
-            
-            store.add(item);
-            transaction.oncomplete = () => {
-                this.loadOfflineQueue();
-                if (window.App && App.showToast) App.showToast("Staged securely offline.");
-            };
-        },
-
-        updateGlobalIndicator() {
-            const btnFloating = document.getElementById('btn-cloud-sync-floating');
-            const dotFloating = document.getElementById('cloud-sync-dot-floating');
-            const count = this.offlineQueue.length;
-            
-            if (btnFloating) {
-                btnFloating.style.display = 'flex';
-                if (dotFloating) dotFloating.style.display = count > 0 ? 'block' : 'none';
-                
-                const icon = btnFloating.querySelector('.material-icons-round');
-                if (icon) {
-                    icon.textContent = count > 0 ? 'cloud_off' : 'cloud_done';
-                    icon.style.color = count > 0 ? '#d97706' : '#64748b';
-                }
-                btnFloating.style.background = count > 0 ? '#fef3c7' : '#ffffff';
-                btnFloating.style.borderColor = count > 0 ? '#fcd34d' : '#e2e8f0';
-                btnFloating.style.boxShadow = count > 0 ? '0 2px 8px rgba(217, 119, 6, 0.2)' : '0 2px 8px rgba(0,0,0,0.1)';
-            }
-
-            // Update Mobile Unsent Banner
-            const mobileBanner = document.getElementById('mobile-unsent-banner');
-            const mobileCountSpan = document.getElementById('mobile-unsent-count');
-            const isMobile = window.innerWidth <= 768;
-
-            if (mobileBanner) {
-                if (count > 0 && isMobile) {
-                    mobileBanner.style.setProperty('display', 'flex', 'important');
-                    if (mobileCountSpan) mobileCountSpan.innerText = count;
-                } else {
-                    mobileBanner.style.setProperty('display', 'none', 'important');
-                }
-            }
-        },
-
-        async fetchWhitelist() {
-            if (!this.APP_URL) return;
-            this.APP_URL = this.APP_URL.trim();
-            console.log("Checking connection to:", this.APP_URL);
-            
-            try {
-                const resp = await fetch(`${this.APP_URL}?action=get_whitelist`, {
-                    mode: 'cors',
-                    cache: 'no-cache'
+        // MEMORY OPTIMIZATION: Use a cursor to get metadata only, avoid loading all Base64 images into RAM
+        const results = [];
+        const request = store.openCursor();
+        request.onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                const val = cursor.value;
+                results.push({
+                    id: val.id,
+                    surveyId: val.surveyId,
+                    timestamp: val.timestamp,
+                    dataLength: val.data ? val.data.length : 0
                 });
-                
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                
-                const res = await resp.json();
-                if (res.status === 'success' && res.data) {
-                    this.whitelist = res.data;
-                    this.renderWhitelist(res.data);
-                } else {
-                    throw new Error(res.message || "Invalid Response");
-                }
-            } catch (e) { 
-                console.error("Whitelist fetch error:", e);
-                const select = document.getElementById('drive-email');
-                if(select) {
-                    select.innerHTML = `<option value="">⚠️ Connection Failed: ${e.message}</option>`;
-                    select.style.borderColor = 'var(--danger)';
-                }
+                cursor.continue();
+            } else {
+                this.offlineQueue = results;
+                this.updateGlobalIndicator();
             }
-        },
+        };
+    },
 
-        renderWhitelist(emails) {
-            const select = document.getElementById('drive-email');
-            if (!select) return;
-            
-            const savedEmail = this.getEmail();
-            const currentUserEmail = (window.USER && window.USER.email) ? window.USER.email.toLowerCase() : '';
-            
-            let html = '<option value="">Select Surveyor Email</option>';
-            emails.forEach(email => {
-                const isMe = email.toLowerCase() === currentUserEmail;
-                const isSelected = email.toLowerCase() === savedEmail.toLowerCase();
-                
-                // Use symbols to visually distinguish
-                const prefix = isMe ? '● ' : '○ ';
-                const label = prefix + email + (isMe ? ' (You)' : '');
-                
-                html += `<option value="${email}" ${isSelected ? 'selected' : ''} style="${!isMe ? 'color:#94a3b8;' : 'font-weight:bold;'}">${label}</option>`;
-            });
-            select.innerHTML = html;
-            
-            // Apply visual dimming to the select element itself if an inactive email is selected
-            select.onchange = (e) => {
-                const val = e.target.value;
-                this.saveEmail(val);
-                if (val && val.toLowerCase() !== currentUserEmail) {
-                    select.style.opacity = '0.6';
-                    select.style.fontStyle = 'italic';
-                } else {
-                    select.style.opacity = '1';
-                    select.style.fontStyle = 'normal';
-                }
-            };
-            // Initial style check
-            if (savedEmail && savedEmail.toLowerCase() !== currentUserEmail) {
+    async handleFiles(fileList) {
+        const currentSid = State.filtered && State.filtered[State.currentIdx] ? State.filtered[State.currentIdx][0] : null;
+        if (!currentSid) return;
+
+        const newFiles = Array.from(fileList);
+        if (newFiles.length === 0) return;
+
+        // Start "Saving" UI State
+        this.setLoadingState(true, `Saving 0/${newFiles.length}`);
+        const email = this.getEmail();
+
+        try {
+            for (let i = 0; i < newFiles.length; i++) {
+                this.setLoadingState(true, `Saving ${i + 1}/${newFiles.length}`);
+                await this.saveOfflineImage(currentSid, newFiles[i], email);
+            }
+        } finally {
+            this.setLoadingState(false);
+            this.loadOfflineQueue();
+            this.updateStatus(currentSid);
+        }
+    },
+
+    setLoadingState(isLoading, text = "") {
+        const btn = document.getElementById('btn-cloud-sync-floating');
+        const icon = btn ? btn.querySelector('.material-icons-round') : null;
+        if (btn && icon) {
+            if (isLoading) {
+                icon.innerText = 'sync';
+                icon.classList.add('spinning');
+                btn.style.background = '#f59e0b'; // Warning orange
+            } else {
+                icon.innerText = 'cloud_upload';
+                icon.classList.remove('spinning');
+                btn.style.background = '';
+            }
+        }
+        if (isLoading && text && window.App && App.showToast) {
+            App.showToast(text);
+        }
+    },
+
+    async saveOfflineImage(surveyId, file, email) {
+        if (!this.db) return;
+        const cleanSid = this._cleanId(surveyId);
+        if (!cleanSid) {
+            console.error("[DriveSync] Attempted to save image without valid Survey ID", { surveyId });
+            if (window.App && App.showToast) App.showToast("❌ Error: Record ID not found. Re-select record and try again.");
+            return;
+        }
+
+        const compressed = await this.compressImage(file);
+        const base64 = await this.toBase64(compressed);
+
+        const transaction = this.db.transaction(['images'], 'readwrite');
+        const store = transaction.objectStore('images');
+        const item = {
+            surveyId: cleanSid,
+            name: file.name,
+            data: base64,
+            email: email || this.getEmail() || 'unknown@staff.local',
+            timestamp: new Date().toISOString()
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = store.add(item);
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject();
+        });
+    },
+
+    updateGlobalIndicator() {
+        const btnFloating = document.getElementById('btn-cloud-sync-floating');
+        const dotFloating = document.getElementById('cloud-sync-dot-floating');
+        const count = this.offlineQueue.length;
+
+        if (btnFloating) {
+            btnFloating.style.display = 'flex';
+            if (dotFloating) dotFloating.style.display = count > 0 ? 'block' : 'none';
+
+            const icon = btnFloating.querySelector('.material-icons-round');
+            if (icon) {
+                icon.textContent = count > 0 ? 'cloud_off' : 'cloud_done';
+                icon.style.color = count > 0 ? '#d97706' : '#64748b';
+            }
+            btnFloating.style.background = count > 0 ? '#fef3c7' : '#ffffff';
+            btnFloating.style.borderColor = count > 0 ? '#fcd34d' : '#e2e8f0';
+            btnFloating.style.boxShadow = count > 0 ? '0 2px 8px rgba(217, 119, 6, 0.2)' : '0 2px 8px rgba(0,0,0,0.1)';
+        }
+
+        // Update Mobile Unsent Banner
+        const mobileBanner = document.getElementById('mobile-unsent-banner');
+        const mobileCountSpan = document.getElementById('mobile-unsent-count');
+        const isMobile = window.innerWidth <= 768;
+
+        if (mobileBanner) {
+            if (count > 0 && isMobile) {
+                mobileBanner.style.setProperty('display', 'flex', 'important');
+                if (mobileCountSpan) mobileCountSpan.innerText = count;
+            } else {
+                mobileBanner.style.setProperty('display', 'none', 'important');
+            }
+        }
+    },
+
+
+    renderWhitelist() {
+        const select = document.getElementById('drive-email');
+        if (!select) return;
+
+        let emails = [];
+        // Pull from window.USER_DB (roles.json)
+        if (window.USER_DB) {
+            emails = [
+                ...(window.USER_DB.admins || []),
+                ...(window.USER_DB.field_staff || [])
+            ];
+            // Deduplicate and sort
+            emails = [...new Set(emails)].sort();
+        }
+
+        const currentUserEmail = (window.USER && window.USER.email) ? window.USER.email.toLowerCase() : '';
+        const savedEmail = this.getEmail();
+
+        // FILTER: Hide specific system/migrated emails from the select list
+        const blacklist = ['migrated@system.local', 'migrated@staff.local', 'unknown@staff.local', 'null@staff.local'];
+        emails = emails.filter(e => !blacklist.includes(e.toLowerCase()));
+
+        let html = '<option value="">Select Surveyor Email</option>';
+        emails.forEach(email => {
+            const isMe = email.toLowerCase() === currentUserEmail;
+            const isSelected = email.toLowerCase() === savedEmail.toLowerCase();
+
+            // Use symbols to visually distinguish
+            const prefix = isMe ? '● ' : '○ ';
+            const label = prefix + email + (isMe ? ' (You)' : '');
+
+            html += `<option value="${email}" ${isSelected ? 'selected' : ''} style="${!isMe ? 'color:#94a3b8;' : 'font-weight:bold;'}">${label}</option>`;
+        });
+        select.innerHTML = html;
+
+        // Apply visual dimming to the select element itself if an inactive email is selected
+        select.onchange = (e) => {
+            const val = e.target.value;
+            this.saveEmail(val);
+            if (val && val.toLowerCase() !== currentUserEmail) {
                 select.style.opacity = '0.6';
                 select.style.fontStyle = 'italic';
+            } else {
+                select.style.opacity = '1';
+                select.style.fontStyle = 'normal';
             }
-        },
+        };
 
-        async fetchAllSyncedData(force = false) {
-            if (!this.APP_URL) return;
+        // IDENTITY LOCKING: Disable dropdown for staff
+        if (window.USER && window.USER.role === 'staff') {
+            select.disabled = true;
+            select.style.cursor = 'not-allowed';
+            select.style.background = '#f8fafc';
+            select.title = "Identity locked for field staff.";
+        }
 
-            // RELIABILITY CACHE: Use session memory if fresh
-            const now = Date.now();
-            if (!force && (now - this._lastSync < this._cacheExpiry) && Object.keys(State.syncedData || {}).length > 0) {
-                console.log("[DriveSync] Using fresh session cache for Synced IDs");
-                return;
+        // Initial style check
+        if (savedEmail && savedEmail.toLowerCase() !== currentUserEmail) {
+            select.style.opacity = '0.6';
+            select.style.fontStyle = 'italic';
+        }
+    },
+
+    async fetchAllSyncedData(force = false) {
+        if (!this.APP_URL) return;
+
+        // RELIABILITY CACHE: Use session memory if fresh
+        const now = Date.now();
+        if (!force && (now - this._lastSync < this._cacheExpiry) && Object.keys(State.syncedData || {}).length > 0) {
+            console.log("[DriveSync] Using fresh session cache for Synced IDs");
+            return;
+        }
+
+        console.log(`[DriveSync] fetchAllSyncedData via Supabase started. force=${force}`);
+
+        const badges = [
+            document.getElementById('sync-server-badge'),
+            document.getElementById('sync-server-badge-sidebar')
+        ].filter(b => b);
+
+        badges.forEach(b => {
+            b.innerHTML = '<span class="material-icons-round spinning" style="font-size:10px;">sync</span>';
+        });
+
+        try {
+            if (!window._supabase) throw new Error("Supabase Client Not Initialized");
+
+            // 1. Fetch Global Total (The 46,000+ number)
+            const { data: summary } = await window._supabase.rpc('get_drive_image_summary');
+            if (summary !== undefined) State.totalDriveImages = summary;
+
+            // 2. Fetch Individual Totals per ID from the new VIEW
+            let allData = [];
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
+
+            let fetchSuccess = true;
+            while (hasMore) {
+                const { data: pageData, error } = await window._supabase
+                    .from('drive_image_counts')
+                    .select('survey_id, image_count')
+                    .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                if (error) {
+                    console.error(`[DriveSync] Error on page ${page}:`, error);
+                    fetchSuccess = false;
+                    hasMore = false;
+                    break;
+                }
+                if (pageData && pageData.length > 0) {
+                    allData = allData.concat(pageData);
+                    page++;
+                    if (pageData.length < pageSize) hasMore = false;
+                } else {
+                    hasMore = false;
+                }
             }
 
-            console.log(`[DriveSync] fetchAllSyncedData via Supabase started. force=${force}`);
-            
-            const badges = [
-                document.getElementById('sync-server-badge'),
-                document.getElementById('sync-server-badge-sidebar')
-            ].filter(b => b);
+            // ONLY update State.syncedData if we successfully fetched the entire dataset
+            if (fetchSuccess && allData.length > 0) {
+                const normalized = {};
+                let totalImages = 0;
 
-            badges.forEach(b => {
-                b.innerHTML = '<span class="material-icons-round spinning" style="font-size:10px;">sync</span>';
-            });
+                allData.forEach(row => {
+                    const cleanSid = this._cleanId(row.survey_id);
+                    if (cleanSid) {
+                        normalized[cleanSid] = (normalized[cleanSid] || 0) + row.image_count;
+                        totalImages += row.image_count;
+                    }
+                });
 
-            try {
-                if (!window._supabase) throw new Error("Supabase Client Not Initialized");
+                // Merge with existing state instead of hard-replacing to prevent "flicker"
+                State.syncedData = Object.assign(State.syncedData || {}, normalized);
+                this._lastSync = now;
 
-                // 1. Instantly fetch fast global pre-computed summaries via PostgreSQL RPC
+                localStorage.setItem('drive_sync_cache', JSON.stringify({
+                    timestamp: now,
+                    data: normalized
+                }));
+
+                console.log(`[DriveSync] Supabase counts loaded: ${allData.length} records with images`);
+
+                badges.forEach(b => {
+                    b.innerHTML = '<span class="material-icons-round" style="font-size:10px;">cached</span> <span style="font-size:8px;">🟢 DB SYNCED</span>';
+                    b.style.background = '#f0fdf4';
+                    b.style.color = '#15803d';
+                    b.style.borderColor = '#bbf7d0';
+                    b.title = `Last sync: ${new Date().toLocaleTimeString()}`;
+                    b.style.cursor = 'default';
+                });
+
+                if (document.getElementById('f-drive-only')) {
+                    State.driveOnlyFilter = document.getElementById('f-drive-only').checked;
+                }
+                App.apply();
+            } else {
+                throw new Error("EMPTY_RESPONSE");
+            }
+        } catch (e) {
+            console.error("[DriveSync] fetchAllSyncedData error:", e);
+
+            // FALLBACK: Try to load from LocalStorage if API fails
+            const localCache = localStorage.getItem('drive_sync_cache');
+            if (localCache) {
                 try {
-                    const { data: summary, error: rpcError } = await window._supabase.rpc('get_drive_image_summary');
-                    if (!rpcError && summary) {
-                        State.totalDriveImages = summary.total_images || 0;
-                        console.log(`[DriveSync] RPC pre-computed total loaded: ${State.totalDriveImages} images`);
-                    }
-                } catch (rpcFail) {
-                    console.warn("[DriveSync] Summary RPC failed, proceeding to manual row tallies", rpcFail);
-                }
+                    const parsed = JSON.parse(localCache);
+                    State.syncedData = parsed.data;
+                    console.warn("[DriveSync] API Failed. Using LocalStorage fallback cache from:", new Date(parsed.timestamp).toLocaleString());
 
-                // 2. Fetch directly from Supabase iteratively with pagination
-                let allData = [];
-                let page = 0;
-                const pageSize = 1000;
-                let hasMore = true;
-
-                while (hasMore) {
-                    const { data: pageData, error } = await window._supabase
-                        .from('drive_images')
-                        .select('survey_id, image_count')
-                        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-                    if (error) throw error;
-                    if (pageData && pageData.length > 0) {
-                        allData = allData.concat(pageData);
-                        page++;
-                    } else {
-                        hasMore = false;
-                    }
-                }
-
-                if (allData.length > 0) {
-                    const normalized = {};
-                    let totalImages = 0;
-                    
-                    allData.forEach(row => {
-                        if (row.image_count > 0) {
-                            normalized[String(row.survey_id).replace(/\.0$/, '').trim()] = row.image_count;
-                            totalImages += (row.image_count || 0);
-                        }
-                    });
-
-                    // Ensure aggregate falls back safely if RPC encountered errors
-                    if (!State.totalDriveImages) {
-                        State.totalDriveImages = totalImages;
-                    }
-
-                    State.syncedData = normalized;
-                    this._lastSync = now;
-                    
-                    localStorage.setItem('drive_sync_cache', JSON.stringify({
-                        timestamp: now,
-                        data: normalized
-                    }));
-
-                    console.log(`[DriveSync] Supabase counts loaded: ${count} records with images`);
-                    
                     badges.forEach(b => {
-                        b.innerHTML = '<span class="material-icons-round" style="font-size:10px;">cached</span> <span style="font-size:8px;">🟢 DB SYNCED</span>';
-                        b.style.background = '#f0fdf4';
-                        b.style.color = '#15803d';
-                        b.style.borderColor = '#bbf7d0';
-                        b.title = `Last sync: ${new Date().toLocaleTimeString()} - Click to Re-sync`;
-                        b.onclick = () => this.fetchAllSyncedData(true);
-                        b.style.cursor = 'pointer';
+                        b.innerHTML = '<span class="material-icons-round" style="font-size:10px;">history</span> <span style="font-size:8px;">🟡 CACHED</span>';
+                        b.style.background = '#fffbeb';
+                        b.style.color = '#b45309';
+                        b.style.borderColor = '#fde68a';
+                        b.title = "Offline/API Error. Showing cached data.";
+                        b.style.cursor = 'default';
                     });
-
-                    if (document.getElementById('f-drive-only')) {
-                        State.driveOnlyFilter = document.getElementById('f-drive-only').checked;
-                    }
                     App.apply();
-                } else {
-                    throw new Error("EMPTY_RESPONSE");
+                    return;
+                } catch (err) { /* corrupted cache */ }
+            }
+
+            if (badges.length > 0) {
+                let errorMsg = "❌ ERROR";
+                if (e.message === "LOGIN_REQUIRED") errorMsg = "🔑 LOGIN";
+                else if (e.message.includes("Failed to fetch")) errorMsg = "🌐 OFFLINE";
+
+                badges.forEach(b => {
+                    b.innerHTML = `<span class="material-icons-round" style="font-size:10px;">sync_problem</span> <span style="font-size:8px;">${errorMsg}</span>`;
+                    b.style.background = '#fef2f2';
+                    b.style.color = '#dc2626';
+                    b.style.borderColor = '#fecaca';
+                    b.title = e.message + " - Click to retry";
+                    b.onclick = () => this.fetchAllSyncedData(true);
+                });
+            }
+        }
+    },
+
+    async fetchMetadata(surveyId) {
+        const sid = this._safeId(surveyId);
+        const cleanSid = this._cleanId(surveyId);
+
+        // 1. Initial UI update
+        this.updateStatus(surveyId);
+
+        try {
+            // PHASE 1: Instant fetch from Supabase Logs (High Speed)
+            let finalImages = [];
+            if (window._supabase) {
+                const { data: dbLogs } = await window._supabase
+                    .from('staff_sync_logs')
+                    .select('file_id, email, synced_at')
+                    .eq('survey_id', cleanSid)
+                    .order('synced_at', { ascending: false });
+
+                if (dbLogs && dbLogs.length > 0) {
+                    finalImages = dbLogs.map(log => ({
+                        id: log.file_id,
+                        uploader: log.email || 'Cloud Log',
+                        timestamp: log.synced_at
+                    }));
+                    // Render instantly so user doesn't wait for Drive API
+                    this.renderSyncedImages(surveyId, finalImages);
                 }
-            } catch (e) {
-                console.error("[DriveSync] fetchAllSyncedData error:", e);
-                
-                // FALLBACK: Try to load from LocalStorage if API fails
-                const localCache = localStorage.getItem('drive_sync_cache');
-                if (localCache) {
-                    try {
-                        const parsed = JSON.parse(localCache);
-                        State.syncedData = parsed.data;
-                        console.warn("[DriveSync] API Failed. Using LocalStorage fallback cache from:", new Date(parsed.timestamp).toLocaleString());
-                        
-                        badges.forEach(b => {
-                            b.innerHTML = '<span class="material-icons-round" style="font-size:10px;">history</span> <span style="font-size:8px;">🟡 CACHED</span>';
-                            b.style.background = '#fffbeb';
-                            b.style.color = '#b45309';
-                            b.style.borderColor = '#fde68a';
-                            b.title = "Offline/API Error. Showing cached data. Click to retry.";
-                            b.onclick = () => this.fetchAllSyncedData(true);
+            }
+
+            // PHASE 2: Background Deep-Check with Google Drive (Accuracy)
+            const driveResp = await fetch(`${this.APP_URL}?action=get_images&surveyId=${cleanSid}`);
+            const driveResult = await driveResp.json();
+
+            if (driveResult && driveResult.status === 'success' && Array.isArray(driveResult.files)) {
+                const driveFiles = driveResult.files;
+                const map = new Map();
+
+                // Seed with current finalImages (Supabase)
+                finalImages.forEach(img => map.set(img.id, img));
+
+                // Add Drive files (catch any missing from logs or manual uploads)
+                let foundChange = false;
+                driveFiles.forEach(file => {
+                    if (file && file.id && !map.has(file.id)) {
+                        map.set(file.id, {
+                            id: file.id,
+                            uploader: 'Drive Discovery',
+                            timestamp: file.createdTime || new Date().toISOString()
                         });
-                        App.apply();
-                        return;
-                    } catch (err) { /* corrupted cache */ }
-                }
+                        foundChange = true;
+                    }
+                });
 
-                if (badges.length > 0) {
-                    let errorMsg = "❌ ERROR";
-                    if (e.message === "LOGIN_REQUIRED") errorMsg = "🔑 LOGIN";
-                    else if (e.message.includes("Failed to fetch")) errorMsg = "🌐 OFFLINE";
+                // If Drive has FEWER images than Supabase (unlikely but possible if deleted), 
+                // or if it has NEW ones, update the view.
+                if (foundChange || (finalImages.length > 0 && driveFiles.length !== finalImages.length)) {
+                    const mergedImages = Array.from(map.values());
 
-                    badges.forEach(b => {
-                        b.innerHTML = `<span class="material-icons-round" style="font-size:10px;">sync_problem</span> <span style="font-size:8px;">${errorMsg}</span>`;
-                        b.style.background = '#fef2f2';
-                        b.style.color = '#dc2626';
-                        b.style.borderColor = '#fecaca';
-                        b.title = e.message + " - Click to retry";
-                        b.onclick = () => this.fetchAllSyncedData(true);
-                    });
-                }
-            }
-        },
-
-        async fetchMetadata(surveyId) {
-            if (!this.APP_URL) return;
-            const sid = this._safeId(surveyId);
-            const statusEl = document.getElementById(`drive-status-${sid}`);
-            try {
-                const resp = await fetch(`${this.APP_URL}?surveyId=${encodeURIComponent(surveyId)}`);
-                const res = await resp.json();
-                if (res.status === 'success') {
-                    this.currentDriveCount = res.totalCount || 0;
-                    this.renderSyncedImages(surveyId, res.data || []);
+                    // Update cache & badge
+                    State.syncedData[cleanSid] = mergedImages.length;
                     this.updateStatus(surveyId);
-                } else {
-                    console.warn("Drive Script logic failure:", res.message);
-                    this.updateStatus(surveyId, "Sync Failed"); 
-                }
-            } catch (e) { 
-                console.error("Metadata fetch error:", e); 
-                this.updateStatus(surveyId, "Connection Error"); 
-            }
-        },
 
-        renderSyncedImages(surveyId, images) {
-            const sid = this._safeId(surveyId);
-            const gal = document.getElementById(`synced-gallery-${sid}`);
-            if (!gal) return;
-            
-            // Check if active session user possesses administrator rights
-            const isAdmin = window.USER && window.USER.role === 'admin';
-            
-            gal.innerHTML = images.map(img => {
-                const url = `https://drive.google.com/thumbnail?id=${img.id}&sz=w1000`;
-                const date = new Date(img.timestamp).toLocaleString();
-                const meta = `Uploaded by: ${img.uploader}\nTime: ${date}`;
-                
-                return `
-                    <div class="gallery-thumb synced" title="${meta}" style="position:relative; border:2px solid #10b981; overflow:hidden; background:#f8fafc; cursor:pointer;">
+                    // Re-render with full merged set
+                    this.renderSyncedImages(surveyId, mergedImages);
+                }
+            }
+        } catch (e) {
+            console.error("[DriveSync] Hybrid Metadata fetch error:", e);
+        }
+    },
+
+    renderSyncedImages(surveyId, images) {
+        const sid = this._safeId(surveyId);
+        const gal = document.getElementById(`synced-gallery-${sid}`);
+        console.log(`[DriveSync] Rendering ${images.length} images for SID: ${sid}. Element found: ${!!gal}`);
+        if (!gal) return;
+
+        // Check if active session user possesses administrator rights
+        const isAdmin = window.USER && window.USER.role === 'admin';
+
+        gal.innerHTML = images.map(img => {
+            const url = `https://drive.google.com/thumbnail?id=${img.id}&sz=w1000`;
+            const date = new Date(img.timestamp).toLocaleString();
+            const meta = `Uploaded by: ${img.uploader}\nTime: ${date}`;
+
+            return `
+                    <div class="gallery-item synced" title="${meta}" style="position:relative; border:2px solid #10b981; overflow:hidden; background:#f8fafc; cursor:pointer; width:100%; aspect-ratio:1/1; border-radius:8px;">
                         <img src="${url}" onclick="Gallery.open('${url}', '${surveyId}')" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src='https://placehold.co/100x100?text=Private+Image';">
                         
                         ${isAdmin ? `
@@ -14973,134 +15180,210 @@ const DriveSync = {
                         </div>
                     </div>
                 `;
-            }).join('');
-        },
+        }).join('');
+    },
 
-        async deleteImage(fileId, surveyId) {
-            const email = this.getEmail();
-            if (!email) return alert("Email verification required before deletion sequences.");
-            
-            try {
-                const resp = await fetch(this.APP_URL, {
-                    method: 'POST',
-                    mode: 'cors',
-                    headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ action: 'delete', fileId, email })
-                });
-                
-                const result = await resp.json();
-                if (result.status === 'success') {
-                    alert("Image successfully removed from Drive!");
-                    
-                    // Decrement Supabase counts
-                    const sidStr = String(surveyId).replace(/\.0$/, '').trim();
-                    const current = State.syncedData[sidStr] || 1;
-                    if (current <= 1) delete State.syncedData[sidStr];
-                    else State.syncedData[sidStr] = current - 1;
-                    
-                    // Update database
-                    await window._supabase.from('drive_images')
-                        .upsert({ survey_id: sidStr, image_count: Math.max(0, current - 1) });
-                    
-                    this.fetchMetadata(surveyId);
-                    App.apply();
-                } else {
-                    throw new Error(result.message);
+    async deleteImage(fileId, surveyId) {
+        const email = this.getEmail();
+        if (!email) { alert("Surveyor Email Required for Deletion"); return; }
+
+        if (!confirm("Are you sure you want to PERMANENTLY delete this image from Google Drive and Supabase?")) return;
+
+        try {
+            const resp = await fetch(this.APP_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'delete', email: email, fileId: fileId })
+            });
+            const result = await resp.json();
+            const isAlreadyDeleted = result.status === 'error' && (result.message.includes('not found') || result.message.includes('404'));
+
+            if (result.status === 'success' || isAlreadyDeleted) {
+                if (App.showToast) App.showToast(isAlreadyDeleted ? "Log Cleared (File missing)" : "Image Trashed");
+
+                // Also prune from Supabase if we have the fileId
+                if (window._supabase && fileId) {
+                    await window._supabase.from('staff_sync_logs').delete().eq('file_id', fileId);
                 }
-            } catch (e) {
-                alert("Deletion error: " + e.message);
-            }
-        },
 
-        updateStatus(surveyId, errorState = null) {
-            const sid = this._safeId(surveyId);
-            const statusBadge = document.getElementById(`drive-status-${sid}`);
-            const offlineWarning = document.getElementById(`offline-warning-${sid}`);
-            const syncBtn = document.getElementById('btn-sync-drive');
-            const actionBtns = document.querySelectorAll('.sync-action-btn:not(.upload)');
-            
-            if (offlineWarning) {
-                const count = this.offlineQueue.filter(item => String(item.surveyId) === String(surveyId)).length;
-                if (count > 0) {
-                    offlineWarning.innerHTML = `
+                // Force refresh counts
+                await this.fetchAllSyncedData(true);
+                this.fetchMetadata(surveyId);
+
+                window._preserveIdx = true;
+                App.apply();
+            } else {
+                alert("Delete Failed: " + result.message);
+            }
+        } catch (e) {
+            console.error("Delete Error:", e);
+        }
+    },
+
+    async deleteBatch(fileIds, skipConfirm = false) {
+        if (!fileIds || fileIds.length === 0) return;
+        const email = this.getEmail();
+        if (!email) { alert("Surveyor Email Required for Deletion"); return; }
+
+        if (!skipConfirm) {
+            const confirm = window.confirm(`Are you sure you want to delete ${fileIds.length} images?`);
+            if (!confirm) return;
+        }
+
+        try {
+            // 1. Delete from Google Drive (via Apps Script)
+            const resp = await fetch(this.APP_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'delete_batch', email: email, fileIds: fileIds })
+            });
+            const result = await resp.json();
+
+            // If Drive sync failed but error indicates files were not found, we still want to clear Supabase
+            const isAlreadyDeleted = result.status === 'error' && (result.message.includes('not found') || result.message.includes('404'));
+
+            if (result.status === 'success' || isAlreadyDeleted) {
+                // 2. Delete from Supabase
+                if (window._supabase) {
+                    await window._supabase
+                        .from('staff_sync_logs')
+                        .delete()
+                        .in('file_id', fileIds);
+                }
+
+                // 3. Update Local Cache
+                if (State.cachedSyncLogs) {
+                    State.cachedSyncLogs = State.cachedSyncLogs.filter(log => !fileIds.includes(log.file_id));
+                }
+
+                // Force refresh of syncedData to update map badges
+                if (window.DriveSync) {
+                    await window.DriveSync.fetchAllSyncedData(true);
+                }
+
+                if (App.showToast) App.showToast(`${fileIds.length} Logs Cleared`);
+                return true;
+            }
+            alert("Cloud Sync Error: " + result.message);
+            return false;
+        } catch (e) {
+            console.error("Batch Delete Error:", e);
+            return false;
+        }
+    },
+
+    async fetchDetailedLogs(email) {
+        if (!window._supabase) return [];
+        try {
+            // Use the authenticated client to fetch details
+            const { data, error } = await window._supabase
+                .from('staff_sync_logs')
+                .select('survey_id, file_id, synced_at')
+                .eq('email', email)
+                .order('synced_at', { ascending: false })
+                .limit(2000); // Show up to 2000 recent records for this user
+
+            if (error) throw error;
+            return data || [];
+        } catch (e) {
+            console.error("Fetch Details Failed:", e);
+            return [];
+        }
+    },
+
+    updateStatus(surveyId, errorState = null) {
+        const sid = this._safeId(surveyId);
+        const statusBadge = document.getElementById(`drive-status-${sid}`);
+        const offlineWarning = document.getElementById(`offline-warning-${sid}`);
+        const syncBtn = document.getElementById('btn-sync-drive');
+        const actionBtns = document.querySelectorAll('.sync-action-btn:not(.upload)');
+
+        if (offlineWarning) {
+            const count = this.offlineQueue.filter(item => String(item.surveyId) === String(surveyId)).length;
+            if (count > 0) {
+                offlineWarning.innerHTML = `
                         <div style="background:#fef3c7; color:#d97706; padding:10px; border-radius:8px; border:1px solid #fcd34d; font-size:11px; font-weight:700; display:flex; align-items:center; gap:6px;">
                             <span class="material-icons-round" style="font-size:16px;">cloud_off</span>
                             <span>You have <strong>${count}</strong> unsent image${count > 1 ? 's' : ''}.</span>
                         </div>
                     `;
-                    offlineWarning.style.display = 'block';
-                } else {
-                    offlineWarning.style.display = 'none';
-                }
-            }
-
-            if (!statusBadge) return;
-            
-            if (errorState) {
-                statusBadge.innerText = `⚠️ ${errorState}`;
-                statusBadge.style.color = "#dc2626"; // red-600
-                statusBadge.style.background = "#fef2f2";
-                statusBadge.style.borderColor = "#fecaca";
-                return;
-            }
-            
-            const syncedTotal = this.currentDriveCount;
-            const pendingTotal = this.files.length;
-            
-            // Make the badge clickable for manual refresh
-            statusBadge.onclick = (e) => {
-                e.stopPropagation();
-                statusBadge.innerText = "⏳ Checking...";
-                this.fetchMetadata(surveyId);
-            };
-            statusBadge.style.cursor = 'pointer';
-            statusBadge.title = "Click to refresh specific record sync status";
-
-            if (syncedTotal > 0 || pendingTotal > 0) {
-                statusBadge.innerHTML = `<span class="material-icons-round" style="font-size:12px; vertical-align:middle;">sync</span> ${syncedTotal} Synced${pendingTotal > 0 ? ` + ${pendingTotal} Pending` : ''}`;
-                statusBadge.style.color = "var(--primary)";
-                statusBadge.style.background = "#eff6ff";
-                statusBadge.style.borderColor = "#dbeafe";
+                offlineWarning.style.display = 'block';
             } else {
-                statusBadge.innerHTML = `<span class="material-icons-round" style="font-size:12px; vertical-align:middle;">sync</span> No Images Synced`;
-                statusBadge.style.color = "#64748b";
-                statusBadge.style.background = "#f8fafc";
-                statusBadge.style.borderColor = "#e2e8f0";
+                offlineWarning.style.display = 'none';
             }
-            
-            if (syncBtn) syncBtn.disabled = (this.files.length === 0);
-            actionBtns.forEach(btn => btn.disabled = false);
-        },
+        }
 
-        // Legacy compatibility: ensure background calls don't crash
-        updateHub() { this.updateStatus(State.filtered[State.currentIdx][0]); },
+        if (!statusBadge) return;
 
-        async handleFiles(fileList) {
-            const currentSid = State.filtered && State.filtered[State.currentIdx] ? State.filtered[State.currentIdx][0] : null;
-            if (!currentSid) return;
+        if (errorState) {
+            statusBadge.innerText = `⚠️ ${errorState}`;
+            statusBadge.style.color = "#dc2626"; // red-600
+            statusBadge.style.background = "#fef2f2";
+            statusBadge.style.borderColor = "#fecaca";
+            return;
+        }
 
-            const newFiles = Array.from(fileList);
-            for (let file of newFiles) {
-                await this.saveOfflineImage(currentSid, file);
+        const cleanSid = this._cleanId(surveyId);
+        const syncedTotal = State.syncedData[cleanSid] || 0;
+        const pendingTotal = this.files.length;
+
+        statusBadge.style.cursor = 'default';
+        statusBadge.title = "Record sync status";
+
+        if (syncedTotal > 0 || pendingTotal > 0) {
+            statusBadge.innerHTML = `<span class="material-icons-round" style="font-size:12px; vertical-align:middle;">sync</span> ${syncedTotal} Synced${pendingTotal > 0 ? ` + ${pendingTotal} Pending` : ''}`;
+            statusBadge.style.color = "var(--primary)";
+            statusBadge.style.background = "#eff6ff";
+            statusBadge.style.borderColor = "#dbeafe";
+        } else {
+            statusBadge.innerHTML = `<span class="material-icons-round" style="font-size:12px; vertical-align:middle;">sync</span> No Images Synced`;
+            statusBadge.style.color = "#64748b";
+            statusBadge.style.background = "#f8fafc";
+            statusBadge.style.borderColor = "#e2e8f0";
+        }
+
+        if (syncBtn) syncBtn.disabled = (this.files.length === 0);
+        actionBtns.forEach(btn => btn.disabled = false);
+    },
+
+    // Legacy compatibility: ensure background calls don't crash
+    updateHub() { this.updateStatus(State.filtered[State.currentIdx][0]); },
+
+    async handleFiles(fileList) {
+        // Replaced by batch-safe version above
+        const currentSid = State.filtered && State.filtered[State.currentIdx] ? State.filtered[State.currentIdx][0] : null;
+        if (currentSid) this.handleFilesBatch(fileList, currentSid);
+    },
+
+    async handleFilesBatch(fileList, currentSid) {
+        const newFiles = Array.from(fileList);
+        this.setLoadingState(true, `Saving 0/${newFiles.length}`);
+        const email = this.getEmail();
+        try {
+            for (let i = 0; i < newFiles.length; i++) {
+                this.setLoadingState(true, `Saving ${i + 1}/${newFiles.length}`);
+                await this.saveOfflineImage(currentSid, newFiles[i], email);
             }
+        } finally {
+            this.setLoadingState(false);
+            this.loadOfflineQueue();
             this.updateStatus(currentSid);
-        },
-        
-        renderPreview() {
-            const container = document.getElementById('drive-preview');
-            const syncBtn = document.getElementById('btn-sync-drive');
-            if(!container) return;
+        }
+    },
 
-            if (this.files.length === 0) {
-                container.style.display = 'none';
-                if(syncBtn) syncBtn.disabled = true;
-                return;
-            }
-            
-            container.style.display = 'flex';
-            if(syncBtn) syncBtn.disabled = false;
-            
-            container.innerHTML = this.files.map((f, i) => `
+    renderPreview() {
+        const container = document.getElementById('drive-preview');
+        const syncBtn = document.getElementById('btn-sync-drive');
+        if (!container) return;
+
+        if (this.files.length === 0) {
+            container.style.display = 'none';
+            if (syncBtn) syncBtn.disabled = true;
+            return;
+        }
+
+        container.style.display = 'flex';
+        if (syncBtn) syncBtn.disabled = false;
+
+        container.innerHTML = this.files.map((f, i) => `
                 <div class="preview-item">
                     <img src="${URL.createObjectURL(f)}">
                     <button class="remove-btn" onclick="DriveSync.remove(${i})">
@@ -15108,248 +15391,396 @@ const DriveSync = {
                     </button>
                 </div>
             `).join('');
-        },
-        
-        remove(idx) {
-            this.files.splice(idx, 1);
-            this.renderPreview();
-            this.updateStatus(State.filtered[State.currentIdx][0]);
-        },
+    },
 
-        compressImage(file, maxWidth = 1024, quality = 0.6) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.src = e.target.result;
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        let { width, height } = img;
-                        if (width > maxWidth) {
-                            height = Math.round((height * maxWidth) / width);
-                            width = maxWidth;
-                        }
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, width, height);
-                        canvas.toBlob((blob) => {
-                            resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: 'image/webp' }));
-                        }, 'image/webp', quality);
-                    };
-                    img.onerror = reject;
+    remove(idx) {
+        this.files.splice(idx, 1);
+        this.renderPreview();
+        this.updateStatus(State.filtered[State.currentIdx][0]);
+    },
+
+    compressImage(file, maxWidth = 1024, quality = 0.6) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (e) => {
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let { width, height } = img;
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => {
+                        resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: 'image/webp' }));
+                    }, 'image/webp', quality);
                 };
-                reader.onerror = reject;
-            });
-        },
-        
-        async upload(surveyId) {
-            const email = this.getEmail();
-            const btn = document.getElementById('btn-sync-drive');
-            const originalHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<span class="material-icons-round rotate">sync</span> Processing...';
-            
-            try {
-                const uploadPromises = this.files.map(async (file, i) => {
-                    const compressed = await this.compressImage(file);
-                    const base64 = await this.toBase64(compressed);
-                    const name = `${surveyId}_img${this.currentDriveCount + i + 1}.webp`; 
-                    
-                    const response = await fetch(this.APP_URL, {
-                        method: 'POST',
-                        mode: 'cors', 
-                        headers: { 'Content-Type': 'text/plain' }, 
-                        body: JSON.stringify({ action: 'upload', name, data: base64, surveyId, email, timestamp: new Date().toISOString() })
-                    });
-                    
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    const result = await response.json();
-                    if (result.status === "error") throw new Error(result.message);
-                    return result;
+                img.onerror = reject;
+            };
+            reader.onerror = reject;
+        });
+    },
+
+    async upload(surveyId) {
+        const email = this.getEmail();
+        if (!email) {
+            alert("SURVEYOR IDENTITY REQUIRED\nPlease select your Email in Settings (Sync Monitor) before syncing.");
+            LayerManager.activeTab = '📊 Sync Monitor';
+            LayerManager.renderSettingsUI();
+            document.getElementById('modal-settings').style.display = 'flex';
+            return;
+        }
+        const cleanSid = this._cleanId(surveyId);
+        const btn = document.getElementById('btn-sync-drive');
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons-round rotate">sync</span> Processing...';
+
+        try {
+            const uploadPromises = this.files.map(async (file, i) => {
+                const compressed = await this.compressImage(file);
+                const base64 = await this.toBase64(compressed);
+                const name = `${cleanSid}_img${this.currentDriveCount + i + 1}.webp`;
+
+                const response = await fetch(this.APP_URL, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({
+                        action: 'upload',
+                        name,
+                        data: base64,
+                        surveyId: cleanSid,      // CamelCase for JS consistency
+                        survey_id: cleanSid,     // Snake_case for database consistency
+                        email,
+                        timestamp: new Date().toISOString()
+                    })
                 });
 
-                await Promise.all(uploadPromises);
-                
-                // Increment Supabase Count
-                const addedCount = this.files.length;
-                const sidStr = String(surveyId).replace(/\.0$/, '').trim();
-                const existingCount = State.syncedData[sidStr] || 0;
-                const newCount = existingCount + addedCount;
-                
-                State.syncedData[sidStr] = newCount;
-                if (window._supabase) {
-                    await window._supabase.from('drive_images').upsert({ survey_id: sidStr, image_count: newCount });
-                }
-                
-                alert(`Successfully synced ${addedCount} images to Google Drive!`);
-                this.files = [];
-                this.renderPreview();
-                this.fetchMetadata(surveyId);
-                App.apply();
-            } catch (e) {
-                console.error("Upload error:", e);
-                alert("Sync failed: " + e.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
-            }
-        },
-        
-        toBase64(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = () => resolve(reader.result.split(',')[1]);
-                reader.onerror = error => reject(error);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();
+                console.log("[DriveSync] Direct Upload Response:", result);
+                if (result.status === "error") throw new Error(result.message);
+                return result;
             });
-        },
-        openSyncModal() {
-            const modal = document.getElementById('modal-offline-sync');
-            const gallery = document.getElementById('offline-sync-gallery');
-            if (!modal || !gallery) return;
 
-            if (this.offlineQueue.length === 0) {
-                alert("You don't have any unsent images in the offline queue.");
+            const results = await Promise.all(uploadPromises);
+
+            // --- NEW: LOG TO SUPABASE ---
+            if (window._supabase) {
+                try {
+                    const logs = results.map(res => {
+                        // ROBUST ID CAPTURE: Fallback through possible response formats
+                        const capturedFileId = res.fileId || res.id || res.file_id || (res.data ? (res.data.id || res.data.fileId) : null);
+
+                        if (!capturedFileId || !cleanSid) {
+                            console.error("[DriveSync] Critical metadata missing for Supabase log", { cleanSid, capturedFileId, response: res });
+                        }
+
+                        return {
+                            email: email,
+                            survey_id: cleanSid,
+                            file_id: capturedFileId,
+                            synced_at: new Date().toISOString()
+                        };
+                    }).filter(log => log.file_id && log.survey_id); // Only log if we have the critical IDs
+
+                    if (logs.length > 0) {
+                        console.log("[DriveSync] Pushing logs to Supabase (Upsert):", logs);
+                        await window._supabase.from('staff_sync_logs').upsert(logs, { onConflict: 'file_id' });
+                    }
+                } catch (e) { console.warn("Supabase Log Failed:", e); }
+            }
+
+            // Increment Supabase Count
+            const addedCount = this.files.length;
+            const sidStr = String(surveyId).replace(/\.0$/, '').trim();
+            const existingCount = State.syncedData[sidStr] || 0;
+            const newCount = existingCount + addedCount;
+
+            State.syncedData[sidStr] = newCount;
+            // Redundant: Counts are now handled automatically by the Supabase View 'drive_image_counts'
+
+            alert(`Successfully synced ${addedCount} images to Google Drive!`);
+            this.files = [];
+            this.renderPreview();
+            this.fetchMetadata(surveyId);
+            // Background refresh for counts
+            this.fetchAllSyncedData(true);
+        } catch (e) {
+            console.error("Upload error:", e);
+            alert("Sync failed: " + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        }
+    },
+
+    toBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = error => reject(error);
+        });
+    },
+    openSyncModal() {
+        const modal = document.getElementById('modal-offline-sync');
+        const gallery = document.getElementById('offline-sync-gallery'); // This is the main container
+        const btn = document.getElementById('btn-execute-bulk-sync');
+        if (!modal || !gallery) return;
+
+        const totalItems = this.offlineQueue.length;
+        if (totalItems === 0) {
+            alert("You don't have any unsent images in the offline queue.");
+            return;
+        }
+
+        // Grouping no longer needed for UI list, but kept for size calculation
+        let totalBytes = 0;
+        this.offlineQueue.forEach(item => {
+            const size = Math.round((item.dataLength || 0) * 0.75);
+            totalBytes += size;
+        });
+
+        const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+        const estSeconds = Math.round(totalBytes / (500 * 1024)); // 500KB/s
+        const estMinutes = Math.ceil(estSeconds / 60);
+
+        // LEAN DASHBOARD UI
+        let html = `
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:24px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 4px 12px rgba(0,0,0,0.03);">
+                <div>
+                    <div style="font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Total Size</div>
+                    <div style="font-size:24px; font-weight:900; color:#1e293b;">${totalMB} <span style="font-size:12px; color:#64748b; font-weight:700;">MB</span></div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:10px; font-weight:800; color:#10b981; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Est. Time</div>
+                    <div style="font-size:18px; font-weight:900; color:#10b981; display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+                        <span class="material-icons-round" style="font-size:20px;">schedule</span>
+                        ~${estMinutes} min
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align:center; padding:10px 0 25px 0;">
+                <div style="font-size:14px; font-weight:800; color:#475569; margin-bottom:4px;">${totalItems} Unsent Images Detected</div>
+                <div style="font-size:11px; color:#94a3b8; font-weight:600;">Click below to sync all records to the secure cloud.</div>
+            </div>
+
+            <!-- VISUAL PROGRESS BAR (Hidden Initially) -->
+            <div id="sync-progress-container" style="display:none; background:#f1f5f9; border-radius:12px; padding:4px; height:32px; width:100%; position:relative; overflow:hidden; margin-bottom:20px; border:1px solid #e2e8f0;">
+                <div id="sync-progress-fill" style="background:linear-gradient(90deg, #3b82f6 0%, #2563eb 100%); height:100%; width:0%; border-radius:8px; transition:width 0.3s ease;"></div>
+                <div id="sync-progress-text" style="position:absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:900; color:#1e293b; mix-blend-mode: multiply;">Preparing...</div>
+            </div>
+        `;
+        
+        if (totalItems > 50) {
+            html += `
+                <div style="background:#fff7ed; color:#c2410c; padding:12px 16px; border-radius:12px; border:1px solid #ffedd5; margin-bottom:20px; display:flex; gap:12px; align-items:flex-start;">
+                    <span class="material-icons-round" style="font-size:24px; color:#f59e0b;">info</span>
+                    <div style="font-size:11px; font-weight:700; line-height:1.4;">
+                        Large queue detected. We will sync the first 50 images to ensure stability.
+                    </div>
+                </div>
+            `;
+        }
+
+        if (btn) {
+            btn.style.display = 'flex';
+            btn.innerHTML = '<span class="material-icons-round">cloud_upload</span><span>START FULL SYNC</span>';
+        }
+
+        gallery.style.display = 'block';
+        gallery.innerHTML = html;
+        modal.style.display = 'flex';
+    },
+
+    async startBulkUpload() {
+        if (!this.db) return alert("Offline storage not connected.");
+        if (this._isUploading) return;
+
+        const email = this.getEmail();
+        if (!email) {
+            alert("SURVEYOR IDENTITY REQUIRED\nPlease select your Email in Settings (Sync Monitor) before syncing.");
+            if (document.getElementById('modal-offline-sync')) document.getElementById('modal-offline-sync').style.display = 'none';
+            LayerManager.activeTab = '📊 Sync Monitor';
+            LayerManager.renderSettingsUI();
+            document.getElementById('modal-settings').style.display = 'flex';
+            return;
+        }
+
+        this._isUploading = true;
+        const btn = document.getElementById('btn-execute-bulk-sync');
+        const originalHtml = btn ? btn.innerHTML : 'Sync';
+
+        let wakeLock = null;
+        if ('wakeLock' in navigator) {
+            try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { }
+        }
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="material-icons-round spinning">sync</span> Syncing...';
+        }
+
+        try {
+            const transaction = this.db.transaction(['images'], 'readonly');
+            const store = transaction.objectStore('images');
+            // MEMORY OPTIMIZATION: Fetch metadata snapshot only (no heavy 'data' field)
+            let snapshot = await new Promise((res, rej) => {
+                const results = [];
+                const req = store.openCursor();
+                req.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        results.push({ id: cursor.value.id, surveyId: cursor.value.surveyId });
+                        cursor.continue();
+                    } else {
+                        res(results);
+                    }
+                };
+                req.onerror = rej;
+            });
+
+            if (snapshot.length === 0) {
+                if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+                this._isUploading = false;
                 return;
             }
 
-            gallery.innerHTML = this.offlineQueue.map((item, index) => `
-                <div style="background:white; border-radius:8px; border:1px solid #cbd5e1; overflow:hidden; position:relative; box-shadow:0 2px 4px rgba(0,0,0,0.05); display:flex; flex-direction:column;">
-                    <div style="height:100px; background:#f8fafc; position:relative;">
-                        <img src="data:image/webp;base64,${item.data}" style="width:100%; height:100%; object-fit:cover;">
-                        <button onclick="event.stopPropagation(); DriveSync.removeOfflineItem(${item.id})" style="position:absolute; top:4px; right:4px; background:rgba(239, 68, 68, 0.9); color:white; border:none; border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center; cursor:pointer;">
-                            <span class="material-icons-round" style="font-size:12px;">close</span>
-                        </button>
-                    </div>
-                    <div style="padding:6px; font-size:10px; font-weight:800; text-align:center; color:#475569; background:#fff; border-top:1px solid #e2e8f0;">
-                        ID: ${item.surveyId}
-                    </div>
-                </div>
-            `).join('');
+            const totalInQueue = snapshot.length;
+            let successCount = 0;
+            const progContainer = document.getElementById('sync-progress-container');
+            const progFill = document.getElementById('sync-progress-fill');
+            const progText = document.getElementById('sync-progress-text');
+            if (progContainer) progContainer.style.display = 'block';
 
-            modal.style.display = 'flex';
-        },
 
-        async removeOfflineItem(id) {
-            if (!this.db || !confirm("Discard this unsent photo?")) return;
-            const transaction = this.db.transaction(['images'], 'readwrite');
-            const store = transaction.objectStore('images');
-            store.delete(id);
-            transaction.oncomplete = () => {
-                this.loadOfflineQueue();
-                setTimeout(() => this.openSyncModal(), 200); 
-            };
-        },
-
-        // Auto-sync removed — manual bulk upload only via cloud button
-
-        async startBulkUpload() {
-            if (!this.db) return alert("Offline storage not connected. Please open an address first.");
-            if (this._isUploading) return alert("Upload already in progress. Please wait.");
-            this._isUploading = true;
-            
-            const btn = document.getElementById('btn-execute-bulk-sync');
-            const originalHtml = btn ? btn.innerHTML : 'Sync';
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<span class="material-icons-round spinning" style="font-size:18px;">sync</span> Uploading...';
-            }
-
-            try {
-                const transaction = this.db.transaction(['images'], 'readonly');
-                const store = transaction.objectStore('images');
-                const snapshot = await new Promise((resolve, reject) => {
-                    const req = store.getAll();
-                    req.onsuccess = (e) => resolve(e.target.result || []);
-                    req.onerror = (e) => reject(e);
+            for (let i = 0; i < snapshot.length; i++) {
+                const metaItem = snapshot[i];
+                
+                // Update Visual Progress Bar
+                const percent = Math.round(((i) / snapshot.length) * 100);
+                if (progFill) progFill.style.width = `${percent}%`;
+                if (progText) progText.innerText = `Syncing ${i + 1} of ${snapshot.length}... (${percent}%)`;
+                
+                // LAZY LOADING: Fetch the actual Base64 data from IDB just-in-time
+                const item = await new Promise((resolve) => {
+                    const tx = this.db.transaction(['images'], 'readonly');
+                    const req = tx.objectStore('images').get(metaItem.id);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => resolve(null);
                 });
 
-                if (snapshot.length === 0) {
-                    alert("Nothing to sync.");
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = originalHtml;
+                if (!item) continue;
+
+                try {
+                    // Property Fallback: handle both camelCase and snake_case from IndexedDB
+                    const rawSid = item.surveyId || item.survey_id || item.sid;
+                    const cleanSid = this._cleanId(rawSid);
+
+                    if (!cleanSid) {
+                        console.warn("[DriveSync] Item missing Survey ID, skipping sync", item);
+                        continue;
                     }
-                    return;
-                }
+                    const existingCount = State.syncedData[cleanSid] || 0;
+                    const name = `${cleanSid}_img${existingCount + 1}.webp`;
 
-                const email = this.getEmail();
-                let successCount = 0;
-                const uploadedIds = [];
-                const progressDiv = document.getElementById('bulk-sync-progress');
-                const progressText = document.getElementById('bulk-sync-progress-text');
-                if (progressDiv) progressDiv.style.display = 'block';
+                    // 1. Upload to Google Drive
+                    const response = await fetch(this.APP_URL, {
+                        method: 'POST',
+                        mode: 'cors', headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({
+                            action: 'upload',
+                            name,
+                            data: item.data,
+                            surveyId: cleanSid,    // CamelCase
+                            survey_id: cleanSid,   // Snake_case
+                            email,
+                            timestamp: item.timestamp
+                        })
+                    });
 
-                for (let i = 0; i < snapshot.length; i++) {
-                    const item = snapshot[i];
-                    if (progressText) progressText.innerText = `Uploading ${i + 1} of ${snapshot.length}...`;
-                    try {
-                        const sidStr = String(item.surveyId).replace(/\.0$/, '').trim();
-                        const existingCount = State.syncedData[sidStr] || 0;
-                        const name = `${sidStr}_img${existingCount + 1}.webp`; 
+                    if (!response.ok) throw new Error(`Google Drive HTTP Error: ${response.status}`);
+                    const result = await response.json();
+                    console.log("[DriveSync] Apps Script Response:", result);
+                    if (result.status !== "success") throw new Error(`Google Drive Logic Error: ${result.message}`);
 
-                        const response = await fetch(this.APP_URL, {
-                            method: 'POST',
-                            mode: 'cors', 
-                            headers: { 'Content-Type': 'text/plain' }, 
-                            body: JSON.stringify({ action: 'upload', name, data: item.data, surveyId: item.surveyId, email, timestamp: item.timestamp })
-                        });
+                    // ROBUST ID CAPTURE: Fallback through possible response formats
+                    const fileId = result.fileId || result.id || result.file_id || (result.data ? (result.data.id || result.data.fileId) : null);
 
-                        if (response.ok) {
-                            const result = await response.json();
-                            if (result.status === "success") {
-                                const newCount = existingCount + 1;
-                                State.syncedData[sidStr] = newCount;
-                                
-                                if (window._supabase) {
-                                    await window._supabase.from('drive_images').upsert({ survey_id: sidStr, image_count: newCount });
-                                }
+                    // 2. Log to Supabase IMMEDIATELY
+                    if (window._supabase && cleanSid && fileId) {
+                        const logData = {
+                            email: email || 'unknown@staff.local',
+                            survey_id: cleanSid,
+                            file_id: fileId,
+                            synced_at: new Date().toISOString(),
+                            upload_count: (existingCount || 0) + 1
+                        };
+                        console.log("[DriveSync] Attempting Supabase Log:", logData);
 
-                                uploadedIds.push(item.id);
-                                successCount++;
-                            }
+                        const { error: dbError } = await window._supabase
+                            .from('staff_sync_logs')
+                            .upsert(logData, { onConflict: 'file_id' });
+
+                        if (dbError) {
+                            console.error("[DriveSync] Supabase upsert failed:", dbError);
+                            throw new Error(`Supabase Error: ${dbError.message}`);
+                        } else {
+                            console.log("[DriveSync] Supabase Upsert Success (Metadata Healed)");
                         }
-                    } catch (e) {
-                        console.error("[BulkUpload] Item failure:", e);
+                    } else if (!cleanSid || !fileId) {
+                        console.error("[DriveSync] Skip Supabase log due to missing metadata:", { cleanSid, fileId });
+                        // We still proceed as the image is safely on Google Drive, 
+                        // but we alert the console for debugging.
                     }
-                }
 
-                if (uploadedIds.length > 0) {
-                    const deleteTx = this.db.transaction(['images'], 'readwrite');
-                    const deleteStore = deleteTx.objectStore('images');
-                    uploadedIds.forEach(id => deleteStore.delete(id));
-                    await new Promise(resolve => deleteTx.oncomplete = resolve);
-                }
+                    // 3. Only if BOTH succeeded, update local state and remove from phone
+                    State.syncedData[cleanSid] = existingCount + 1;
 
-                const finalTx = this.db.transaction(['images'], 'readonly');
-                const finalStore = finalTx.objectStore('images');
-                this.offlineQueue = await new Promise(resolve => {
-                    const finalReq = finalStore.getAll();
-                    finalReq.onsuccess = (e) => resolve(e.target.result || []);
-                });
-                this.updateGlobalIndicator();
+                    const delTx = this.db.transaction(['images'], 'readwrite');
+                    delTx.objectStore('images').delete(item.id);
+                    await new Promise(r => delTx.oncomplete = r);
 
-                alert(`Finished bulk sync. Successfully uploaded ${successCount} out of ${snapshot.length} items.`);
-                if (document.getElementById('modal-offline-sync')) {
-                    document.getElementById('modal-offline-sync').style.display = 'none';
-                }
-                App.apply();
-            } catch (err) {
-                console.error("Bulk upload error:", err);
-                alert("Bulk sync failed: " + err.message);
-            } finally {
-                this._isUploading = false;
-                const pd = document.getElementById('bulk-sync-progress');
-                if (pd) pd.style.display = 'none';
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
+                    successCount++;
+
+                } catch (e) {
+                    console.error("Upload/Log cycle failed for item:", e);
                 }
             }
+
+            // Final Progress Bar Update
+            if (progFill) progFill.style.width = `100%`;
+            if (progText) progText.innerText = `Sync Complete!`;
+
+            this.loadOfflineQueue();
+            const remaining = totalInQueue - successCount;
+            let msg = `Successfully synced ${successCount} photos.`;
+            if (remaining > 0) msg += `\n\n${remaining} images failed or remaining. Check connection and retry.`;
+            alert(msg);
+
+            if (document.getElementById('modal-offline-sync')) document.getElementById('modal-offline-sync').style.display = 'none';
+            this.fetchAllSyncedData(true);
+        } catch (err) {
+            console.error("Bulk sync error:", err);
+            alert("Upload process encountered an error.");
+        } finally {
+            this._isUploading = false;
+            if (wakeLock) await wakeLock.release().catch(() => { });
+            if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+            const pc = document.getElementById('sync-progress-container');
+            if (pc) pc.style.display = 'none';
         }
-    };
+    },
+};
 
 // === 13_layer_manager.js ===
 // === 13_layer_manager.js ===
@@ -15462,7 +15893,6 @@ const LayerManager = {
         setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);
     },
 
-
     switchTab(city) {
         this.activeTab = city;
         this.renderSettingsUI();
@@ -15499,7 +15929,6 @@ const LayerManager = {
 
         // Immediate Update on Map
         this.activeLayers.forEach(layer => {
-            // Check if it's a boundary layer (GeoJSON)
             if (layer.feature) {
                 if (State.showTooltips) {
                     const layerName = layer.options.layerKey ? layer.options.layerKey.split('|')[1] : null;
@@ -15532,7 +15961,129 @@ const LayerManager = {
 
         // Close Settings Modal
         document.getElementById('modal-settings').style.display = 'none';
+        this.renderSettingsUI();
         this.showToast(`Active Layers: ${keys.length}`);
+    },
+
+    async showStaffSyncDetails(email) {
+        const id = email.replace(/[^a-z0-9]/gi, '_');
+        const container = document.getElementById(`details-${id}`);
+        if (!container) return;
+
+        // Toggle
+        if (container.style.display === 'block') {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        container.innerHTML = `<div style="text-align:center; padding:20px;"><span class="material-icons-round spinning" style="font-size:18px; color:var(--primary);">sync</span></div>`;
+
+        const logs = await DriveSync.fetchDetailedLogs(email);
+        if (!logs || logs.length === 0) {
+            container.innerHTML = `<div style="padding:10px; color:#94a3b8; font-size:11px;">No individual records found.</div>`;
+            return;
+        }
+
+        // Group by Survey ID
+        const groups = {};
+        logs.forEach(l => {
+            if (!groups[l.survey_id]) groups[l.survey_id] = { files: [], email: l.email, timestamp: l.synced_at };
+            groups[l.survey_id].files.push(l.file_id);
+        });
+
+        let html = `
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-top:none; border-radius:0 0 12px 12px; padding:12px; animation: slideDown 0.2s ease;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">ID Breakdown (Text Only)</div>
+                    <button onclick="LayerManager.deleteSelectedSyncs('${id}')" id="btn-del-${id}" style="background:#fee2e2; color:#ef4444; border:none; padding:4px 10px; border-radius:6px; font-size:10px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                        <span class="material-icons-round" style="font-size:14px;">delete_sweep</span> PRUNE LOGS
+                    </button>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:6px;">
+        `;
+
+        Object.entries(groups).forEach(([sid, g]) => {
+            const files = g.files;
+            html += `
+                <div style="background:white; border:1px solid #e2e8f0; border-radius:12px; padding:10px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" class="sync-chk-${id}" data-files="${files.join(',')}" style="width:16px; height:16px; accent-color:var(--primary);">
+                        <div>
+                            <div style="font-weight:800; color:#1e293b; font-size:12px;">ID: ${sid || 'Unknown'}</div>
+                            <div style="font-size:9px; color:#94a3b8; font-weight:700;">${files.length} Logged Record${files.length > 1 ? 's' : ''}</div>
+                        </div>
+                    </div>
+                    <div style="font-size:9px; color:#cbd5e1; font-weight:800; text-align:right;">
+                        ${new Date(g.timestamp).toLocaleDateString()}
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `</div></div>`;
+        container.innerHTML = html;
+    },
+
+    async pruneAllForEmail(email) {
+        if (!confirm(`This will verify and prune ALL ${email}'s sync logs. Proceed?`)) return;
+        
+        const logs = await DriveSync.fetchDetailedLogs(email);
+        if (!logs || logs.length === 0) return alert("No logs found to prune.");
+        
+        const fileIds = logs.map(l => l.file_id);
+        const safeId = email.replace(/[^a-z0-9]/gi, '_');
+        const btn = document.getElementById(`btn-prune-${safeId}`);
+        const originalHtml = btn ? btn.innerHTML : '';
+        
+        if (btn) {
+            btn.disabled = true;
+            btn.style.width = '120px'; // Expand to fit text
+        }
+
+        const chunkSize = 10;
+        let successCount = 0;
+
+        for (let i = 0; i < fileIds.length; i += chunkSize) {
+            const chunk = fileIds.slice(i, i + chunkSize);
+            if (btn) btn.innerHTML = `<span style="font-size:10px; font-weight:800;">${i} of ${fileIds.length}</span>`;
+            
+            const success = await DriveSync.deleteBatch(chunk, true); // true = skip individual confirms
+            if (success) successCount += chunk.length;
+        }
+
+        if (btn) {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            btn.style.width = '';
+        }
+
+        State.cachedSyncLogs = null;
+        this.renderSettingsUI();
+    },
+
+    async deleteSelectedSyncs(id) {
+        const checks = document.querySelectorAll(`.sync-chk-${id}:checked`);
+        if (checks.length === 0) { alert("Select at least one ID to delete."); return; }
+
+        let allFileIds = [];
+        checks.forEach(c => {
+            const files = c.getAttribute('data-files').split(',');
+            allFileIds = allFileIds.concat(files);
+        });
+
+        const btn = document.getElementById(`btn-del-${id}`);
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons-round spinning" style="font-size:14px;">sync</span> DELETING...';
+
+        const success = await DriveSync.deleteBatch(allFileIds);
+        if (success) {
+            this.renderSettingsUI(); // Refresh the whole thing
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
     },
 
     clearCity() {
@@ -15560,7 +16111,6 @@ const LayerManager = {
 
         const hasLayers = typeof window.GEO_LAYERS !== 'undefined' && window.GEO_LAYERS !== null;
         if (!hasLayers) {
-            console.warn("GEO_LAYERS not yet initialized.");
             container.innerHTML = '<div style="padding:40px; text-align:center; color:#64748b;">Loading map layers... please wait.</div>';
             return;
         }
@@ -15577,10 +16127,11 @@ const LayerManager = {
         // Base Fixed Tabs
         let tabs = ['📊 Stats', '📍 Marker Limit'];
 
-        // NEW: Add Billing Tab for Admins
+        // Add Billing Tab for Admins
         if (window.USER && window.USER.role === 'admin') {
             tabs.push('⚙️ App Config');
             tabs.push('📈 Pin Management');
+            tabs.push('📊 Sync Monitor');
         }
 
         // Natural Sort for Dynamic Tabs (Cities/Layers)
@@ -15589,16 +16140,13 @@ const LayerManager = {
         // Special handling for Sargodha MC tab placement
         const sargodhaIndex = dynamicTabs.indexOf('SARGODHA');
         if (sargodhaIndex > -1) {
-            dynamicTabs.splice(sargodhaIndex, 1); // Remove raw 'SARGODHA'
-            tabs.push('🏢 SARGODHA MC'); // Add MC tab
-            tabs.push('SARGODHA'); // Add main SARGODHA tab
+            dynamicTabs.splice(sargodhaIndex, 1);
+            tabs.push('🏢 SARGODHA MC');
+            tabs.push('SARGODHA');
         }
-
-        tabs = tabs.concat(dynamicTabs); // Combine all remaining city tabs
+        tabs = tabs.concat(dynamicTabs);
 
         if (!this.activeTab) this.activeTab = '📊 Stats';
-
-        const isVerificationTab = this.activeTab === '📈 Pin Management';
 
         let tabsHtml = `<div class="settings-tabs-row">`;
         tabs.forEach(tab => {
@@ -15663,8 +16211,6 @@ const LayerManager = {
                             </div>
                             <span class="material-icons-round" style="font-size:40px; color:#dbeafe;">speed</span>
                         </div>
-                        <div style="font-size:12px; color:#64748b; margin-bottom:20px; line-height:1.5;">Higher limits allow visualizing more data but may impact performance on older mobile devices.</div>
-                        
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
                             <button onclick="Settings.setMarkerLimit(5000)" class="secondary-btn" style="margin:0; justify-content:center;">5,000</button>
                             <button onclick="Settings.setMarkerLimit(10000)" class="secondary-btn" style="margin:0; justify-content:center;">10,000</button>
@@ -15672,131 +16218,132 @@ const LayerManager = {
                             <button onclick="Settings.setMarkerLimit(50000)" class="secondary-btn" style="margin:0; justify-content:center;">50,000</button>
                             <button onclick="Settings.setMarkerLimit(999999)" class="secondary-btn" style="margin:0; justify-content:center; grid-column: span 2; background:#f0f7ff; border-color:#dbeafe; color:#2563eb;">Show All Records</button>
                         </div>
-                        
-                        <div style="display:flex; gap:10px;">
-                            <button onclick="Settings.incrementMarkerLimit(-5000)" style="flex:1; padding:14px; border-radius:12px; border:1px solid #e2e8f0; background:white; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; color:#64748b;">
-                                <span class="material-icons-round" style="font-size:18px;">remove_circle_outline</span> -5K
-                            </button>
-                            <button onclick="Settings.incrementMarkerLimit(5000)" style="flex:1; padding:14px; border-radius:12px; border:1px solid #e2e8f0; background:white; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; color:#2563eb;">
-                                <span class="material-icons-round" style="font-size:18px;">add_circle_outline</span> +5K
-                            </button>
-                        </div>
                     </div>`;
         }
         else if (this.activeTab === '⚙️ App Config') {
             contentHtml += `
                     <div style="padding:4px;">
-                        <h4 style="margin:0 0 16px 0; color:#1e40af; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Global Billing Configuration</h4>
-                        <div style="background:#fff; border:1px solid #f1f5f9; border-radius:16px; padding:20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                        <div style="background:#fff; border:1px solid #f1f5f9; border-radius:16px; padding:20px;">
                             <label style="font-weight:800; font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:8px;">Active Billing Month</label>
                             <input type="text" id="input-billing-month" value="${window.ACTIVE_BILLING_MONTH}" placeholder="e.g. feb2026" 
-                                style="width:100%; padding:14px; border-radius:12px; border:1px solid #e2e8f0; font-size:16px; font-weight:700; color:#1e293b; margin-bottom:16px; outline:none; transition:border-color 0.2s;"
-                                onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
-                            
-                            <button id="btn-save-billing" onclick="Settings.updateBillingMonth()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#2563eb; color:white; border:none; padding:15px; border-radius:12px; font-weight:800; gap:8px;">
+                                style="width:100%; padding:14px; border-radius:12px; border:1px solid #e2e8f0; font-size:16px; font-weight:700; margin-bottom:16px; outline:none;">
+                            <button onclick="Settings.updateBillingMonth()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#2563eb; color:white; border:none; padding:15px; border-radius:12px; font-weight:800;">
                                 <span class="material-icons-round">cloud_done</span> Save to Cloud
                             </button>
                         </div>
-                        
-                        <div style="margin-top:16px; padding:16px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:16px; font-size:11px; color:#0369a1; line-height:1.6; font-weight:600;">
-                            <b>Important:</b> Changing this value affects all verifications and delivery tracking across the entire platform. Ensure the month name matches your Supabase column convention (e.g. <code>delivery_feb2026</code>).
-                        </div>
-
-                        <div style="margin-top:20px; padding:20px; background:white; border:1px solid #e2e8f0; border-radius:16px;">
-                            <h4 style="margin:0 0 12px 0; color:#1e293b; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;">Administration Tools</h4>
-                            <button onclick="Settings.exportHouseSequences()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#f8fafc; color:#475569; border:1px solid #e2e8f0; padding:12px; border-radius:10px; font-weight:800; gap:8px;">
-                                <span class="material-icons-round">download_for_offline</span> Export Sequencing CSV
+                        <div style="margin-top:20px; padding:20px; background:#fff1f2; border:1px solid #fecaca; border-radius:16px;">
+                            <h4 style="margin:0 0 8px 0; color:#991b1b; font-size:11px; font-weight:800; text-transform:uppercase;">Advanced Database Maintenance</h4>
+                            <button id="btn-normalize-db" onclick="LayerManager.normalizeDatabase()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#ef4444; color:white; border:none; padding:12px; border-radius:10px; font-weight:800;">
+                                <span class="material-icons-round">biotech</span> Normalize Historical IDs
                             </button>
                         </div>
                     </div>`;
         }
         else if (this.activeTab === '📈 Pin Management') {
             contentHtml += Settings.renderVerificationStats();
-            // Master Export Button for Admin (within Pin Management)
             contentHtml += `
-                <div style="padding:16px; margin-top:0;">
-                    <button onclick="Settings.exportHouseSequences()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#2563eb; color:white; border:none; padding:14px; border-radius:12px; font-weight:800; gap:8px; box-shadow:0 4px 10px rgba(37,99,235,0.2);">
+                <div style="padding:16px;">
+                    <button onclick="Settings.exportHouseSequences()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#2563eb; color:white; border:none; padding:14px; border-radius:12px; font-weight:800;">
                         <span class="material-icons-round">file_download</span> Master Export (Intelligence CSV)
                     </button>
                 </div>
             `;
         }
+        else if (this.activeTab === '📊 Sync Monitor') {
+            contentHtml += `<div id="sync-monitor-content" style="padding:4px;">
+                <div style="text-align:center; padding:40px; color:#64748b;">
+                    <span class="material-icons-round spinning" style="font-size:32px; color:var(--primary); margin-bottom:12px;">sync</span>
+                    <div style="font-weight:700;">Fetching live sync logs...</div>
+                </div>
+            </div>`;
+            
+            setTimeout(async () => {
+                const el = document.getElementById('sync-monitor-content');
+                if (!el || !window._supabase) return;
+                const days = localStorage.getItem('sync_filter_days') || '7';
+                if (State.cachedSyncLogs && State.cachedSyncLogs._days === days) {
+                    this._renderSyncMonitorFromData(State.cachedSyncLogs);
+                    return;
+                }
+                try {
+                    // 1. Fetch Absolute Total (Unfiltered) for the header
+                    const { count: absoluteTotal } = await window._supabase
+                        .from('staff_sync_logs')
+                        .select('*', { count: 'exact', head: true });
+                    
+                    State.totalDriveImages = absoluteTotal || 0;
+
+                    // 2. Fetch Filtered Logs for the list
+                    let query = window._supabase.from('staff_sync_logs').select('email, survey_id, file_id, synced_at');
+                    if (days !== '0') {
+                        const cutoff = new Date();
+                        cutoff.setDate(cutoff.getDate() - parseInt(days));
+                        query = query.gte('synced_at', cutoff.toISOString());
+                    }
+                    const { data: allLogs, error } = await query.order('synced_at', { ascending: false }).limit(100000);
+                    if (error) throw error;
+                    
+                    State.cachedSyncLogs = allLogs || [];
+                    State.cachedSyncLogs._days = days;
+                    this._renderSyncMonitorFromData(State.cachedSyncLogs);
+                } catch (e) {
+                    el.innerHTML = `<div style="padding:40px; text-align:center; color:#ef4444; font-weight:800;">Failed to load data.</div>`;
+                }
+            }, 50);
+        }
         else {
-            // KML Cities Sections
             let cityName = this.activeTab;
             let isMcTab = cityName === '🏢 SARGODHA MC';
             if (isMcTab) cityName = 'SARGODHA';
-
             const allCityLayers = window.GEO_LAYERS[cityName] || {};
             let filteredKeys = Object.keys(allCityLayers);
-
-            if (isMcTab) {
-                filteredKeys = filteredKeys.filter(k => k.match(/MC\s?\d+/i));
-            } else if (cityName === 'SARGODHA') {
-                // Remove MC layers from main Sargodha tab to avoid duplication
-                filteredKeys = filteredKeys.filter(k => !k.match(/MC\s?\d+/i));
-            }
-
+            if (isMcTab) filteredKeys = filteredKeys.filter(k => k.match(/MC\s?\d+/i));
+            else if (cityName === 'SARGODHA') filteredKeys = filteredKeys.filter(k => !k.match(/MC\s?\d+/i));
             const sortedLayers = filteredKeys.sort(this.naturalSort);
 
             if (sortedLayers.length === 0) {
-                contentHtml += '<div style="padding:60px 20px; text-align:center; color:#94a3b8;">' +
-                    '<span class="material-icons-round" style="font-size:48px; display:block; margin-bottom:12px; opacity:0.3;">layers_clear</span>' +
-                    'No matching layers for this section.</div>';
+                contentHtml += '<div style="padding:60px 20px; text-align:center; color:#94a3b8;">No matching layers.</div>';
             } else {
                 const allSelected = sortedLayers.every(layerName => this.pendingSelections.has(`${cityName}|${layerName}`));
-
                 contentHtml += `
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                            <div style="font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;">${this.activeTab} LAYERS</div>
-                            <button onclick="LayerManager.toggleAll('${cityName}', ${!allSelected})" style="background:#f0f7ff; color:#2563eb; border:none; padding:6px 14px; border-radius:8px; font-size:10px; font-weight:800; cursor:pointer;">
+                            <div style="font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase;">${this.activeTab} LAYERS</div>
+                            <button onclick="LayerManager.toggleAll('${cityName}', ${!allSelected})" style="background:#f0f7ff; color:#2563eb; border:none; padding:6px 14px; border-radius:8px; font-size:10px; font-weight:800;">
                                 ${allSelected ? 'UNSELECT ALL' : 'SELECT ALL'}
                             </button>
                         </div>
                         <div class="kml-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">`;
-
                 sortedLayers.forEach(layerName => {
                     const key = `${cityName}|${layerName}`;
                     const isChecked = this.pendingSelections.has(key);
                     const count = areaCounts[layerName] || 0;
                     contentHtml += `
                             <div class="multi-option ${isChecked ? 'selected' : ''}" onclick="LayerManager.toggleSelection('${key}')" 
-                                 style="padding:12px; margin:0; border:1px solid ${isChecked ? '#bfdbfe' : '#f1f5f9'}; border-radius:12px; 
-                                 display:flex; align-items:center; gap:10px; cursor:pointer; background:${isChecked ? '#eff6ff' : 'white'}; transition:all 0.2s;">
+                                 style="padding:12px; border:1px solid ${isChecked ? '#bfdbfe' : '#f1f5f9'}; border-radius:12px; 
+                                 display:flex; align-items:center; gap:10px; cursor:pointer; background:${isChecked ? '#eff6ff' : 'white'};">
                                 <div style="width:20px; height:20px; border:1.5px solid ${isChecked ? '#2563eb' : '#cbd5e1'}; border-radius:6px; 
                                             display:flex; align-items:center; justify-content:center; background:${isChecked ? '#2563eb' : 'transparent'};">
                                     ${isChecked ? '<span class="material-icons-round" style="font-size:14px; color:white;">check</span>' : ''}
                                 </div>
-                                <span style="font-size:11px; font-weight:700; color:${isChecked ? '#1e40af' : '#64748b'}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                                    ${count > 0 ? `<span style="opacity:0.6; font-size:9px; margin-right:4px;">(${count})</span>` : ''}${layerName}
+                                <span style="font-size:11px; font-weight:700;">
+                                     ${count > 0 ? `<span style="opacity:0.6; font-size:9px; margin-right:4px;">(${count})</span>` : ''}${layerName}
                                 </span>
                             </div>`;
                 });
                 contentHtml += `</div>`;
-
-                contentHtml += `
-                        <div style="margin-top:24px; display:flex; gap:12px;">
-                            <button onclick="LayerManager.clearCity()" style="flex:1; padding:10px; font-size:11px; color:#64748b; font-weight:700; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
-                                <span class="material-icons-round" style="font-size:16px;">clear_all</span> Uncheck Tab
-                            </button>
-                            <button onclick="LayerManager.clear()" style="flex:1; padding:10px; font-size:11px; color:#ef4444; font-weight:700; background:#fef2f2; border:1px solid #fee2e2; border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
-                                <span class="material-icons-round" style="font-size:16px;">delete_sweep</span> Uncheck All
-                            </button>
-                        </div>`;
             }
         }
 
-        contentHtml += '</div>'; // End Scroll Area
+        contentHtml += '</div>';
 
-        // Footer Control (Always sticky bottom)
-        const showApply = !['📊 Stats', '📍 Marker Limit', '📈 Pin Management'].includes(this.activeTab);
+        const showApply = !['📊 Stats', '📍 Marker Limit', '📈 Pin Management', '📊 Sync Monitor'].includes(this.activeTab);
         contentHtml += `
-                <div class="settings-footer" style="position: sticky; bottom: 0; left: 0; right: 0; padding: 12px 16px; background: white; border-top: 1px solid #e2e8f0; display: flex; gap: 10px; border-radius: 0 0 16px 16px; z-index: 10;">
+                <div class="settings-footer" style="position: sticky; bottom: 0; padding: 12px 16px; background: white; border-top: 1px solid #e2e8f0; display: flex; gap: 10px; border-radius: 0 0 16px 16px; z-index: 10;">
                     ${showApply ? `
-                        <button onclick="Settings.close()" class="secondary-btn" style="flex:1; margin:0; justify-content:center; padding:12px; font-size:13px; font-weight:700; border-radius:10px;">Cancel</button>
-                        <button onclick="LayerManager.applySettings()" class="secondary-btn" style="flex:1.5; margin:0; justify-content:center; background:var(--primary); color:white; border:none; padding:12px; font-size:13px; font-weight:800; border-radius:10px; box-shadow:0 4px 12px rgba(37,99,235,0.2);">Apply Changes</button>
+                        <button onclick="Settings.close()" class="secondary-btn" style="flex:1;">Cancel</button>
+                        <button onclick="LayerManager.applySettings()" class="secondary-btn" style="flex:1.5; background:var(--primary); color:white; border:none;">Apply Changes</button>
                     ` : `
-                        <button onclick="Settings.close()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; padding:12px; font-size:13px; font-weight:800; border-radius:10px;">Close Settings</button>
+                        <button onclick="Settings.close()" class="secondary-btn" style="width:100%;">Close Settings</button>
                     `}
                 </div>
             `;
@@ -15805,19 +16352,142 @@ const LayerManager = {
         if (scrollEl) container.querySelector('.settings-scroll-area').scrollTop = lastScroll;
     },
 
+    _renderSyncMonitorFromData(allLogs) {
+        const el = document.getElementById('sync-monitor-content');
+        if (!el) return;
+
+        const totalCount = State.totalDriveImages || allLogs.length;
+        const days = localStorage.getItem('sync_filter_days') || '7';
+
+        const stats = {};
+        const dailyPerformance = {};
+        const today = new Date().toISOString().split('T')[0];
+
+        allLogs.forEach(log => {
+            if (!stats[log.email]) stats[log.email] = { total: 0, today: 0, last: log.synced_at };
+            stats[log.email].total += 1;
+            const dateKey = log.synced_at ? log.synced_at.split('T')[0] : 'Unknown';
+            if (!dailyPerformance[dateKey]) dailyPerformance[dateKey] = 0;
+            dailyPerformance[dateKey] += 1;
+            if (log.synced_at && log.synced_at.startsWith(today)) stats[log.email].today += 1;
+            if (new Date(log.synced_at) > new Date(stats[log.email].last)) stats[log.email].last = log.synced_at;
+        });
+
+        const last7Days = Object.entries(dailyPerformance).sort((a,b) => b[0].localeCompare(a[0])).slice(0, 7);
+
+        let tableHtml = `
+            <div style="margin-bottom:20px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <div>
+                        <div style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">Network Sync Total</div>
+                        <div style="font-size:22px; font-weight:900; color:#1e293b;">${totalCount.toLocaleString()} <span style="font-size:12px; color:#94a3b8;">Images</span></div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <select onchange="localStorage.setItem('sync_filter_days', this.value); LayerManager.renderSettingsUI()" style="border-radius:12px; padding:8px; font-size:11px; font-weight:800;">
+                            <option value="1" ${days === '1' ? 'selected' : ''}>Today</option>
+                            <option value="7" ${days === '7' ? 'selected' : ''}>Last 7 Days</option>
+                            <option value="30" ${days === '30' ? 'selected' : ''}>Last 30 Days</option>
+                            <option value="0" ${days === '0' ? 'selected' : ''}>All Time</option>
+                        </select>
+                        <button onclick="DriveSync.clearOfflineQueue()" style="background:#fff; border:1px solid #e2e8f0; color:#64748b; padding:8px 12px; border-radius:10px; display:flex; align-items:center; gap:6px; cursor:pointer;" title="Clear Local Phone Queue">
+                             <span class="material-icons-round" style="font-size:18px;">cloud_off</span>
+                             <span style="font-size:10px; font-weight:800;">CLEAR QUEUE</span>
+                        </button>
+                        <button onclick="State.cachedSyncLogs=null; LayerManager.renderSettingsUI()" style="padding:8px 14px; font-size:11px; font-weight:800; border:1px solid #e2e8f0; border-radius:10px; background:white; cursor:pointer;">
+                            <span class="material-icons-round" style="font-size:16px;">refresh</span>
+                        </button>
+                    </div>
+                </div>
+                <div style="background:white; border:1px solid #f1f5f9; border-radius:12px; padding:12px; max-height: 200px; overflow-y: auto;">
+                    <div style="font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase; margin-bottom:10px;">Daily Sync Activity (Last 30 Days)</div>
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        ${Object.entries(dailyPerformance)
+                            .sort((a,b) => b[0].localeCompare(a[0]))
+                            .slice(0, 30)
+                            .map(([date, count]) => `
+                                <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; border-bottom:1px solid #f8fafc; padding-bottom:4px;">
+                                    <div style="color:#64748b; font-weight:600;">${new Date(date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}</div>
+                                    <div style="font-weight:800; color:var(--primary);">${count.toLocaleString()}</div>
+                                </div>
+                            `).join('')}
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px;" id="sync-monitor-list">
+        `;
+
+        const blacklist = ['migrated@system.local', 'migrated@staff.local', 'unknown@staff.local'];
+        Object.entries(stats)
+            .filter(([email]) => !blacklist.includes(email.toLowerCase()))
+            .sort((a,b) => b[1].total - a[1].total)
+            .forEach(([email, s]) => {
+            const date = new Date(s.last).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+            const safeId = email.replace(/[^a-z0-9]/gi, '_');
+            tableHtml += `
+                <div class="sync-staff-row" onclick="LayerManager.showStaffSyncDetails('${email}')" style="background:white; border:1px solid #f1f5f9; border-radius:12px; padding:12px 16px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <div style="flex:1;">
+                        <div style="font-weight:800; color:#1e293b; font-size:13px;">${email}</div>
+                        <div style="font-size:10px; color:#94a3b8; font-weight:700;">Last: ${date}</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <div style="text-align:right;">
+                            <div style="font-size:16px; font-weight:900; color:#10b981;">${s.today} <span style="color:#94a3b8; font-size:12px;">/ ${s.total.toLocaleString()}</span></div>
+                        </div>
+                        <button id="btn-prune-${safeId}" onclick="event.stopPropagation(); LayerManager.pruneAllForEmail('${email}')" 
+                                style="background:#fef2f2; border:1px solid #fee2e2; color:#ef4444; padding:6px; border-radius:8px; display:flex; align-items:center; justify-content:center;"
+                                title="Prune all stale logs for this email">
+                            <span class="material-icons-round" style="font-size:18px;">delete_sweep</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="details-${safeId}" style="display:none; margin-bottom:12px;"></div>
+            `;
+        });
+        tableHtml += `</div>`;
+        el.innerHTML = tableHtml;
+    },
+
+    async normalizeDatabase() {
+        if (!confirm("This will scan the sync logs and convert any IDs like '123.0' into '123'. Proceed?")) return;
+        if (!window._supabase) return;
+        const btn = document.getElementById('btn-normalize-db');
+        btn.disabled = true;
+        try {
+            let processed = 0;
+            let from = 0;
+            const step = 1000;
+            while (true) {
+                const { data, error } = await window._supabase.from('staff_sync_logs').select('id, survey_id').or('survey_id.ilike.%.0,survey_id.ilike.% %').range(from, from + step - 1);
+                if (error || !data || data.length === 0) break;
+                for (const row of data) {
+                    const clean = row.survey_id.replace(/\.0$/, '').trim();
+                    if (clean !== row.survey_id) {
+                        await window._supabase.from('staff_sync_logs').update({ survey_id: clean }).eq('id', row.id);
+                        processed++;
+                    }
+                }
+                if (data.length < step) break;
+                from += step;
+            }
+            alert(`Normalized ${processed} records.`);
+            this.renderSettingsUI();
+        } finally {
+            btn.disabled = false;
+        }
+    }
 };
 
 // Attach Gallery Events
 const galVp = document.getElementById('gal-vp');
-galVp.addEventListener('mousedown', e => Gallery.onStart(e));
-galVp.addEventListener('mousemove', e => Gallery.onMove(e));
-galVp.addEventListener('touchstart', e => Gallery.onStart(e), { passive: false });
-galVp.addEventListener('touchmove', e => Gallery.onMove(e), { passive: false });
-galVp.addEventListener('wheel', e => Gallery.onWheel(e), { passive: false });
-galVp.addEventListener('click', e => Gallery.clickNav(e));
-galVp.addEventListener('dblclick', () => Gallery.reset());
-
-// Window level listeners to catch drag releases outside the viewport
+if (galVp) {
+    galVp.addEventListener('mousedown', e => Gallery.onStart(e));
+    galVp.addEventListener('mousemove', e => Gallery.onMove(e));
+    galVp.addEventListener('touchstart', e => Gallery.onStart(e), { passive: false });
+    galVp.addEventListener('touchmove', e => Gallery.onMove(e), { passive: false });
+    galVp.addEventListener('wheel', e => Gallery.onWheel(e), { passive: false });
+    galVp.addEventListener('click', e => Gallery.clickNav(e));
+    galVp.addEventListener('dblclick', () => Gallery.reset());
+}
 window.addEventListener('mouseup', (e) => Gallery.onEnd(e));
 window.addEventListener('touchend', (e) => Gallery.onEnd(e));
 window.addEventListener('mouseleave', (e) => Gallery.onEnd(e));
@@ -20788,11 +21458,6 @@ document.addEventListener('keydown', (e) => {
     } else if (e.key === ']') {
         e.preventDefault();
         if (typeof MapNavigator !== 'undefined') MapNavigator.move(1);
-    } else if (e.key.toLowerCase() === 'm') {
-        // "M" for Map
-        if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-            if (typeof ViewSwitcher !== 'undefined') ViewSwitcher.toMap();
-        }
     }
 });
 
