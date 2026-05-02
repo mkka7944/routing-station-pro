@@ -1,6 +1,6 @@
 {
-    "name": "Routing Station Pro",
-    "short_name": "RSP",
+    "name": "TMT Billing Dept App",
+    "short_name": "TMT Billing",
     "start_url": "./index.html",
     "display": "standalone",
     "orientation": "any",
