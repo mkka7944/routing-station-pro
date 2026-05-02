@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Routing Station Pro [v2026.04.20.1201]</title>
+        <title>TMT Billing Dept App [v2026.04.20.1201]</title>
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
@@ -9654,8 +9655,8 @@ input[type=number] {
             <div style="background:linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); width:72px; height:72px; border-radius:20px; display:flex; align-items:center; justify-content:center; margin:0 auto 24px; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);">
                 <span class="material-icons-round" style="font-size:36px; color:white;">analytics</span>
             </div>
-            <h1 style="margin:0 0 8px; font-size:26px; font-weight:800; color:#1e293b; letter-spacing:-0.5px;">Routing Station Pro <span style="font-size:12px; color:#2563eb; background:#eff6ff; padding:2px 8px; border-radius:12px; vertical-align:middle;">V8 PWA</span></h1>
-            <p style="margin:0 0 32px; font-size:14px; color:#64748b; font-weight:600;">Spatial Intelligence & Recovery</p>
+            <h1 style="margin:0 0 8px; font-size:26px; font-weight:800; color:#1e293b; letter-spacing:-0.5px;">TMT Billing Dept App <span style="font-size:12px; color:#2563eb; background:#eff6ff; padding:2px 8px; border-radius:12px; vertical-align:middle;">V8 PWA</span></h1>
+            <p style="margin:0 0 32px; font-size:14px; color:#64748b; font-weight:600;">Routing Station Pro &bull; Spatial Intelligence & Recovery</p>
             
             <div id="g_id_onload"
                  data-client_id="1039864656694-57q2kbgrpc9fivodbqj7kaffh1kr3fql.apps.googleusercontent.com"
@@ -9685,10 +9686,10 @@ input[type=number] {
     <!-- Compact Header -->
     <div class="sidebar-header-padding">
         <div>
-            <div style="font-weight: 700; font-size: 16px;">Routing Station Pro</div>
+            <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.05.02.1256</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.05.02.1313</span>
             </div>
         </div>
         
@@ -10117,7 +10118,7 @@ input[type=number] {
                     <div id="routing-drag-handle" style="padding:10px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; background:#f8fafc; cursor:move;">
                         <div style="display:flex; align-items:center; gap:8px;">
                             <span class="material-icons-round" onclick="SpatialRouter.dumpDiagnostics()" style="color:var(--primary); font-size:18px; cursor:help;" title="Click for System Diagnostics (Console)">route</span>
-                            <span style="font-weight:700; font-size:13px; color:#1e293b; letter-spacing: -0.2px;">Routing Station PRO</span>
+                            <span style="font-weight:700; font-size:13px; color:#1e293b; letter-spacing: -0.2px;">TMT Billing Dept</span>
                             <span style="font-size:10px; color:#2563eb; background:#eff6ff; padding:1px 6px; border-radius:8px; margin-left:4px;">V8 PWA</span>
                             <div id="sync-server-badge" class="sync-status-badge" style="margin-left:8px; background:#fefce8; color:#ca8a04; border-color:#fde68a;">
                                 <span style="font-size:8px;">⏳ SYNC...</span>
@@ -11042,7 +11043,7 @@ async function loadData() {
     const loadingOverlay = document.createElement('div');
     loadingOverlay.id = 'initial-loader';
     loadingOverlay.style.cssText = 'position:fixed; inset:0; background:#fff; z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:sans-serif;';
-    loadingOverlay.innerHTML = '<div style="font-size:24px; font-weight:bold; margin-bottom:20px; color:#2563eb;">Routing Station Pro</div><div class="loader" style="width:40px; height:40px; border:4px solid #f3f3f3; border-top:4px solid #3498db; border-radius:50%; animation:spin 1s linear infinite;"></div><div id="loader-status" style="margin-top:20px; color:#64748b;">Assembling Spatial Data...</div><style>@keyframes spin {0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);}}</style>';
+    loadingOverlay.innerHTML = '<div style="font-size:24px; font-weight:bold; margin-bottom:20px; color:#2563eb;">TMT Billing Dept App</div><div class="loader" style="width:40px; height:40px; border:4px solid #f3f3f3; border-top:4px solid #3498db; border-radius:50%; animation:spin 1s linear infinite;"></div><div id="loader-status" style="margin-top:20px; color:#64748b;">Assembling Spatial Data...</div><style>@keyframes spin {0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);}}</style>';
     document.body.appendChild(loadingOverlay);
 
     const status = document.getElementById('loader-status');
@@ -11211,7 +11212,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.05.02.1256";
+window.DATA_VERSION = "v2026.05.02.1313";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
