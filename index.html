@@ -9689,7 +9689,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.05.02.1354</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.05.03.1214</span>
             </div>
         </div>
         
@@ -11212,7 +11212,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.05.02.1354";
+window.DATA_VERSION = "v2026.05.03.1214";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -13968,7 +13968,14 @@ const Gallery = {
 
     updateImage() {
         const img = document.getElementById('gal-img');
-        img.src = this.images[this.idx];
+        let src = this.images[this.idx];
+        
+        // UPGRADE: If this is a low-res Drive thumbnail, promote it to high-res for the gallery view
+        if (src && src.includes('drive.google.com/thumbnail') && src.includes('sz=w200')) {
+            src = src.replace('sz=w200', 'sz=w1000');
+        }
+
+        img.src = src;
         this.reset();
         const counter = document.getElementById('gal-counter');
         if (counter) counter.innerText = `${this.idx + 1} / ${this.images.length}`;
@@ -14683,6 +14690,7 @@ const DriveSync = {
     _cacheExpiry: 3600000, // 1 hour reliability cache
     offlineQueue: [],
     db: null,
+    _activeFetch: null, // For aborting pending metadata requests
 
     _safeId(id) { return id.toString().replace(/[^a-z0-9]/gi, '_'); },
     _cleanId(id) {
@@ -15084,6 +15092,12 @@ const DriveSync = {
         const sid = this._safeId(surveyId);
         const cleanSid = this._cleanId(surveyId);
 
+        // PHASE 0: Cancel any pending fetch for previous records
+        if (this._activeFetch) {
+            this._activeFetch.abort();
+            this._activeFetch = null;
+        }
+
         // 1. Initial UI update
         this.updateStatus(surveyId);
 
@@ -15109,8 +15123,12 @@ const DriveSync = {
             }
 
             // PHASE 2: Background Deep-Check with Google Drive (Accuracy)
-            const driveResp = await fetch(`${this.APP_URL}?action=get_images&surveyId=${cleanSid}`);
+            this._activeFetch = new AbortController();
+            const driveResp = await fetch(`${this.APP_URL}?action=get_images&surveyId=${cleanSid}`, {
+                signal: this._activeFetch.signal
+            });
             const driveResult = await driveResp.json();
+            this._activeFetch = null;
 
             if (driveResult && driveResult.status === 'success' && Array.isArray(driveResult.files)) {
                 const driveFiles = driveResult.files;
@@ -15146,6 +15164,7 @@ const DriveSync = {
                 }
             }
         } catch (e) {
+            if (e.name === 'AbortError') return; // Silent discard for aborted requests
             console.error("[DriveSync] Hybrid Metadata fetch error:", e);
         }
     },
@@ -15160,7 +15179,7 @@ const DriveSync = {
         const isAdmin = window.USER && window.USER.role === 'admin';
 
         gal.innerHTML = images.map(img => {
-            const url = `https://drive.google.com/thumbnail?id=${img.id}&sz=w1000`;
+            const url = `https://drive.google.com/thumbnail?id=${img.id}&sz=w200`;
             const date = new Date(img.timestamp).toLocaleString();
             const meta = `Uploaded by: ${img.uploader}\nTime: ${date}`;
 
@@ -15420,11 +15439,20 @@ const DriveSync = {
                     ctx.drawImage(img, 0, 0, width, height);
                     canvas.toBlob((blob) => {
                         resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", { type: 'image/webp' }));
+                        // Cleanup
+                        img.src = '';
+                        canvas.width = 0;
+                        canvas.height = 0;
                     }, 'image/webp', quality);
                 };
-                img.onerror = reject;
+                img.onerror = (err) => {
+                    img.src = '';
+                    reject(err);
+                };
             };
-            reader.onerror = reject;
+            reader.onerror = (err) => {
+                reject(err);
+            };
         });
     },
 
