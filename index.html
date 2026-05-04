@@ -9689,7 +9689,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.05.03.1214</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.05.04.0940</span>
             </div>
         </div>
         
@@ -11212,7 +11212,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.05.03.1214";
+window.DATA_VERSION = "v2026.05.04.0940";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -16305,16 +16305,35 @@ const LayerManager = {
                     State.totalDriveImages = absoluteTotal || 0;
 
                     // 2. Fetch Filtered Logs for the list
-                    let query = window._supabase.from('staff_sync_logs').select('email, survey_id, file_id, synced_at');
-                    if (days !== '0') {
-                        const cutoff = new Date();
-                        cutoff.setDate(cutoff.getDate() - parseInt(days));
-                        query = query.gte('synced_at', cutoff.toISOString());
+                    let allLogs = [];
+                    let from = 0;
+                    const step = 1000;
+                    let hasMore = true;
+                    const cutoff = (days !== '0') ? (() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() - parseInt(days));
+                        return d.toISOString();
+                    })() : null;
+
+                    while (hasMore && allLogs.length < 100000) {
+                        let query = window._supabase.from('staff_sync_logs').select('email, survey_id, file_id, synced_at');
+                        if (cutoff) query = query.gte('synced_at', cutoff);
+                        
+                        const { data, error: fetchError } = await query
+                            .order('synced_at', { ascending: false })
+                            .range(from, from + step - 1);
+
+                        if (fetchError) throw fetchError;
+                        if (!data || data.length === 0) {
+                            hasMore = false;
+                        } else {
+                            allLogs = allLogs.concat(data);
+                            if (data.length < step) hasMore = false;
+                            else from += step;
+                        }
                     }
-                    const { data: allLogs, error } = await query.order('synced_at', { ascending: false }).limit(100000);
-                    if (error) throw error;
                     
-                    State.cachedSyncLogs = allLogs || [];
+                    State.cachedSyncLogs = allLogs;
                     State.cachedSyncLogs._days = days;
                     this._renderSyncMonitorFromData(State.cachedSyncLogs);
                 } catch (e) {
@@ -16397,7 +16416,18 @@ const LayerManager = {
         allLogs.forEach(log => {
             if (!stats[log.email]) stats[log.email] = { total: 0, today: 0, last: log.synced_at };
             stats[log.email].total += 1;
-            const dateKey = log.synced_at ? log.synced_at.split('T')[0] : 'Unknown';
+            
+            // SUPER-ROBUST DATE PARSING
+            let dateKey = 'Unknown';
+            try {
+                if (log.synced_at) {
+                    const s = String(log.synced_at);
+                    // Extract YYYY-MM-DD using regex to be format-agnostic
+                    const match = s.match(/^(\d{4}-\d{2}-\d{2})/);
+                    dateKey = match ? match[1] : 'Unknown';
+                }
+            } catch(e) { dateKey = 'Unknown'; }
+
             if (!dailyPerformance[dateKey]) dailyPerformance[dateKey] = 0;
             dailyPerformance[dateKey] += 1;
             if (log.synced_at && log.synced_at.startsWith(today)) stats[log.email].today += 1;
@@ -16411,7 +16441,9 @@ const LayerManager = {
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                     <div>
                         <div style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">Network Sync Total</div>
-                        <div style="font-size:22px; font-weight:900; color:#1e293b;">${totalCount.toLocaleString()} <span style="font-size:12px; color:#94a3b8;">Images</span></div>
+                        <div style="font-size:32px; font-weight:800; color:#1e293b; margin:10px 0;">
+                            ${totalCount.toLocaleString()} <span style="font-size:14px; color:#64748b; font-weight:400;">Total / ${allLogs.length.toLocaleString()} Loaded</span>
+                        </div>
                     </div>
                     <div style="display:flex; gap:8px;">
                         <select onchange="localStorage.setItem('sync_filter_days', this.value); LayerManager.renderSettingsUI()" style="border-radius:12px; padding:8px; font-size:11px; font-weight:800;">
