@@ -20,6 +20,8 @@
     <meta name="apple-mobile-web-app-title" content="BSP">
     <link rel="apple-touch-icon" href="./icon-192.png">
     <meta name="theme-color" content="#1e293b">
+    <meta name="screen-orientation" content="portrait">
+    <meta name="x5-orientation" content="portrait">
     
     <!-- Scripts (Critical ones first, non-critical deferred) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -9689,7 +9691,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.05.14.1633</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.05.16.1048</span>
             </div>
         </div>
         
@@ -9893,8 +9895,21 @@ input[type=number] {
                 </div>
             </div>
 
-
-
+            <!-- Boundary Layers (KML) -->
+            <div class="filter-group collapsed">
+                <div class="panel-header-premium" onclick="App.toggleFilterGroup(this)">
+                    <span class="material-icons-round" style="color:#f59e0b; font-size:20px;">map</span>
+                    <span class="filter-label" style="flex:1">Boundary Layers</span>
+                    <button class="toggle-group-btn" style="border:none; background:none; padding:0;">
+                        <i class="material-icons-round">expand_more</i>
+                    </button>
+                </div>
+                <div class="filter-content" style="padding: 12px; display:flex; flex-direction:column; gap:8px;">
+                    <div id="sidebar-kml-container" style="display:flex; flex-direction:column; gap:8px; max-height: 250px; overflow-y: auto; padding-right: 4px;">
+                        <div style="padding:10px; text-align:center; color:#94a3b8; font-size:11px;">Loading boundary data...</div>
+                    </div>
+                </div>
+            </div>
 
             <!-- Tools: Staff Report -->
             <div class="filter-group collapsed">
@@ -9922,7 +9937,6 @@ input[type=number] {
                     </div>
                 </div>
             </div>
-
             <!-- View & Sync Tools (Consolidated) -->
             <div class="filter-group collapsed">
                 <div class="panel-header-premium" onclick="App.toggleFilterGroup(this)">
@@ -11212,7 +11226,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.05.14.1633";
+window.DATA_VERSION = "v2026.05.16.1048";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -11383,6 +11397,24 @@ const App = {
     init() {
         if (window.APP_INITIALIZED) return;
         window.APP_INITIALIZED = true;
+
+        // [QUOTA FIX] Prune local cache if it exceeds browser limits (v2026.05.16)
+        try {
+            const cache = localStorage.getItem('verified_houses_cache');
+            if (cache && cache.length > 4000000) { // ~4MB (safety margin under 5MB)
+                console.warn("[App.init] LocalStorage cache large (" + (cache.length/1024/1024).toFixed(2) + "MB). Pruning...");
+                const parsed = JSON.parse(cache);
+                if (Array.isArray(parsed) && parsed.length > 1000) {
+                    const pruned = parsed.slice(-500); // Keep only 500 most recent
+                    localStorage.setItem('verified_houses_cache', JSON.stringify(pruned));
+                    console.log("[App.init] Pruned cache to 500 records.");
+                }
+            }
+        } catch (e) {
+            console.error("[App.init] Cache pruning failed:", e);
+            localStorage.removeItem('verified_houses_cache');
+        }
+
         console.warn("GSI TROUBLESHOOTING: If you see 403 / Origin Not Allowed, ensure http://localhost:8000 is added as an Authorized JavaScript Origin in GCP console.");
         State.raw_data = window.RAW_DATA;
 
@@ -11414,6 +11446,9 @@ const App = {
         InfoCard.init();
         if (window.SpatialRouter) SpatialRouter.init();
         if (typeof UniversalSearch !== 'undefined') UniversalSearch.init();
+        
+        // Populate sidebar KML layers
+        if (window.LayerManager) LayerManager.renderSidebarKML();
 
         // 1. Initial State: Always start fresh for maximum performance
         this.resetFilters();
@@ -12502,9 +12537,12 @@ closeNearbyMarkersPopup() {
                     id: r[0]?.toString()
                 });
 
-                // Invisible touch hitbox for easier mobile tap (25px radius)
-                // User can tap near marker, not exactly on it
-                const hitRadius = 25;
+                // Dynamic touch hitbox scaling (v2026.05.16)
+                const currentZoom = State.map.getZoom();
+                let hitRadius = 25;
+                if (currentZoom >= 19) hitRadius = 8;
+                else if (currentZoom >= 17) hitRadius = 15;
+
                 const mHit = L.circleMarker([r[1], r[2]], {
                     radius: hitRadius,
                     fillColor: 'transparent',
@@ -12516,16 +12554,25 @@ closeNearbyMarkersPopup() {
                 });
                 mHit.addTo(State.markerLayer);
 
-                // Hitbox click handler - same as marker click
+                // Hitbox click handler - with Conflict Detection
                 mHit.on('click', (e) => {
                     L.DomEvent.stopPropagation(e);
+                    
+                    // Conflict Detection: If markers are extremely tight, show picker
+                    // We use a small 3-meter radius for "true" overlaps
+                    const nearby = App.findNearbyMarkers(r[1], r[2], 3); 
+                    if (nearby.length > 1) {
+                        App.showNearbyMarkersPopup(nearby, e.latlng);
+                        return;
+                    }
+
                     App._markerHit = true;
-                    console.log('[DEBUG mHit.on(click)] Calling showMarkerCard for:', r[0]);
                     if (window.SpatialRouter) {
                         SpatialRouter.showMarkerCard(r[0]);
                     }
                     if (State.activeMarker) State.activeMarker.closeTooltip();
                     m.openTooltip();
+                    m.bringToFront();
                     State.activeMarker = m;
                 });
 
@@ -12560,11 +12607,11 @@ closeNearbyMarkersPopup() {
                         SpatialRouter.showMarkerCard(r[0]);
                     }
 
-                    // Manage Active Tooltip Focus (Keeps the standard hover tooltip open)
                     if (State.activeMarker) {
                         State.activeMarker.closeTooltip();
                     }
                     m.openTooltip();
+                    m.bringToFront();
                     State.activeMarker = m;
 
                     // Mobile Touch Enhancement: Ensure touch opens marker card
@@ -12575,6 +12622,7 @@ closeNearbyMarkersPopup() {
                         }
                         if (State.activeMarker) State.activeMarker.closeTooltip();
                         m.openTooltip();
+                        m.bringToFront();
                         State.activeMarker = m;
                     });
                 });
@@ -12632,15 +12680,6 @@ closeNearbyMarkersPopup() {
         marker.bindTooltip(`${content}<div class="tooltip-arrow"><div class="tooltip-arrow-stem"></div><div class="tooltip-arrow-tip"></div></div>`, tooltipOptions);
         
         if (forcePermanent) marker.openTooltip();
-
-        // Ensure that on mobile/touch, a click triggers the 'permanent' feel
-        marker.on('click', (e) => {
-             const currentTooltip = marker.getTooltip();
-             if (currentTooltip && !currentTooltip.options.permanent) {
-                 // Toggle to permanent for this specific marker to make it 'stay' on touch
-                 this.bindCustomTooltip(marker, content, true);
-             }
-        });
     },
 
     saveSession() {
@@ -16537,6 +16576,66 @@ const LayerManager = {
         } finally {
             btn.disabled = false;
         }
+    },
+
+    renderSidebarKML() {
+        const container = document.getElementById('sidebar-kml-container');
+        if (!container) return;
+
+        if (typeof GEO_LAYERS === 'undefined') {
+            container.innerHTML = '<div style="padding:10px; text-align:center; color:#94a3b8; font-size:11px;">Initializing map data...</div>';
+            return;
+        }
+
+        let html = '';
+        const cities = Object.keys(GEO_LAYERS).filter(c => c.toUpperCase() === 'SARGODHA');
+        
+        cities.forEach(city => {
+            const layers = Object.keys(GEO_LAYERS[city]).filter(l => l.toUpperCase().includes('MC'));
+            if (layers.length === 0) return;
+
+            html += `<div style="font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; margin-top:8px; padding-left:4px;">${city}</div>`;
+            
+            layers.forEach(layerName => {
+                const key = `${city}|${layerName}`;
+                const isActive = this.pendingSelections.has(key);
+                
+                html += `
+                    <div class="multi-option ${isActive ? 'selected' : ''}" 
+                         onclick="LayerManager.toggleSidebarLayer('${key}')"
+                         style="margin:0; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
+                        <input type="checkbox" ${isActive ? 'checked' : ''} style="pointer-events:none;">
+                        <span style="font-size:12px; font-weight:700; color:#334155;">${layerName}</span>
+                    </div>
+                `;
+            });
+        });
+
+        if (!html) {
+            html = '<div style="padding:10px; text-align:center; color:#94a3b8; font-size:11px;">No boundary layers found.</div>';
+        }
+        
+        container.innerHTML = html;
+    },
+
+    toggleSidebarLayer(key) {
+        if (this.pendingSelections.has(key)) {
+            this.pendingSelections.delete(key);
+        } else {
+            this.pendingSelections.add(key);
+        }
+        
+        // Immediate Apply for Sidebar interactions
+        const keys = Array.from(this.pendingSelections);
+        this.load(keys);
+        
+        this.renderSidebarKML();
+        
+        // Sync with Settings UI if currently open
+        const settingsModal = document.getElementById('modal-settings');
+        if (settingsModal && settingsModal.style.display === 'block') {
+            this.renderSettingsUI();
+        }
     }
 };
 
@@ -18640,7 +18739,7 @@ const SpatialRouter = {
             if (!window.ALL_VERIFIED_DATA) window.ALL_VERIFIED_DATA = [];
             window.ALL_VERIFIED_DATA = window.ALL_VERIFIED_DATA.filter(v => String(v.survey_id) !== sidStr);
             window.ALL_VERIFIED_DATA.push({...payload});
-            localStorage.setItem('verified_houses_cache', JSON.stringify(window.ALL_VERIFIED_DATA));
+            try { localStorage.setItem('verified_houses_cache', JSON.stringify(window.ALL_VERIFIED_DATA)); } catch(e) { console.warn("Quota Exceeded", e); }
             console.log("[SaveIntel] Local cache updated with", payload.survey_id);
 
             // Clear staging state after successful save
@@ -18718,7 +18817,7 @@ const SpatialRouter = {
             
             if (data && Array.isArray(data)) {
                 window.ALL_VERIFIED_DATA = data;
-                localStorage.setItem('verified_houses_cache', JSON.stringify(data));
+                try { localStorage.setItem('verified_houses_cache', JSON.stringify(data)); } catch(e) { console.warn("Quota Exceeded", e); }
                 console.log("[VerifiedData] Refreshed local cache with", data.length, "records");
             }
         } catch (e) {
