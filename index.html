@@ -3845,27 +3845,6 @@ body {
                 height: 44px !important;
         }
 
-        #btn-cluster-toggle, #btn-show-all-markers {
-                bottom: 90px !important;
-                left: 16px !important;
-        }
-
-        #btn-cluster-toggle {
-                bottom: 90px !important;
-        }
-
-        #btn-show-all-markers {
-                bottom: 140px !important;
-        }
-
-        #btn-cluster-toggle, #btn-show-all-markers {
-                width: 40px !important;
-                height: 40px !important;
-                border-radius: 50% !important;
-                min-width: 0 !important;
-                padding: 0 !important;
-        }
-
         #map-pager {
                 max-width: 180px !important;
                 padding: 6px 10px !important;
@@ -3879,119 +3858,47 @@ body {
                 text-overflow: ellipsis !important;
         }
 
-#nearby-markers-popup {
-                left: 360px !important;
-                right: auto !important;
-                top: 450px !important;
-                bottom: auto !important;
-                transform: none !important;
-                padding: 8px !important;
-                background: #f8fafc !important;
-                width: 90px !important;
-                min-width: 90px !important;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
-                cursor: move !important;
-                z-index: 15001 !important;
-                opacity: 1 !important;
-                flex-direction: column !important;
-                box-sizing: border-box !important;
-        }
+/* Nearby Markers Popup - base positioning via inline styles */
+#nearby-markers-popup { user-select: none; }
 
-        #nearby-markers-popup:active {
-                cursor: grabbing !important;
-        }
-
-        #nearby-markers-list {
-                display: flex !important;
-                flex-direction: column !important;
-                max-height: 80px !important;
-                overflow-y: auto !important;
-                gap: 3px !important;
-                box-sizing: border-box !important;
-                width: 100% !important;
-        }
-
-        #nearby-markers-list > div {
-                padding: 2px 4px !important;
-                background: #e0f2fe !important;
-                border-radius: 3px !important;
-                cursor: pointer !important;
-                font-size: 10px !important;
-                font-weight: 600 !important;
-                text-align: center !important;
-                white-space: nowrap !important;
-                box-sizing: border-box !important;
-                width: 100% !important;
-        }
-
-        #nearby-markers-list > div:hover {
-                background: #bae6fd !important;
-        }
-                font-size: 20px !important;
-        }
-
-/* Cluster Toggle Button - Left side with offset from sidebar */
-#btn-cluster-toggle {
-        display: flex !important;
-        position: fixed;
-        bottom: 12px;
-        left: 340px;
-        z-index: 10000;
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
+#nearby-markers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 160px;
+    overflow-y: auto;
 }
 
-/* Show All Markers Button */
-#btn-show-all-markers {
-        display: flex !important;
-        position: fixed;
-        bottom: 70px;
-        left: 340px;
-        z-index: 10000;
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
+#nearby-markers-list > div {
+    padding: 5px 10px;
+    background: #f8fafc;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    white-space: nowrap;
+    transition: background 0.1s;
+    flex-shrink: 0;
+    border: 2px solid transparent;
 }
+#nearby-markers-list > div:hover { background: #e2e8f0; }
+#nearby-markers-list > div.is-selected { background: #2563eb !important; color: #fff !important; border-color: #1d4ed8 !important; }
+#nearby-markers-list > div.in-sequence { background: #dcfce7; color: #15803d; }
+#nearby-markers-list > div.is-selected.in-sequence { background: #2563eb !important; color: #fff !important; border-color: #1d4ed8 !important; }
 
+/* Map FAB Buttons - active/hover states only; positioning via inline styles */
 #btn-show-all-markers:active,
-#btn-cluster-toggle:active {
-        transform: scale(0.95);
+#btn-cluster-toggle:active,
+#btn-cloud-sync-floating:active {
+    transform: scale(0.95) !important;
 }
 
 #btn-cluster-toggle.active,
 #btn-show-all-markers.active {
-        background: var(--primary);
-        color: white;
-        border-color: var(--primary);
-}
-
-/* Mobile styles - adjust left offset */
-@media (max-width: 768px) {
-        #btn-cluster-toggle,
-        #btn-show-all-markers {
-                left: 12px;
-                width: 44px;
-                height: 44px;
-        }
-        #btn-show-all-markers {
-                bottom: 120px;
-        }
-        #btn-cluster-toggle {
-                bottom: 65px;
-        }
+    background: var(--primary) !important;
+    color: white !important;
+    border-color: var(--primary) !important;
 }
 
 .map-nav-text {
@@ -4812,156 +4719,7 @@ button {
         color: white;
 }
 
-/* Nearby Markers Popup - Responsive */
-@media (max-width: 768px) {
-#nearby-markers-popup {
-                left: 12px !important;
-                right: auto !important;
-                top: 300px !important;
-                bottom: auto !important;
-                transform: none !important;
-                height: 200px !important;
-                padding: 8px !important;
-                background: rgba(255,255,255,0.95) !important;
-                width: 90px !important;
-                min-width: 80px !important;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
-                cursor: move !important;
-                z-index: 15001 !important;
-                opacity: 1 !important;
-                flex-direction: column !important;
-                box-sizing: border-box !important;
-        }
 
-        #nearby-markers-popup:active {
-                cursor: grabbing !important;
-        }
-
-        #nearby-markers-list {
-                display: flex !important;
-                flex-direction: column !important;
-                flex: 1 !important;
-                overflow-y: auto !important;
-                gap: 3px !important;
-                box-sizing: border-box !important;
-                width: 100% !important;
-                max-height: 150px !important;
-        }
-
-#nearby-markers-popup:active {
-        cursor: grabbing !important;
-        }
-
-#nearby-markers-list {
-        display: flex !important;
-        flex-direction: column !important;
-        flex: 1 !important;
-        overflow-y: auto !important;
-        gap: 3px !important;
-        box-sizing: border-box !important;
-        width: 100% !important;
-        }
-
-#nearby-markers-list > div {
-                padding: 2px 4px !important;
-                background: #e0f2fe !important;
-                border-radius: 3px !important;
-                cursor: pointer !important;
-                font-size: 10px !important;
-                font-weight: 600 !important;
-                text-align: center !important;
-                white-space: nowrap !important;
-                box-sizing: border-box !important;
-                width: 100% !important;
-}
-
-        #nearby-markers-list > div:hover {
-        background: #bae6fd !important;
-        }
-}
-
-        #nearby-markers-popup:active {
-                cursor: grabbing !important;
-        }
-
-        #nearby-markers-list {
-                display: flex !important;
-                flex-direction: column !important;
-                flex-wrap: nowrap !important;
-                flex: 1 !important;
-                overflow-y: auto !important;
-                overflow-x: hidden !important;
-                gap: 2px !important;
-                box-sizing: border-box !important;
-                width: 100% !important;
-        }
-
-        #nearby-markers-list > div {
-                padding: 2px 4px !important;
-                background: #e0f2fe !important;
-                border-radius: 3px !important;
-                cursor: pointer !important;
-                font-size: 10px !important;
-                font-weight: 600 !important;
-                text-align: center !important;
-                white-space: nowrap !important;
-                box-sizing: border-box !important;
-                width: 100% !important;
-        }
-
-        #nearby-markers-list > div:hover {
-                background: #bae6fd !important;
-        }
-        #nearby-markers-list {
-                flex-direction: column !important;
-        }
-        #nearby-markers-list > div {
-                width: 100%;
-        }
-}
-
-        #nearby-markers-popup:active {
-                cursor: grabbing !important;
-        }
-
-        #nearby-markers-popup span {
-                font-size: 11px !important;
-                padding: 2px 6px !important;
-                background: #e0f2fe !important;
-                border-radius: 4px !important;
-                cursor: pointer !important;
-                display: inline-block !important;
-                white-space: nowrap !important;
-        }
-
-        #nearby-markers-list {
-                display: flex !important;
-                flex-direction: column !important;
-                flex-wrap: nowrap !important;
-                flex: 1 !important;
-                overflow-y: auto !important;
-                overflow-x: hidden !important;
-                gap: 4px !important;
-                scrollbar-width: thin !important;
-                box-sizing: border-box !important;
-        }
-
-        #nearby-markers-list > div {
-                flex-shrink: 0 !important;
-                box-sizing: border-box !important;
-        }
-}
-
-#nearby-markers-list > div {
-        padding: 8px 12px;
-        background: #f8fafc;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: background 0.2s;
-}
-#nearby-markers-list > div:hover {
-        background: #e2e8f0;
-}
 
 .float-btn .material-icons-round {
         font-size: 24px;
@@ -8247,6 +8005,7 @@ path.leaflet-interactive:focus {
         color: #1e293b;
         padding: 4px 8px;
         white-space: nowrap;
+        pointer-events: none !important;
 }
 
 .active-nav-tooltip {
@@ -9627,27 +9386,6 @@ input[type=number] {
         flex-direction: column;
         gap: 8px;
 }
-    @media (max-width: 768px) {
-        #btn-cloud-sync-floating,
-        #btn-show-all-markers,
-        #btn-cluster-toggle {
-            left: 30px !important;
-            width: 40px !important;
-            height: 40px !important;
-            border-radius: 50% !important;
-            min-width: 0 !important;
-            padding: 0 !important;
-        }
-        #btn-cluster-toggle {
-            bottom: 90px !important;
-        }
-        #btn-cloud-sync-floating {
-            bottom: 135px !important;
-        }
-        #btn-show-all-markers {
-            bottom: 180px !important;
-        }
-    }
     </style>
 </head>
 <body>
@@ -9691,7 +9429,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.05.16.1235</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.05.19.1629</span>
             </div>
         </div>
         
@@ -10022,15 +9760,15 @@ input[type=number] {
          <!-- Populated by JS -->
     </div>
 
-    <!-- Nearby Markers Popup - Shows when multiple markers are close -->
-    <div id="nearby-markers-popup" style="display:none; position:fixed; z-index:15000; background:#f8fafc; padding:6px; box-shadow:0 4px 12px rgba(0,0,0,0.1); border:1px solid #e2e8f0;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; border-bottom:1px solid #e2e8f0; padding-bottom:4px;">
-            <span style="font-weight:700; font-size:9px; color:#475569;">Nearby</span>
+    <!-- Nearby Markers Popup -->
+    <div id="nearby-markers-popup" style="display:none; position:fixed; left:calc(var(--sidebar-w, 320px) + 20px); bottom:200px; z-index:15001; padding:4px; background:#fff; width:auto; min-width:80px; max-width:160px; border-radius:8px; border:1px solid #e2e8f0; box-shadow:0 4px 16px rgba(0,0,0,0.12); overflow:hidden; flex-direction:column;">
+        <div id="nearby-popup-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; border-bottom:1px solid #e2e8f0; padding-bottom:3px; cursor:grab;">
+            <span style="font-weight:700; font-size:9px; color:#475569; user-select:none;">Nearby</span>
             <button onclick="App.closeNearbyMarkersPopup()" title="Close" style="background:none; border:none; color:#64748b; cursor:pointer; padding:2px;">
                 <span class="material-icons-round" style="font-size:12px;">close</span>
             </button>
         </div>
-        <div id="nearby-markers-list" style="display:flex; flex-direction:column; gap:3px; max-height:180px; overflow-y:auto; overflow-x:hidden;"></div>
+        <div id="nearby-markers-list"></div>
     </div>
 
 
@@ -10085,14 +9823,14 @@ input[type=number] {
                     <span class="material-icons-round" style="color:#6366f1">qr_code_scanner</span>
                 </button>
             </div>
-            <button id="btn-cloud-sync-floating" class="routing-tool-btn" onclick="DriveSync.openSyncModal()" title="Sync Offline Images" style="position:fixed; bottom:110px; left:calc(var(--sidebar-w, 320px) + 60px); z-index:1001; width:32px; height:32px; border-radius:50%; min-width:32px; background:#fef3c7; border:1px solid #fcd34d; display:flex; align-items:center; justify-content:center;">
+            <button id="btn-cloud-sync-floating" class="routing-tool-btn" onclick="DriveSync.openSyncModal()" title="Sync Offline Images" style="position:fixed; bottom:110px; left:calc(var(--sidebar-w, 320px) + 60px); z-index:10000; width:32px; height:32px; border-radius:50%; min-width:32px; background:#fef3c7; border:1px solid #fcd34d; display:flex; align-items:center; justify-content:center;">
                 <span class="material-icons-round" style="color:#d97706; font-size:18px;">cloud_off</span>
                 <span id="cloud-sync-dot-floating" style="display:none; position:absolute; top:2px; right:2px; width:6px; height:6px; background:#dc2626; border-radius:50%;"></span>
             </button>
-            <button id="btn-cluster-toggle" class="routing-tool-btn" onclick="App.toggleClustering()" title="Toggle Marker Clustering" style="position:fixed; bottom:70px; left:calc(var(--sidebar-w, 320px) + 20px); z-index:1001; width:32px; height:32px; border-radius:50%; min-width:32px;">
+            <button id="btn-cluster-toggle" class="routing-tool-btn" onclick="App.toggleClustering()" title="Toggle Marker Clustering" style="position:fixed; bottom:70px; left:calc(var(--sidebar-w, 320px) + 20px); z-index:10000; width:32px; height:32px; border-radius:50%; min-width:32px; display:flex; align-items:center; justify-content:center;">
                 <span class="material-icons-round" style="font-size:18px;">hub</span>
             </button>
-            <button id="btn-show-all-markers" class="routing-tool-btn" onclick="App.showAllMarkersInView()" title="Show All Markers in Current View" style="position:fixed; bottom:70px; left:calc(var(--sidebar-w, 320px) + 60px); z-index:1001; width:32px; height:32px; border-radius:50%; min-width:32px;">
+            <button id="btn-show-all-markers" class="routing-tool-btn" onclick="App.showAllMarkersInView()" title="Show All Markers in Current View" style="position:fixed; bottom:70px; left:calc(var(--sidebar-w, 320px) + 60px); z-index:10000; width:32px; height:32px; border-radius:50%; min-width:32px; display:flex; align-items:center; justify-content:center;">
                 <span class="material-icons-round" style="font-size:18px;">visibility</span>
             </button>
             <button class="float-btn mobile-only" onclick="Sidebar.toggle()" title="Menu">
@@ -11106,7 +10844,8 @@ async function loadData() {
                     r[5] = decodePII(r[5]);
                     r[15] = decodePII(r[15]);
                     r._search = `${r[0]}|${r[15]}|${r[4]}|${r[5]}|${r[12]}|${r[6]}`.toLowerCase();
-                    window.SID_MAP.set(String(r[0]).trim(), r);
+                    const cleanKey = String(r[0]).replace(/\.0$/, '').trim();
+                    window.SID_MAP.set(cleanKey, r);
                 }
                 
                 processed = end;
@@ -11188,6 +10927,7 @@ const State = {
     searchLocalOnly: false, // Toggle for searching within current filters
     showTooltips: false, // User Preference for boundary layers
     isMapPagerActive: false, // UI GUARD: Prevents map interactions from hiding pager
+    nearbyPopupSelectedId: null,
     kmlPane: null,
 
     // Pinning Mode HUD Tracking
@@ -11226,7 +10966,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.05.16.1235";
+window.DATA_VERSION = "v2026.05.19.1629";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -11422,7 +11162,10 @@ const App = {
         if (!window.SID_MAP && window.RAW_DATA) {
             console.time("SID_MAP_INIT");
             window.SID_MAP = new Map();
-            window.RAW_DATA.forEach(r => window.SID_MAP.set(String(r[0]), r));
+            window.RAW_DATA.forEach(r => {
+                const cleanKey = String(r[0]).replace(/\.0$/, '').trim();
+                window.SID_MAP.set(cleanKey, r);
+            });
             console.timeEnd("SID_MAP_INIT");
         }
 
@@ -11481,6 +11224,10 @@ const App = {
         // Initial call
         const el = document.getElementById('zoom-level-text');
         if (el) el.innerText = `Z: ${State.map.getZoom()}`;
+
+        // Mobile layout for FAB buttons
+        this._applyMobileLayout();
+        window.addEventListener('resize', () => this._applyMobileLayout());
 
         // Handle URL Params (QR Code Link)
         // Handle URL parameters for direct linking
@@ -11643,6 +11390,14 @@ const App = {
             App.hideCardsOnMapClick();
         });
 
+        // Clear tooltips when dragging or zooming the map to prevent permanent sticky tooltips
+        State.map.on('dragstart zoomstart movestart', () => {
+            if (State.activeMarker) {
+                State.activeMarker.closeTooltip();
+                State.activeMarker = null;
+            }
+        });
+
         // Create a dedicated pane for Routing polygons
         State.map.createPane('routingPane');
         State.map.getPane('routingPane').style.zIndex = 650;
@@ -11783,96 +11538,96 @@ const App = {
         }
     },
 
-// Nearby Markers Popup
+// // Nearby Markers Popup
     showNearbyMarkersPopup(markers, latlng) {
         const popup = document.getElementById('nearby-markers-popup');
         const list = document.getElementById('nearby-markers-list');
         if (!popup || !list || !markers || markers.length === 0) return;
 
+        // Set initial position if first show (not dragged yet)
+        if (!this._nearbyPopupDragged) {
+            if (window.innerWidth <= 768) {
+                popup.style.left = '12px';
+                popup.style.bottom = '200px';
+            } else {
+                popup.style.left = 'calc(var(--sidebar-w, 320px) + 20px)';
+                popup.style.bottom = '200px';
+            }
+        }
+
+        this._applyMobileLayout();
+
+        popup.style.display = 'flex';
+        popup.style.opacity = '1';
+
         list.innerHTML = '';
+
         markers.slice(0, 30).forEach(m => {
             const item = document.createElement('div');
-            item.style.cssText = 'display:inline-flex; align-items:center; gap:2px; padding:3px 6px; background:#f1f5f9; border-radius:10px; cursor:pointer; font-size:10px; font-weight:600; white-space:nowrap; border:1px solid transparent;';
-            item.onclick = () => {
-                // Reset all items to default
-                Array.from(list.children).forEach(child => {
-                    child.style.background = '#f1f5f9';
-                    child.style.border = '1px solid transparent';
-                });
-                // Highlight clicked item
-                item.style.background = '#f1f5f9';
-                item.style.border = '1px solid red';
-                
-                // Open marker card
-                if (window.SpatialRouter) SpatialRouter.showMarkerCard(m.id);
+            
+            const seqIdx = window.SpatialRouter ? SpatialRouter.sequence.findIndex(p => String(p.id) === String(m.id)) : -1;
+            
+            item.onclick = (e) => {
+                list.querySelectorAll('.is-selected').forEach(el => el.classList.remove('is-selected'));
+                item.classList.add('is-selected');
+                State.nearbyPopupSelectedId = m.id;
+                if (window.SpatialRouter) {
+                    SpatialRouter.showMarkerCard(m.id);
+                }
+                State.map.panTo([m.lat, m.lng]);
             };
-            item.innerHTML = `<span style="color:var(--primary); font-size:9px;">#${m.id}</span>`;
+            
+            item.innerText = `${m.id}${seqIdx !== -1 ? ' ✓' : ''}`;
+            
+            if (m.id === State.nearbyPopupSelectedId) {
+                item.classList.add('is-selected');
+            }
+            if (seqIdx !== -1) {
+                item.classList.add('in-sequence');
+            }
             list.appendChild(item);
         });
 
-        popup.style.display = 'flex';
-        popup.style.flexDirection = 'column';
-        
-        // Animate in
-        popup.style.opacity = '0';
-        requestAnimationFrame(() => {
-            popup.style.transition = 'opacity 0.15s ease-in-out';
-            popup.style.opacity = '1';
-        });
-        
-        // Position: responsive - left side on desktop, safer position on mobile
-        const isMobile = window.innerWidth <= 768;
-        const sidebarW = isMobile ? 12 : 340;
-        popup.style.left = sidebarW + 'px';
-        popup.style.top = isMobile ? '280px' : '450px';
+        // Drag setup on header
+        const header = document.getElementById('nearby-popup-header');
+        if (header) {
+            this._setupDrag(header, popup);
+        }
+    },
 
-        // Drag functionality
-        let isDragging = false;
-        let startX, startY, startLeft, startTop;
-        
+    _setupDrag(handle, target) {
         const onStart = (e) => {
-            if (e.target.closest('#nearby-markers-list') || e.target.closest('button')) return;
             e.preventDefault();
-            e.stopPropagation();
-            isDragging = true;
+            const rect = target.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            startX = clientX;
-            startY = clientY;
-            const rect = popup.getBoundingClientRect();
-            startLeft = rect.left;
-            startTop = rect.top;
-            popup.style.cursor = 'grabbing';
-            popup.style.transition = 'none';
-        };
-        
-        const onMove = (e) => {
-            if (!isDragging) return;
-            // Only prevent default on touch to stop page scroll while dragging
-            if (e.touches) e.preventDefault();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            const dx = clientX - startX;
-            const dy = clientY - startY;
-            const newLeft = Math.max(0, Math.min(window.innerWidth - 90, startLeft + dx));
-            const newTop = Math.max(0, Math.min(window.innerHeight - 120, startTop + dy));
-            popup.style.left = newLeft + 'px';
-            popup.style.top = newTop + 'px';
-        };
-        
-        const onEnd = () => {
-            if (!isDragging) return;
-            isDragging = false;
-            popup.style.cursor = 'move';
+            const offsetX = clientX - rect.left;
+            const offsetY = clientY - rect.top;
+
+            const onMove = (ev) => {
+                const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+                const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
+                target.style.left = (cx - offsetX) + 'px';
+                target.style.top = (cy - offsetY) + 'px';
+                target.style.bottom = 'auto';
+                App._nearbyPopupDragged = true;
+            };
+
+            const onEnd = () => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onEnd);
+                document.removeEventListener('touchmove', onMove);
+                document.removeEventListener('touchend', onEnd);
+            };
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onEnd);
+            document.addEventListener('touchmove', onMove, { passive: true });
+            document.addEventListener('touchend', onEnd);
         };
 
-        popup.addEventListener('mousedown', onStart);
-        popup.addEventListener('touchstart', onStart, { passive: false });
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('touchmove', onMove, { passive: false });
-document.addEventListener('mouseup', onEnd);
-        document.addEventListener('touchend', onEnd);
-        // No auto-hide timer - popup stays open until user closes it
+        handle.addEventListener('mousedown', onStart);
+        handle.addEventListener('touchstart', onStart, { passive: true });
     },
 
 closeNearbyMarkersPopup() {
@@ -11883,6 +11638,38 @@ closeNearbyMarkersPopup() {
             this._nearbyPopupTimer = null;
         }
 },
+
+    _applyMobileLayout() {
+        const isMobile = window.innerWidth <= 768;
+        ['btn-cloud-sync-floating', 'btn-cluster-toggle', 'btn-show-all-markers'].forEach(id => {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            if (isMobile) {
+                btn.style.left = '12px';
+                btn.style.width = '44px';
+                btn.style.height = '44px';
+            } else {
+                btn.style.left = '';
+                btn.style.width = '';
+                btn.style.height = '';
+            }
+        });
+        if (isMobile) {
+            const cs = document.getElementById('btn-cloud-sync-floating');
+            if (cs) cs.style.bottom = '175px';
+            const ct = document.getElementById('btn-cluster-toggle');
+            if (ct) ct.style.bottom = '65px';
+            const sa = document.getElementById('btn-show-all-markers');
+            if (sa) sa.style.bottom = '120px';
+        } else {
+            const cs = document.getElementById('btn-cloud-sync-floating');
+            if (cs) { cs.style.bottom = ''; cs.style.left = ''; }
+            const ct = document.getElementById('btn-cluster-toggle');
+            if (ct) ct.style.bottom = '';
+            const sa = document.getElementById('btn-show-all-markers');
+            if (sa) { sa.style.bottom = ''; sa.style.left = ''; }
+        }
+    },
     
     // Show all markers in current map view
     showAllMarkersInView() {
@@ -11933,6 +11720,54 @@ closeNearbyMarkersPopup() {
             const dist = center.distanceTo(markerPos);
             if (dist <= radiusMeters) {
                 nearby.push({ id: r[0], lat: r[1], lng: r[2], name: r[4] });
+            }
+        });
+
+        return nearby;
+    },
+
+    // Find nearby markers within a visual screen pixel radius (resolves overlapping/tightly packed markers)
+    findNearbyMarkersPixel(latOrLatLng, lngOrRadius, radiusPixels = 30) {
+        if (!window.RAW_DATA || !State.map) return [];
+        if (!State.filtered) return [];
+
+        let lat, lng;
+        let rad = radiusPixels;
+        if (latOrLatLng && typeof latOrLatLng === 'object' && 'lat' in latOrLatLng) {
+            lat = latOrLatLng.lat;
+            lng = latOrLatLng.lng;
+            rad = typeof lngOrRadius === 'number' ? lngOrRadius : radiusPixels;
+        } else {
+            lat = latOrLatLng;
+            lng = lngOrRadius;
+        }
+
+        const clickedPoint = State.map.latLngToContainerPoint([lat, lng]);
+        const nearby = [];
+
+        // O(1) Bounding-Box Geofencing: Convert pixel radius to latitude/longitude degree deltas
+        const clickedLatLng = L.latLng(lat, lng);
+        const edgePoint = State.map.containerPointToLatLng([clickedPoint.x + rad, clickedPoint.y + rad]);
+        const latDelta = Math.abs(lat - edgePoint.lat);
+        const lngDelta = Math.abs(lng - edgePoint.lng);
+
+        const minLat = lat - latDelta;
+        const maxLat = lat + latDelta;
+        const minLng = lng - lngDelta;
+        const maxLng = lng + lngDelta;
+
+        State.filtered.forEach(r => {
+            if (!r[1] || !r[2]) return;
+            const mLat = parseFloat(r[1]);
+            const mLng = parseFloat(r[2]);
+            
+            // Perform rapid pre-filter bounding check before Leaflet projection to prevent projection rendering lag
+            if (mLat >= minLat && mLat <= maxLat && mLng >= minLng && mLng <= maxLng) {
+                const otherPoint = State.map.latLngToContainerPoint([mLat, mLng]);
+                const dist = Math.sqrt(Math.pow(clickedPoint.x - otherPoint.x, 2) + Math.pow(clickedPoint.y - otherPoint.y, 2));
+                if (dist <= rad) {
+                    nearby.push({ id: r[0], lat: mLat, lng: mLng, name: r[4] });
+                }
             }
         });
 
@@ -12534,14 +12369,13 @@ closeNearbyMarkersPopup() {
                     color: 'rgba(0,0,0,0.6)',
                     weight: 1,
                     fillOpacity: 0.6,
+                    interactive: false, // Make visible dot completely non-interactive
                     id: r[0]?.toString()
                 });
 
-                // Dynamic touch hitbox scaling (v2026.05.16)
-                const currentZoom = State.map.getZoom();
-                let hitRadius = 25;
-                if (currentZoom >= 19) hitRadius = 8;
-                else if (currentZoom >= 17) hitRadius = 15;
+                // Touch-optimized target size (v2026.05.18)
+                const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768);
+                const hitRadius = isTouch ? 26 : 16;
 
                 const mHit = L.circleMarker([r[1], r[2]], {
                     radius: hitRadius,
@@ -12554,38 +12388,21 @@ closeNearbyMarkersPopup() {
                 });
                 mHit.addTo(State.markerLayer);
 
-                // Hitbox click handler - with Conflict Detection
+                // Hitbox click handler - Unified with precision overlap conflict picker
                 mHit.on('click', (e) => {
                     L.DomEvent.stopPropagation(e);
                     
-                    // Conflict Detection: If markers are extremely tight, show picker
-                    // We use a small 3-meter radius for "true" overlaps
-                    const nearby = App.findNearbyMarkers(r[1], r[2], 3); 
+                    // High-Precision Overlap Detection relative to exact clicked LatLng coordinate
+                    const nearby = App.findNearbyMarkersPixel(e.latlng, hitRadius + 5); 
                     if (nearby.length > 1) {
                         App.showNearbyMarkersPopup(nearby, e.latlng);
                         return;
                     }
 
                     App._markerHit = true;
-                    if (window.SpatialRouter) {
-                        SpatialRouter.showMarkerCard(r[0]);
-                    }
-                    if (State.activeMarker) State.activeMarker.closeTooltip();
-                    m.openTooltip();
-                    m.bringToFront();
-                    State.activeMarker = m;
-                });
-
-                // Bind Tooltip safely
-                this.bindCustomTooltip(m, `${r[0]} | ${r[4] || 'Unknown'}`);
-
-                // REMOVED bindPopup - Using Image Modal instead
-
-                m.on('click', (e) => {
+                    
                     // Priority 1: Pickers (Start/End)
                     if (window.SpatialRouter && SpatialRouter.pickingMode) {
-                        L.DomEvent.stopPropagation(e);
-                        App._markerHit = true;
                         SpatialRouter.handleMarkerClick(r[0]);
                         return;
                     }
@@ -12601,31 +12418,21 @@ closeNearbyMarkersPopup() {
 
                     // Default Action: Show Image Modal
                     if (window.SpatialRouter) {
-                        L.DomEvent.stopPropagation(e);
-                        App._markerHit = true;
-                        console.log('[DEBUG m.on(click)] Calling showMarkerCard for:', r[0]);
+                        console.log('[DEBUG mHit.on(click)] Calling showMarkerCard for:', r[0]);
                         SpatialRouter.showMarkerCard(r[0]);
                     }
 
                     if (State.activeMarker) {
                         State.activeMarker.closeTooltip();
                     }
-                    m.openTooltip();
+                    
+                    mHit.openTooltip();
                     m.bringToFront();
-                    State.activeMarker = m;
-
-                    // Mobile Touch Enhancement: Ensure touch opens marker card
-                    m.on('touchend', (e) => {
-                        L.DomEvent.stopPropagation(e);
-                        if (window.SpatialRouter) {
-                            SpatialRouter.showMarkerCard(r[0]);
-                        }
-                        if (State.activeMarker) State.activeMarker.closeTooltip();
-                        m.openTooltip();
-                        m.bringToFront();
-                        State.activeMarker = m;
-                    });
+                    State.activeMarker = mHit;
                 });
+
+                // Bind Tooltip safely to the hitbox (mHit) for a larger, responsive hover targets
+                this.bindCustomTooltip(mHit, `${r[0]} | ${r[4] || 'Unknown'}`);
 
                 State.markers.addLayer(m);
                 m.addTo(State.markerLayer);
@@ -18866,7 +18673,8 @@ const SpatialRouter = {
                 newLng = position.coords.longitude;
             }
 
-            const row = window.RAW_DATA.find(r => String(r[0]) === String(sid));
+            const cleanSid = String(sid).replace(/\.0$/, '').trim();
+            const row = window.SID_MAP ? window.SID_MAP.get(cleanSid) : null;
             const surveyorName = row ? (row[6] || 'Unknown Surveyor') : 'Unknown Surveyor';
 
             buttons.forEach(btn => {
@@ -19532,16 +19340,8 @@ switchTab(tab) {
         }
 
         // Pre-process and sort routes by Area
-        const isMapReady = window.SID_MAP instanceof Map;
         const routesWithMeta = State.savedRoutes.map((route, originalIdx) => {
-            let area = 'Unknown Area';
-            if (route.sequence && route.sequence.length > 0) {
-                // Normalize ID from route sequence
-                const rawSid = String(route.sequence[0].surveyId || route.sequence[0].id);
-                const sid = rawSid.replace(/\.0$/, '').trim();
-                const row = isMapReady ? window.SID_MAP.get(sid) : null;
-                if (row && row[12]) area = this.cleanMCName(row[12]);
-            }
+            const area = this.getRouteArea(route);
             return { originalIdx, route, area };
         });
 
@@ -19856,7 +19656,8 @@ switchTab(tab) {
         this.saveSnapshot();
         const sortedIDs = [...this.capturedIDs].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
         this.sequence = sortedIDs.map(id => {
-            const row = window.RAW_DATA.find(r => String(r[0]) === String(id));
+            const cleanId = String(id).replace(/\.0$/, '').trim();
+            const row = window.SID_MAP ? window.SID_MAP.get(cleanId) : null;
             return row ? { id: String(id), lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) } : null;
         }).filter(Boolean);
         this.renderRoute();
@@ -19893,7 +19694,8 @@ switchTab(tab) {
         let item = null;
         if (seqIdx !== -1) item = this.sequence.splice(seqIdx, 1)[0];
         else {
-            const row = window.RAW_DATA.find(r => String(r[0]) === sid);
+            const cleanSid = String(sid).replace(/\.0$/, '').trim();
+            const row = window.SID_MAP ? window.SID_MAP.get(cleanSid) : null;
             if (row) item = { id: sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) };
         }
         if (item) {
@@ -19912,7 +19714,8 @@ switchTab(tab) {
         let item = null;
         if (seqIdx !== -1) item = this.sequence.splice(seqIdx, 1)[0];
         else {
-            const row = window.RAW_DATA.find(r => String(r[0]) === sid);
+            const cleanSid = String(sid).replace(/\.0$/, '').trim();
+            const row = window.SID_MAP ? window.SID_MAP.get(cleanSid) : null;
             if (row) item = { id: sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) };
         }
         if (item) {
@@ -19947,22 +19750,35 @@ switchTab(tab) {
     },
 
     harvest(polyPts = null) {
-        const searchPool = State.masterFiltered || State.filtered || [];
+        const dataPool = window.RAW_DATA || [];
+        // Build explicit whitelist from current filter
+        const filterSet = new Set();
+        if (State.filtered && State.filtered.length > 0) {
+            State.filtered.forEach(r => filterSet.add(String(r[0]).replace(/\.0$/, '').trim()));
+        }
         const pts = polyPts || this.points;
         if (!pts || pts.length < 3) return [];
 
         this.saveSnapshot();
-        let added = 0;
         const newIds = [];
-        searchPool.forEach(row => {
+        
+        // Fast numerical pre-filtering using Leaflet bounding box
+        const bounds = L.latLngBounds(pts);
+        
+        dataPool.forEach(row => {
+            if (!row[1] || !row[2]) return;
             const lat = parseFloat(row[1]);
             const lng = parseFloat(row[2]);
-            if (this.isPointInPoly([lat, lng], pts)) {
-                const sid = String(row[0]);
-                newIds.push(sid);
-                if (!this.capturedIDs.includes(sid)) {
-                    this.capturedIDs.push(sid);
-                    added++;
+            const sid = String(row[0]).replace(/\.0$/, '').trim();
+            
+            // Skip if not in current filter (when filter is active)
+            if (filterSet.size > 0 && !filterSet.has(sid)) return;
+            
+            // Numerical boundary filter (super fast, completes in <2ms for all 170,504 records)
+            if (lat >= bounds.getSouth() && lat <= bounds.getNorth() &&
+                lng >= bounds.getWest() && lng <= bounds.getEast()) {
+                if (this.isPointInPoly([lat, lng], pts)) {
+                    newIds.push(sid);
                 }
             }
         });
@@ -19971,10 +19787,6 @@ switchTab(tab) {
             this.drawnPolygons.forEach(p => p.setStyle({ color: '#94a3b8', fillOpacity: 0.1, weight: 1.5 }));
         }
 
-        if (added > 0) {
-            if (App.showToast) App.showToast(`Found ${added} items.`);
-            this.renderRoute();
-        }
         return newIds;
     },
 
@@ -19997,7 +19809,8 @@ switchTab(tab) {
     },
 
     addManualID(id) {
-        const row = window.RAW_DATA.find(r => String(r[0]) === String(id));
+        const cleanId = String(id).replace(/\.0$/, '').trim();
+        const row = window.SID_MAP ? window.SID_MAP.get(cleanId) : null;
         if (row) this.addManualPoint(row);
     },
 
@@ -20011,7 +19824,8 @@ switchTab(tab) {
 
         if (idx === -1) {
             // If not in sequence, find in RAW_DATA and add it at the requested position
-            const row = window.RAW_DATA.find(r => String(r[0]) === sidStr);
+            const cleanSid = String(sidStr).replace(/\.0$/, '').trim();
+            const row = window.SID_MAP ? window.SID_MAP.get(cleanSid) : null;
             if (row) {
                 const item = { id: sidStr, lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) };
                 this.sequence.splice(pos - 1, 0, item);
@@ -20045,7 +19859,8 @@ switchTab(tab) {
         this.saveSnapshot();
         const sid = String(id);
         if (this.sequence.find(p => String(p.id) === sid)) return;
-        const row = window.RAW_DATA.find(r => String(r[0]) === sid);
+        const cleanSid = String(sid).replace(/\.0$/, '').trim();
+        const row = window.SID_MAP ? window.SID_MAP.get(cleanSid) : null;
         if (!row) return;
         const idx = Math.max(0, Math.min((pos || this.sequence.length + 1) - 1, this.sequence.length));
         this.sequence.splice(idx, 0, { id: sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) });
@@ -20095,7 +19910,8 @@ switchTab(tab) {
         if (this.capturedIDs.length < 2) return;
         this.saveSnapshot();
         const pool = this.capturedIDs.map(id => {
-            const row = window.RAW_DATA.find(r => String(r[0]) === String(id));
+            const cleanId = String(id).replace(/\.0$/, '').trim();
+            const row = window.SID_MAP ? window.SID_MAP.get(cleanId) : null;
             return { id: String(id), lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) };
         });
         const optimized = [];
@@ -20587,16 +20403,26 @@ switchTab(tab) {
         }
         if (init) init.style.display = 'none';
 
+        // O(1) Indexing of sequence entries for maximum performance
+        const sequenceMap = new Map();
+        const sequenceIndices = new Map();
+        this.sequence.forEach((p, idx) => {
+            const cleanPId = String(p.id).replace(/\.0$/, '').trim();
+            sequenceMap.set(cleanPId, p);
+            sequenceIndices.set(cleanPId, idx);
+        });
+
         const fragment = document.createDocumentFragment();
         this.capturedIDs.forEach(sid => {
-            const row = window.RAW_DATA ? window.RAW_DATA.find(r => String(r[0]) === String(sid)) : null;
-            const seqEntry = this.sequence.find(p => String(p.id) === String(sid));
+            const cleanSid = String(sid).replace(/\.0$/, '').trim();
+            const row = window.SID_MAP ? window.SID_MAP.get(cleanSid) : null;
+            const seqEntry = sequenceMap.get(cleanSid);
             const lat = row ? parseFloat(row[1]) : (seqEntry ? seqEntry.lat : null);
             const lng = row ? parseFloat(row[2]) : (seqEntry ? seqEntry.lng : null);
             const name = row ? decodePII(row[4]) : (seqEntry ? seqEntry.name : '');
             if (lat === null) return;
 
-            const seqIdx = this.sequence.findIndex(p => String(p.id) === String(sid));
+            const seqIdx = sequenceIndices.has(cleanSid) ? sequenceIndices.get(cleanSid) : -1;
             const isStart = seqIdx === 0;
             const isEnd = seqIdx !== -1 && seqIdx === this.sequence.length - 1;
 
@@ -20687,7 +20513,8 @@ switchTab(tab) {
 
         // SINGLE MODE
         this.capturedIDs.forEach(sid => {
-            const row = window.RAW_DATA ? window.RAW_DATA.find(r => String(r[0]) === String(sid)) : null;
+            const cleanSid = String(sid).replace(/\.0$/, '').trim();
+            const row = window.SID_MAP ? window.SID_MAP.get(cleanSid) : null;
             const seqEntry = this.sequence.find(p => String(p.id) === String(sid));
             const lat = row ? parseFloat(row[1]) : (seqEntry ? seqEntry.lat : null);
             const lng = row ? parseFloat(row[2]) : (seqEntry ? seqEntry.lng : null);
@@ -20888,9 +20715,16 @@ switchTab(tab) {
             if (this.points.length > 2) {
                 const polyPts = this.points.map(p => ({ lat: p.lat, lng: p.lng }));
                 const searchPool = State.filtered || [];
+                const bounds = L.latLngBounds(this.points);
                 searchPool.forEach(row => {
-                    if (this.isPointInPoly([parseFloat(row[1]), parseFloat(row[2])], polyPts)) {
-                        L.circleMarker([row[1], row[2]], { radius: 2, color: '#94a3b8', fillOpacity: 0.5, stroke: false, pane: 'routingPane' }).addTo(this.currentDrawLayer);
+                    if (!row[1] || !row[2]) return;
+                    const lat = parseFloat(row[1]);
+                    const lng = parseFloat(row[2]);
+                    if (lat >= bounds.getSouth() && lat <= bounds.getNorth() &&
+                        lng >= bounds.getWest() && lng <= bounds.getEast()) {
+                        if (this.isPointInPoly([lat, lng], polyPts)) {
+                            L.circleMarker([lat, lng], { radius: 2, color: '#94a3b8', fillOpacity: 0.5, stroke: false, pane: 'routingPane' }).addTo(this.currentDrawLayer);
+                        }
                     }
                 });
             }
@@ -20951,6 +20785,7 @@ switchTab(tab) {
 
             // Harvest new IDs
             const ids = this.harvest(polyPts);
+            if (ids.length > 0 && App.showToast) App.showToast(`Found ${ids.length} items.`);
 
             // Exit batch mode
             this.isBatchMode = false;
@@ -20982,6 +20817,7 @@ switchTab(tab) {
             this.startId = null;
             this.endId = null;
             this.renderRoute(); // Show new items
+            this.switchTab('editor'); // Auto-switch focus to editor list panel
 
             poly.on('click', (e) => {
                 L.DomEvent.stopPropagation(e);
@@ -21049,7 +20885,8 @@ switchTab(tab) {
         } else {
             let shortMC = 'Unnamed';
             const firstSid = this.sequence[0].id;
-            const firstRow = window.RAW_DATA ? window.RAW_DATA.find(r => String(r[0]) === String(firstSid)) : null;
+            const cleanFirstSid = String(firstSid).replace(/\.0$/, '').trim();
+            const firstRow = window.SID_MAP ? window.SID_MAP.get(cleanFirstSid) : null;
             if (firstRow && firstRow[12]) {
                 const match = String(firstRow[12]).match(/(MC|UC)[- ]?(\d+)/i);
                 shortMC = match ? `${match[1].toUpperCase()}-${match[2]}` : String(firstRow[12]).split(' ')[0].replace(/[\/\\]/g, '-');
@@ -21187,9 +21024,7 @@ switchTab(tab) {
                 const seqEntry = seqIdx !== -1 ? this.sequence[seqIdx] : null;
                 const name = row ? decodePII(row[4]) : (seqEntry ? seqEntry.name : '');
                 let area = row ? (row[12] || 'Area').replace(/Municipal Committee/gi, 'MC').replace(/Union Council/gi, 'UC') : '';
-                if (area)
-
-                    card.innerHTML = `
+                card.innerHTML = `
                         <div class="v6-badge" style="background:${isStart ? '#10b981' : isEnd ? '#ef4444' : ''}; padding:0; overflow:hidden; width:26px; height:24px;">
                             <input type="number" min="1" max="${this.sequence.length + 1}" value="${seqIdx === -1 ? '' : seqIdx + 1}" placeholder="-"
                                    style="width:100%; height:100%; border:none; background:transparent; color:${(isStart || isEnd) ? 'white' : 'var(--primary)'}; text-align:center; font-size:10px; font-weight:800; outline:none; padding:0;"
@@ -21224,7 +21059,14 @@ switchTab(tab) {
         const row = isMapReady ? window.SID_MAP.get(sidStr) : null;
         if (row) {
             this.sequence.push({ id: sidStr, lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) });
-            this.updateSpecificRouteItem(sidStr);
+            
+            // CRITICAL: Ensure present in capturedIDs pool
+            if (!this.capturedIDs.includes(sidStr)) {
+                this.capturedIDs.push(sidStr);
+                this.renderRoute(); // Force list card generation and refresh
+            } else {
+                this.updateSpecificRouteItem(sidStr); // Fast update
+            }
         }
     },
     init() {
@@ -21269,9 +21111,66 @@ switchTab(tab) {
                     if (!this.drawnPolygons) this.drawnPolygons = [];
                     this.drawnPolygons.push(layer);
                     State.map.addLayer(layer);
+
+                    // Style active polygon layer
+                    layer.setStyle({
+                        color: '#3b82f6',
+                        fillOpacity: 0.1,
+                        weight: 3
+                    });
+
                     const latlngs = layer.getLatLngs()[0];
                     const polyPts = latlngs.map(p => ({ lat: p.lat, lng: p.lng }));
-                    this.harvest(polyPts);
+
+                    // Exit batch mode
+                    this.isBatchMode = false;
+                    this.batchRouteSequences = [];
+                    this.batchRoutePolygons = [];
+                    this.activeDisplayRoutes = [];
+
+                    // Save state of previous active polygon
+                    if (this.activePolygon) {
+                        this.saveStateToPolygon(this.activePolygon);
+                        this.activePolygon.setStyle({ color: '#94a3b8', weight: 1.5 });
+                    }
+
+                    // Reset capturedIDs before harvesting so we don't carry over old markers
+                    this.capturedIDs = [];
+                    const ids = this.harvest(polyPts);
+                    if (ids.length > 0 && App.showToast) App.showToast(`Found ${ids.length} items.`);
+
+                    // Initialize state for the new polygon
+                    layer._routeState = {
+                        sequence: [],
+                        capturedIDs: ids,
+                        startId: null,
+                        endId: null
+                    };
+
+                    // Set active session variables
+                    this.activePolygon = layer;
+                    this.capturedIDs = ids;
+                    this.sequence = [];
+                    this.startId = null;
+                    this.endId = null;
+
+                    this.renderRoute();
+                    this.switchTab('editor');
+
+                    // Bind click event to activate the polygon when clicked
+                    layer.on('click', (ev) => {
+                        L.DomEvent.stopPropagation(ev);
+                        if (this.activePolygon === layer) return;
+
+                        if (this.activePolygon) {
+                            this.saveStateToPolygon(this.activePolygon);
+                            this.activePolygon.setStyle({ color: '#94a3b8', weight: 1.5 });
+                        }
+
+                        this.activePolygon = layer;
+                        layer.setStyle({ color: '#3b82f6', weight: 3 });
+                        this.restoreStateFromPolygon(layer);
+                    });
                 }
             });
         }
