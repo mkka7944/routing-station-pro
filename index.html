@@ -9429,7 +9429,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.05.20.1255</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.05.20.1332</span>
             </div>
         </div>
         
@@ -10966,7 +10966,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.05.20.1255";
+window.DATA_VERSION = "v2026.05.20.1332";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -15518,11 +15518,6 @@ const DriveSync = {
         const btn = document.getElementById('btn-execute-bulk-sync');
         const originalHtml = btn ? btn.innerHTML : 'Sync';
 
-        let wakeLock = null;
-        if ('wakeLock' in navigator) {
-            try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { }
-        }
-
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<span class="material-icons-round spinning">sync</span> Syncing...';
@@ -15671,7 +15666,6 @@ const DriveSync = {
             alert("Upload process encountered an error.");
         } finally {
             this._isUploading = false;
-            if (wakeLock) await wakeLock.release().catch(() => { });
             if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
             const pc = document.getElementById('sync-progress-container');
             if (pc) pc.style.display = 'none';
@@ -18686,7 +18680,7 @@ const SpatialRouter = {
                 const getPos = (opts) => new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, opts));
                 let position;
                 try {
-                    position = await getPos({ enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+                    position = await getPos({ enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
                 } catch (e) {
                     console.warn("High-accuracy failed or timed out, trying standard accuracy...");
                     if (App.showToast) App.showToast("GPS taking long, using network location...");
@@ -21112,7 +21106,7 @@ switchTab(tab) {
         // Fix: Catch potential errors in loadRoutes to prevent init crash
         this.loadRoutes(null, true).catch(err => console.warn("Initial loadRoutes failed:", err));
 
-        setInterval(() => this.checkServerHealth(), 5000);
+        setInterval(() => this.checkServerHealth(), 120000);
 
         // Bind dummy handlers placeholders (Will be properly assigned during startDrawing)
         this.onClick = () => { };
