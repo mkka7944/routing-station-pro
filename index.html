@@ -9429,7 +9429,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.05.19.1629</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.05.20.1058</span>
             </div>
         </div>
         
@@ -10966,7 +10966,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.05.19.1629";
+window.DATA_VERSION = "v2026.05.20.1058";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -11641,33 +11641,21 @@ closeNearbyMarkersPopup() {
 
     _applyMobileLayout() {
         const isMobile = window.innerWidth <= 768;
-        ['btn-cloud-sync-floating', 'btn-cluster-toggle', 'btn-show-all-markers'].forEach(id => {
-            const btn = document.getElementById(id);
-            if (!btn) return;
-            if (isMobile) {
-                btn.style.left = '12px';
-                btn.style.width = '44px';
-                btn.style.height = '44px';
-            } else {
-                btn.style.left = '';
-                btn.style.width = '';
-                btn.style.height = '';
-            }
-        });
+        const cs = document.getElementById('btn-cloud-sync-floating');
+        const ct = document.getElementById('btn-cluster-toggle');
+        const sa = document.getElementById('btn-show-all-markers');
+
         if (isMobile) {
-            const cs = document.getElementById('btn-cloud-sync-floating');
+            [cs, ct, sa].forEach(b => { if (b) { b.style.left = '12px'; b.style.width = '44px'; b.style.height = '44px'; b.style.borderRadius = '50%'; } });
             if (cs) cs.style.bottom = '175px';
-            const ct = document.getElementById('btn-cluster-toggle');
             if (ct) ct.style.bottom = '65px';
-            const sa = document.getElementById('btn-show-all-markers');
             if (sa) sa.style.bottom = '120px';
         } else {
-            const cs = document.getElementById('btn-cloud-sync-floating');
-            if (cs) { cs.style.bottom = ''; cs.style.left = ''; }
-            const ct = document.getElementById('btn-cluster-toggle');
-            if (ct) ct.style.bottom = '';
-            const sa = document.getElementById('btn-show-all-markers');
-            if (sa) { sa.style.bottom = ''; sa.style.left = ''; }
+            // Desktop - restore original position with sidebar offset
+            [cs, ct, sa].forEach(b => { if (b) { b.style.width = '32px'; b.style.height = '32px'; b.style.borderRadius = '50%'; } });
+            if (ct) { ct.style.left = 'calc(var(--sidebar-w, 320px) + 20px)'; ct.style.bottom = '70px'; }
+            if (sa) { sa.style.left = 'calc(var(--sidebar-w, 320px) + 60px)'; sa.style.bottom = '70px'; }
+            if (cs) { cs.style.left = 'calc(var(--sidebar-w, 320px) + 60px)'; cs.style.bottom = '110px'; }
         }
     },
     
