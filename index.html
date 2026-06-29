@@ -198,9 +198,9 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px;
+    padding: 10px 16px;
     background: white;
-    border-bottom: 1px solid #e2e8f0;
+    border-top: 1px solid #e2e8f0;
 }
 
 .map-nav {
@@ -1290,6 +1290,94 @@ path.leaflet-interactive:focus {
     z-index: 1001;
 }
 
+/* Delivery Activity Panel */
+#delivery-activity-panel {
+    position: absolute;
+    top: 60px;
+    right: 12px;
+    width: 420px;
+    height: 520px;
+    z-index: 5000;
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.08);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: 12px;
+    border: 1px solid #e2e8f0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+#delivery-activity-panel .dap-drag-handle {
+    cursor: grab;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border-bottom: 1px solid #e2e8f0;
+    user-select: none;
+    flex-shrink: 0;
+}
+#delivery-activity-panel .dap-drag-handle:active {
+    cursor: grabbing;
+}
+#delivery-activity-panel .dap-resize-handle {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 20px;
+    height: 20px;
+    cursor: nwse-resize;
+    background: linear-gradient(135deg, transparent 50%, #cbd5e1 50%);
+    border-radius: 0 0 14px 0;
+    flex-shrink: 0;
+}
+#delivery-activity-panel .dap-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    -webkit-overflow-scrolling: touch;
+}
+#delivery-activity-panel .dap-kpi-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+#delivery-activity-panel .dap-kpi-card {
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 8px 6px;
+    text-align: center;
+    border: 1px solid #f1f5f9;
+}
+#delivery-activity-panel .dap-kpi-card .dap-kpi-val {
+    font-size: 18px;
+    font-weight: 900;
+    color: #1e293b;
+    line-height: 1.2;
+}
+#delivery-activity-panel .dap-kpi-card .dap-kpi-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-top: 2px;
+}
+#delivery-activity-panel .dap-footer {
+    border-top: 1px solid #f1f5f9;
+    padding: 6px 14px;
+    font-size: 10px;
+    color: #94a3b8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #fafafa;
+    flex-shrink: 0;
+}
+
 .float-btn:hover {
     background: #f1f5f9;
     transform: scale(1.05);
@@ -1635,13 +1723,6 @@ input:checked+.slider:before {
 
     .mobile-only {
         display: block !important;
-    }
-
-    .mobile-sidebar-toggle {
-        display: flex !important;
-        align-items: center;
-        justify-content: center;
-        z-index: 10001;
     }
 
     .map-controls {
@@ -3215,19 +3296,6 @@ details summary::-webkit-details-marker {
     color: #64748b;
 }
 
-/* Sidebar Desktop UI Fixes */
-@media (min-width: 769px) {
-    #list-view-stage .mobile-sidebar-toggle {
-        display: none !important;
-    }
-}
-
-@media (max-width: 768px) {
-    #list-view-stage .mobile-sidebar-toggle {
-        display: flex !important;
-    }
-}
-
 .user-details-wrapper {
     display: flex;
     align-items: center;
@@ -3805,9 +3873,9 @@ body {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 16px;
+        padding: 10px 16px;
         background: white;
-        border-bottom: 1px solid #e2e8f0;
+        border-top: 1px solid #e2e8f0;
 }
 
 .map-nav {
@@ -7977,9 +8045,6 @@ details summary::-webkit-details-marker {
         }
 
 
-        #list-view-stage .mobile-sidebar-toggle {
-                display: flex !important;
-        }
 }
 
 /* === 03_markers.css === */
@@ -8949,13 +9014,6 @@ input[type=number] {
                 display: block !important;
         }
 
-        .mobile-sidebar-toggle {
-                display: flex !important;
-                align-items: center;
-                justify-content: center;
-                z-index: 10001;
-        }
-
         .map-controls {
                 bottom: 90px;
                 right: 20px;
@@ -9803,6 +9861,9 @@ input[type=number] {
                 <button class="float-btn" onclick="App.toggleLayer()" title="Toggle Satellite">
                     <span class="material-icons-round" id="layer-icon">satellite_alt</span>
                 </button>
+                <button class="float-btn admin-only" onclick="LayerManager.toggleDeliveryActivityPanel()" title="Delivery Activity">
+                    <span class="material-icons-round" style="color:#8b5cf6">assignment_turned_in</span>
+                </button>
                 <button class="float-btn admin-only" onclick="Settings.open()" title="Settings">
                     <span class="material-icons-round" style="color:#10b981">settings</span>
                 </button>
@@ -10035,20 +10096,21 @@ input[type=number] {
 
     <!-- Persistent List View -->
     <div id="list-view-stage">
-        <div class="list-nav">
-            <div style="display:flex; gap:8px;">
-                <button onclick="Sidebar.toggle()" class="gal-btn mobile-sidebar-toggle" style="background:#eff6ff; color:var(--primary);" title="Filters"><span class="material-icons-round">tune</span></button>
-            </div>
-            <div style="font-weight:700">Record <span id="lv-idx">1</span> of <span id="lv-total">0</span></div>
-            <div style="display:flex; gap:8px;">
-                <button onclick="ListView.prev()" class="gal-btn" style="background:#f1f5f9; color:var(--text);"><span class="material-icons-round">chevron_left</span></button>
-                <button onclick="ListView.next()" class="gal-btn" style="background:#f1f5f9; color:var(--text);"><span class="material-icons-round">chevron_right</span></button>
-                <button onclick="ViewSwitcher.toMap()" class="gal-btn" style="background:var(--primary); color:white; margin-left:8px;" title="Go to Map"><span class="material-icons-round">map</span></button>
-            </div>
-        </div>
-        <div class="record-card-container" style="flex:1; position:relative; overflow:hidden; display:flex; flex-direction:column;">
-            <div id="lv-search-container" style="position:relative; margin: 12px auto; width: 96%; max-width: 560px; z-index:1002;"></div>
+        <div id="lv-search-container" style="position:relative; margin: 12px auto; width: 96%; max-width: 560px; z-index:1002; flex-shrink:0;"></div>
+        <div class="record-card-container" style="flex:1; overflow-x:hidden; overflow-y:auto; display:flex; flex-direction:column;">
             <div id="lv-content" class="record-card"></div>
+        </div>
+        <div class="list-nav" style="border-top:1px solid #e2e8f0; border-bottom:none; flex-shrink:0;">
+            <div style="display:flex; gap:6px;">
+                <button onclick="ListView.goFirst()" class="gal-btn" style="background:#f1f5f9; color:var(--text); width:44px; height:44px;" title="First Record"><span class="material-icons-round" style="font-size:20px;">first_page</span></button>
+                <button onclick="ListView.prev()" class="gal-btn" style="background:#f1f5f9; color:var(--text); width:44px; height:44px;" title="Previous Record"><span class="material-icons-round" style="font-size:20px;">chevron_left</span></button>
+            </div>
+            <div style="font-weight:700; font-size:13px; text-align:center; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">Record <span id="lv-idx">1</span> of <span id="lv-total">0</span></div>
+            <div style="display:flex; gap:6px;">
+                <button onclick="ListView.next()" class="gal-btn" style="background:#f1f5f9; color:var(--text); width:44px; height:44px;" title="Next Record"><span class="material-icons-round" style="font-size:20px;">chevron_right</span></button>
+                <button onclick="ListView.goLast()" class="gal-btn" style="background:#f1f5f9; color:var(--text); width:44px; height:44px;" title="Last Record"><span class="material-icons-round" style="font-size:20px;">last_page</span></button>
+                <button onclick="ViewSwitcher.toMap()" class="gal-btn" style="background:var(--primary); color:white; width:44px; height:44px;" title="Go to Map"><span class="material-icons-round" style="font-size:20px;">map</span></button>
+            </div>
         </div>
     </div>
 
@@ -10663,10 +10725,38 @@ async function handleCredentialResponse(response) {
         // Store for global use (e.g. Sync Monitor dropdown)
         window.USER_DB = roles;
 
-        const isAuthorized = roles.admins.includes(payload.email) || roles.field_staff.includes(payload.email);
-        if (!isAuthorized) throw new Error("Unauthorized User Email.");
+        let isAuthorized = roles.admins.includes(payload.email) || roles.field_staff.includes(payload.email);
+        let role = roles.admins.includes(payload.email) ? 'admin' : 'staff';
 
-        const role = roles.admins.includes(payload.email) ? 'admin' : 'staff';
+        // Fallback: check Supabase staff_roles for emails added in-app
+        if (!isAuthorized) {
+            try {
+                const { data: srData } = await window._supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'staff_roles')
+                    .single();
+                if (srData && srData.value) {
+                    const sr = srData.value;
+                    if (sr.admins && sr.admins.includes(payload.email)) {
+                        isAuthorized = true;
+                        role = 'admin';
+                        window.USER_DB = {
+                            admins: [...new Set([...(roles.admins || []), ...(sr.admins || [])])],
+                            field_staff: [...new Set([...(roles.field_staff || []), ...(sr.field_staff || [])])]
+                        };
+                    } else if (sr.field_staff && sr.field_staff.includes(payload.email)) {
+                        isAuthorized = true;
+                        role = 'staff';
+                        window.USER_DB = {
+                            admins: [...new Set([...(roles.admins || []), ...(sr.admins || [])])],
+                            field_staff: [...new Set([...(roles.field_staff || []), ...(sr.field_staff || [])])]
+                        };
+                    }
+                }
+            } catch (_) {}
+            if (!isAuthorized) throw new Error("Unauthorized User Email.");
+        }
 
         // Success!
         window.USER = {
@@ -11154,6 +11244,11 @@ const App = {
         // [OPTIMIZATION] Immediate Drive Sync on Boot (Relocated from setTimeout)
         if (window.DriveSync) {
             window.DriveSync.fetchAllSyncedData();
+        }
+
+        // Load delivery cache so map info card badge works everywhere
+        if (window.DeliveryModule) {
+            DeliveryModule.loadDeliveryCache();
         }
 
         console.log("App initialized.");
@@ -12788,9 +12883,8 @@ const ListView = {
                             <span id="delivery-strip-badge-${r[0]}" style="margin-left:auto; display:none;"></span>
                         </div>
                         <div style="height:1px; background:repeating-linear-gradient(90deg, #e2e8f0 0px, #e2e8f0 4px, transparent 4px, transparent 8px);"></div>
-                        <div id="delivery-gps-strip-${r[0]}" style="display:flex; align-items:center; gap:6px; font-size:10px; font-weight:700; color:#64748b; background:#f8fafc; padding:4px 10px 6px; transition: opacity 0.3s ease;">
-                            <span style="color:#3b82f6;">⏳</span>
-                            <span>Acquiring GPS position...</span>
+                        <div id="delivery-gps-strip-${r[0]}" style="display:flex; align-items:center; gap:8px; font-size:10px; font-weight:700; color:#64748b; background:#f8fafc; padding:4px 10px 6px; transition: opacity 0.3s ease;">
+                            <span>⏳ Acquiring GPS position...</span>
                         </div>
                     </div>
 
@@ -13144,8 +13238,10 @@ const ListView = {
         }
     },
 
-    next() { if (State.currentIdx < State.filtered.length - 1) { State.currentIdx++; this.render(); } },
+    goFirst() { if (State.filtered.length > 0) { State.currentIdx = 0; this.render(); } },
     prev() { if (State.currentIdx > 0) { State.currentIdx--; this.render(); } },
+    next() { if (State.currentIdx < State.filtered.length - 1) { State.currentIdx++; this.render(); } },
+    goLast() { if (State.filtered.length > 0) { State.currentIdx = State.filtered.length - 1; this.render(); } },
 
     jumpFromMap(id) {
         ViewSwitcher.toList(false);
@@ -13557,15 +13653,19 @@ const ListView = {
         if (!strip) return;
 
         if (state === 'no-gps' || state === 'error') {
-            strip.innerHTML = `<span style="color:#94a3b8;">📍</span><span style="color:#94a3b8;">GPS unavailable</span>`;
+            strip.style.justifyContent = 'center';
+            strip.innerHTML = `<span style="color:#94a3b8;">📍 GPS unavailable</span>`;
             return;
         }
 
         const gps = window.DeliveryModule ? DeliveryModule.currentGPS : null;
         if (!gps) {
-            strip.innerHTML = `<span style="color:#3b82f6;">⏳</span><span>Acquiring GPS position...</span>`;
+            strip.style.justifyContent = 'center';
+            strip.innerHTML = `<span>⏳ Acquiring GPS position...</span>`;
             return;
         }
+
+        strip.style.justifyContent = 'flex-start';
 
         const accuracy = Math.round(gps.accuracy);
         const bars = accuracy <= 10 ? 5 : accuracy <= 25 ? 4 : accuracy <= 50 ? 3 : accuracy <= 100 ? 2 : 1;
@@ -13575,13 +13675,16 @@ const ListView = {
             `<span style="display:inline-block;width:3px;height:${4+i*2}px;border-radius:1px;background:${i<bars?sigColor:'#cbd5e1'};margin-right:1px;"></span>`
         ).join('');
 
-        const targetLat = r[1], targetLng = r[2];
-        if (!targetLat || !targetLng) {
-            strip.innerHTML = `
+        const accuracyBadge = `
+            <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;background:#f1f5f9;">
                 <span>📍 ±${accuracy}m</span>
                 <span style="display:inline-flex;align-items:end;height:14px;">${barsHtml}</span>
-                <span style="font-size:9px;color:${sigColor};">${sigLabel}</span>
-                <span style="margin-left:auto;color:#94a3b8;font-size:9px;">No target coords</span>`;
+                <span style="font-weight:800;color:${sigColor};">${sigLabel}</span>
+            </span>`;
+
+        const targetLat = r[1], targetLng = r[2];
+        if (!targetLat || !targetLng) {
+            strip.innerHTML = accuracyBadge + `<span style="color:#94a3b8;">No target coords</span>`;
             return;
         }
 
@@ -13592,13 +13695,13 @@ const ListView = {
         else if (dist <= threshold) { dColor = '#d97706'; dLabel = 'At Edge'; }
         else { dColor = '#dc2626'; dLabel = 'Out of Range'; }
 
-        strip.innerHTML = `
-            <span>📍 ±${accuracy}m</span>
-            <span style="display:inline-flex;align-items:end;height:14px;margin-left:2px;margin-right:2px;">${barsHtml}</span>
-            <span style="margin-left:2px;display:flex;align-items:center;gap:4px;">
+        const distanceBadge = `
+            <span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:20px;background:${dColor}15;">
                 <span style="font-weight:900;color:${dColor};">${dist}m</span>
-                <span style="font-size:8px;padding:1px 4px;border-radius:10px;font-weight:800;background:${dColor}15;color:${dColor};">${dLabel}</span>
+                <span style="font-weight:900;color:${dColor};">${dLabel}</span>
             </span>`;
+
+        strip.innerHTML = accuracyBadge + distanceBadge;
     }
 };
 
@@ -14129,6 +14232,11 @@ const LocalCam = {
                     
                     if(window.App && App.showToast) App.showToast("Image Saved: " + filename);
                     else alert("Image Saved: " + filename);
+
+                    // Record delivery in Supabase (no GDrive file ID for local saves)
+                    if (window.DeliveryModule) {
+                        DeliveryModule.logDelivery(surveyId, null, 'delivered');
+                    }
                     
                 } catch (e) {
                     console.error("Compression failed", e);
@@ -16130,6 +16238,7 @@ const LayerManager = {
             tabs.push('⚙️ App Config');
             tabs.push('📈 Pin Management');
             tabs.push('📊 Sync Monitor');
+            tabs.push('🔐 Staff Management');
             tabs.push('📦 Delivery Log');
         }
 
@@ -16309,6 +16418,9 @@ const LayerManager = {
                 }
             }, 50);
         }
+        else if (this.activeTab === '🔐 Staff Management') {
+            contentHtml += this.renderStaffManagementTab();
+        }
         else if (this.activeTab === '📦 Delivery Log') {
             contentHtml += this.renderDeliveryLogTab();
         }
@@ -16357,7 +16469,7 @@ const LayerManager = {
 
         contentHtml += '</div>';
 
-        const showApply = !['📊 Stats', '📍 Marker Limit', '📈 Pin Management', '📊 Sync Monitor', '📦 Delivery Log'].includes(this.activeTab);
+        const showApply = !['📊 Stats', '📍 Marker Limit', '📈 Pin Management', '📊 Sync Monitor', '🔐 Staff Management', '📦 Delivery Log'].includes(this.activeTab);
         contentHtml += `
                 <div class="settings-footer" style="position: sticky; bottom: 0; padding: 12px 16px; background: white; border-top: 1px solid #e2e8f0; display: flex; gap: 10px; border-radius: 0 0 16px 16px; z-index: 10;">
                     ${showApply ? `
@@ -16583,16 +16695,23 @@ const LayerManager = {
         </div>`;
     },
 
+    // ─── Delivery Log Tab ─────────────────────────
+    _deliveryLogRecords: null,
+    _deliveryMarkers: null,
+    _deliveryMoveHandler: null,
+
     async _fetchAndRenderDeliveryLog() {
         const el = document.getElementById('delivery-log-content');
         if (!el || !window._supabase || !window.ACTIVE_BILLING_MONTH) return;
 
         const statusFilter = document.getElementById('dl-status')?.value || '';
         const searchQuery = document.getElementById('dl-search')?.value?.trim() || '';
+        const staffFilter = document.getElementById('dl-staff')?.value || '';
 
         let query = window._supabase.from('delivery_log').select('*')
             .eq('bill_month', window.ACTIVE_BILLING_MONTH);
         if (statusFilter) query = query.eq('status', statusFilter);
+        if (staffFilter) query = query.eq('staff_email', staffFilter);
         if (searchQuery) {
             query = query.or(`survey_id.ilike.%${searchQuery}%,consumer_name.ilike.%${searchQuery}%`);
         }
@@ -16603,6 +16722,8 @@ const LayerManager = {
             if (error) throw error;
 
             const records = data || [];
+            this._deliveryLogRecords = records;
+
             const total = records.length;
             const delivered = records.filter(r => r.status === 'delivered').length;
             const unsent = records.filter(r => r.status === 'unsent').length;
@@ -16610,6 +16731,11 @@ const LayerManager = {
                 const d = new Date(r.delivered_at);
                 return d.toDateString() === new Date().toDateString();
             }).length;
+
+            const staffEmails = [...new Set(records.map(r => r.staff_email).filter(Boolean))];
+            const staffOptions = staffEmails.map(e =>
+                `<option value="${e}"${staffFilter === e ? ' selected' : ''}>${e}</option>`
+            ).join('');
 
             let recordsHtml;
             if (records.length === 0) {
@@ -16619,60 +16745,66 @@ const LayerManager = {
                     records.map(function(r) {
                         var isDelivered = r.status === 'delivered';
                         var isUnsent = r.status === 'unsent';
-                        return '<div onclick="Settings.close(); setTimeout(function() { ListView.showOnMap(\'' + r.survey_id + '\') }, 150)"' +
-                            ' style="display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background 0.15s;"' +
+                        var portalCoords = r.target_lat && r.target_lng ? r.target_lat.toFixed(5) + ', ' + r.target_lng.toFixed(5) : '-';
+                        var captureCoords = r.capture_gps_lat && r.capture_gps_lng ? r.capture_gps_lat.toFixed(5) + ', ' + r.capture_gps_lng.toFixed(5) : '-';
+                        var dateStr = r.delivered_at ? new Date(r.delivered_at).toLocaleString(undefined, {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}) : '-';
+                        return '<div onclick="Settings.close(); setTimeout(function() { LayerManager.showDeliveryOnMap(\'' + r.survey_id + '\') }, 150)"' +
+                            ' style="display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background 0.15s; font-size:10px;"' +
                             ' onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">' +
-                            '<div style="flex:0 0 60px; font-weight:800; font-size:12px; color:var(--primary);">#' + r.survey_id + '</div>' +
-                            '<div style="flex:1; min-width:0;">' +
-                            '<div style="font-weight:700; font-size:11px; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (r.consumer_name || '-') + '</div>' +
-                            (r.staff_email ? '<div style="font-size:9px; color:#94a3b8;">' + r.staff_email + '</div>' : '') +
-                            '</div>' +
-                            '<div style="flex:0 0 auto;">' +
-                            '<span style="display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:6px; font-size:9px; font-weight:800;' +
+                            '<div style="flex:0 0 55px; font-weight:800; color:var(--primary);">#' + r.survey_id + '</div>' +
+                            '<div style="flex:0 0 80px; min-width:0; font-weight:700; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (r.consumer_name || '-') + '</div>' +
+                            '<div style="flex:0 0 70px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (r.staff_name || r.staff_email || '-') + '</div>' +
+                            '<div style="flex:0 0 60px;">' +
+                            '<span style="display:inline-flex; align-items:center; gap:2px; padding:1px 6px; border-radius:4px; font-size:9px; font-weight:800;' +
                             ' background:' + (isDelivered ? '#dcfce7' : isUnsent ? '#fee2e2' : '#fef3c7') + ';' +
                             ' color:' + (isDelivered ? '#15803d' : isUnsent ? '#b91c1c' : '#d97706') + ';">' +
                             (isDelivered ? '&#10003;' : isUnsent ? '&#9888;' : '') + ' ' + (r.status || 'unknown') +
                             '</span>' +
                             '</div>' +
-                            '<div style="flex:0 0 60px; text-align:right; font-size:10px; color:#64748b; font-weight:600;">' +
+                            '<div style="flex:1; min-width:0; font-family:monospace; font-size:9px; color:#64748b; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + portalCoords + '</div>' +
+                            '<div style="flex:1; min-width:0; font-family:monospace; font-size:9px; color:' + (isDelivered ? '#16a34a' : isUnsent ? '#dc2626' : '#64748b') + '; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + captureCoords + '</div>' +
+                            '<div style="flex:0 0 45px; text-align:right; font-weight:600; color:#64748b;">' +
                             (r.distance_to_target ? r.distance_to_target + 'm' : '-') +
                             '</div>' +
-                            '<div style="flex:0 0 80px; text-align:right; font-size:9px; color:#94a3b8;">' +
-                            (r.delivered_at ? new Date(r.delivered_at).toLocaleDateString() : '-') +
-                            '</div>' +
+                            '<div style="flex:0 0 100px; text-align:right; color:#94a3b8; font-size:9px;">' + dateStr + '</div>' +
                             '</div>';
                     }).join('');
             }
 
             let html = `
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
-                    <div style="background:#f0fdf4; border-radius:12px; padding:14px; text-align:center; border:1px solid #dcfce7;">
-                        <div style="font-size:10px; font-weight:800; color:#16a34a; letter-spacing:0.5px;">DELIVERED TODAY</div>
-                        <div style="font-size:24px; font-weight:900; color:#15803d; margin-top:4px;">${today}</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; margin-bottom:12px;">
+                    <div style="background:#f0fdf4; border-radius:10px; padding:10px 8px; text-align:center; border:1px solid #dcfce7;">
+                        <div style="font-size:9px; font-weight:800; color:#16a34a; letter-spacing:0.5px;">TODAY</div>
+                        <div style="font-size:20px; font-weight:900; color:#15803d; margin-top:2px;">${today}</div>
                     </div>
-                    <div style="background:#fef3c7; border-radius:12px; padding:14px; text-align:center; border:1px solid #fde68a;">
-                        <div style="font-size:10px; font-weight:800; color:#d97706; letter-spacing:0.5px;">UNSENT</div>
-                        <div style="font-size:24px; font-weight:900; color:#92400e; margin-top:4px;">${unsent}</div>
+                    <div style="background:#fee2e2; border-radius:10px; padding:10px 8px; text-align:center; border:1px solid #fecaca;">
+                        <div style="font-size:9px; font-weight:800; color:#dc2626; letter-spacing:0.5px;">UNSENT</div>
+                        <div style="font-size:20px; font-weight:900; color:#991b1b; margin-top:2px;">${unsent}</div>
                     </div>
-                    <div style="background:#eff6ff; border-radius:12px; padding:14px; text-align:center; border:1px solid #dbeafe;">
-                        <div style="font-size:10px; font-weight:800; color:#2563eb; letter-spacing:0.5px;">DELIVERED (MONTH)</div>
-                        <div style="font-size:24px; font-weight:900; color:#1e40af; margin-top:4px;">${delivered}</div>
+                    <div style="background:#eff6ff; border-radius:10px; padding:10px 8px; text-align:center; border:1px solid #dbeafe;">
+                        <div style="font-size:9px; font-weight:800; color:#2563eb; letter-spacing:0.5px;">MONTH</div>
+                        <div style="font-size:20px; font-weight:900; color:#1e40af; margin-top:2px;">${delivered}</div>
                     </div>
-                    <div style="background:#f8fafc; border-radius:12px; padding:14px; text-align:center; border:1px solid #e2e8f0;">
-                        <div style="font-size:10px; font-weight:800; color:#64748b; letter-spacing:0.5px;">TOTAL RECORDS</div>
-                        <div style="font-size:24px; font-weight:900; color:#1e293b; margin-top:4px;">${total}</div>
+                    <div style="background:#f8fafc; border-radius:10px; padding:10px 8px; text-align:center; border:1px solid #e2e8f0;">
+                        <div style="font-size:9px; font-weight:800; color:#64748b; letter-spacing:0.5px;">TOTAL</div>
+                        <div style="font-size:20px; font-weight:900; color:#1e293b; margin-top:2px;">${total}</div>
                     </div>
                 </div>
                 <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
                     <select id="dl-status" onchange="LayerManager._fetchAndRenderDeliveryLog()"
-                            style="flex:1; min-width:120px; padding:10px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:700;">
+                            style="flex:1; min-width:90px; padding:8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:700;">
                         <option value="">All Status</option>
                         <option value="delivered"${statusFilter === 'delivered' ? ' selected' : ''}>Delivered</option>
                         <option value="unsent"${statusFilter === 'unsent' ? ' selected' : ''}>Unsent</option>
                     </select>
+                    <select id="dl-staff" onchange="LayerManager._fetchAndRenderDeliveryLog()"
+                            style="flex:1; min-width:100px; padding:8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:700;">
+                        <option value="">All Staff</option>
+                        ${staffOptions}
+                    </select>
                     <input id="dl-search" type="text" placeholder="Search SID or name..." value="${searchQuery}"
                            oninput="clearTimeout(this._timer); this._timer=setTimeout(() => LayerManager._fetchAndRenderDeliveryLog(), 400)"
-                           style="flex:2; min-width:160px; padding:10px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:700;">
+                           style="flex:1; min-width:140px; padding:8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:700;">
                 </div>
                 <div style="background:white; border-radius:12px; border:1px solid #f1f5f9; overflow:hidden;">
                     ${recordsHtml}
@@ -16684,6 +16816,805 @@ const LayerManager = {
             console.error("[DeliveryLog] Fetch error:", e);
             el.innerHTML = '<div style="padding:40px; text-align:center; color:#ef4444; font-weight:800;">Failed to load delivery data.</div>';
         }
+    },
+
+    showDeliveryOnMap(sid) {
+        const sidStr = String(sid).trim();
+        const records = this._deliveryLogRecords || [];
+        const r = records.find(x => String(x.survey_id).trim() === sidStr);
+        if (!r || !State.map) return;
+
+        // Clean up previous markers
+        this._clearDeliveryMarkers();
+
+        const portalLat = parseFloat(r.target_lat);
+        const portalLng = parseFloat(r.target_lng);
+        const capLat = parseFloat(r.capture_gps_lat);
+        const capLng = parseFloat(r.capture_gps_lng);
+
+        const hasPortal = !isNaN(portalLat) && !isNaN(portalLng);
+        const hasCapture = !isNaN(capLat) && !isNaN(capLng);
+
+        ViewSwitcher.toMap();
+
+        this._deliveryMarkers = [];
+
+        if (hasPortal) {
+            const portalMarker = L.circleMarker([portalLat, portalLng], {
+                radius: 10, color: '#3b82f6', fillColor: '#3b82f6',
+                fillOpacity: 0.25, weight: 3, opacity: 0.6,
+                dashArray: '4,4'
+            }).addTo(State.map);
+            portalMarker.bindTooltip('📍 Portal Location', { permanent: false, direction: 'top' });
+            this._deliveryMarkers.push(portalMarker);
+        }
+
+        if (hasCapture) {
+            const isDelivered = r.status === 'delivered';
+            const color = isDelivered ? '#16a34a' : '#dc2626';
+            const captureMarker = L.circleMarker([capLat, capLng], {
+                radius: 12, color: color, fillColor: color,
+                fillOpacity: 0.35, weight: 3
+            }).addTo(State.map);
+            const distText = r.distance_to_target ? ` (${r.distance_to_target}m from portal)` : '';
+            captureMarker.bindTooltip(`📸 Capture${distText}`, { permanent: false, direction: 'top' });
+            this._deliveryMarkers.push(captureMarker);
+        }
+
+        // Connect portal and capture with a dashed line
+        if (hasPortal && hasCapture) {
+            const line = L.polyline([[portalLat, portalLng], [capLat, capLng]], {
+                color: '#64748b', weight: 2, opacity: 0.4, dashArray: '6,6'
+            }).addTo(State.map);
+            if (r.distance_to_target) {
+                line.bindTooltip(r.distance_to_target + 'm', { permanent: false, direction: 'center' });
+            }
+            this._deliveryMarkers.push(line);
+        }
+
+        // Auto-clear on any map click
+        this._deliveryClearClick = () => this._clearDeliveryMarkers();
+        State.map.once('click', this._deliveryClearClick);
+
+        // Fly to fit both markers after map transition completes
+        setTimeout(() => {
+            if (hasPortal && hasCapture) {
+                const bounds = L.latLngBounds([portalLat, portalLng], [capLat, capLng]);
+                State.map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 19, duration: 0.8 });
+            } else if (hasPortal) {
+                State.map.flyTo([portalLat, portalLng], 18, { duration: 0.6 });
+            } else if (hasCapture) {
+                State.map.flyTo([capLat, capLng], 18, { duration: 0.6 });
+            }
+        }, 400); // Wait for toMap() CSS transitions
+
+        // Markers persist until user clicks another delivery row
+    },
+
+    _clearDeliveryMarkers() {
+        if (this._deliveryMarkers) {
+            this._deliveryMarkers.forEach(m => State.map.removeLayer(m));
+            this._deliveryMarkers = null;
+        }
+        if (this._deliveryClearClick) {
+            State.map.off('click', this._deliveryClearClick);
+            this._deliveryClearClick = null;
+        }
+    },
+
+    // ─── Staff Management Tab (merged: access control + display names) ───
+    _staffNamesCache: null,
+
+    renderStaffManagementTab() {
+        if (!window._supabase) {
+            return '<div style="padding:40px; text-align:center; color:#ef4444; font-weight:800;">Supabase not connected.</div>';
+        }
+        setTimeout(() => this._fetchAndRenderStaffManagement(), 50);
+        return `<div id="staff-management-content" style="padding:4px;">
+            <div style="text-align:center; padding:40px; color:#64748b;">
+                <span class="material-icons-round spinning" style="font-size:32px; color:var(--primary); margin-bottom:12px;">manage_accounts</span>
+                <div style="font-weight:700;">Loading staff management...</div>
+            </div>
+        </div>`;
+    },
+
+    async _fetchAndRenderStaffManagement() {
+        const el = document.getElementById('staff-management-content');
+        if (!el) return;
+
+        try {
+            // 1. Load roles.json emails
+            const baseRoles = window.USER_DB || {};
+
+            // 2. Load saved staff roles + names from Supabase
+            let supabaseRoles = { admins: [], field_staff: [] };
+            let savedNames = {};
+            try {
+                const { data: srData } = await window._supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'staff_roles')
+                    .single();
+                if (srData && srData.value) {
+                    supabaseRoles = srData.value;
+                }
+            } catch (_) {}
+
+            try {
+                const { data } = await window._supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'delivery_config')
+                    .single();
+                if (data && data.value && data.value.staff_names) {
+                    savedNames = data.value.staff_names;
+                }
+            } catch (_) {}
+
+            this._staffNamesCache = { ...savedNames };
+
+            // 3. Merge: base emails (roles.json) marked as locked, supabase-only emails as mutable
+            const baseSet = new Set([...(baseRoles.admins || []), ...(baseRoles.field_staff || [])].map(e => e.toLowerCase()));
+            const mergedAdmins = [...new Set([...(baseRoles.admins || []), ...(supabaseRoles.admins || [])])];
+            const mergedStaff = [...new Set([...(baseRoles.field_staff || []), ...(supabaseRoles.field_staff || [])])];
+            const allMerged = [...new Set([...mergedAdmins, ...mergedStaff])].filter(Boolean);
+
+            const currentEmail = (window.USER && window.USER.email) || '';
+
+            // 4. Build rows
+            let rowsHtml = '';
+            allMerged.forEach(email => {
+                const isLocked = baseSet.has(email.toLowerCase());
+                const isAdmin = mergedAdmins.includes(email);
+                const isSelf = email.toLowerCase() === currentEmail.toLowerCase();
+                const displayName = savedNames[email] || '';
+                const safeEmail = email.replace(/[^a-z0-9@._-]/gi, '_');
+                rowsHtml += `
+                    <tr>
+                        <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-size:11px; color:#1e293b; font-weight:600; white-space:nowrap;">
+                            ${email}
+                            ${isLocked ? '<span style="margin-left:6px; font-size:9px; color:#94a3b8;">🔒</span>' : ''}
+                        </td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-size:11px; font-weight:700; color:${isAdmin ? '#2563eb' : '#64748b'};">
+                            ${isAdmin ? 'Admin' : 'Staff'}
+                        </td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9;">
+                            <input type="text" id="staff-name-${safeEmail}" value="${displayName}"
+                                   placeholder="Display name"
+                                   style="width:100%; padding:6px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; outline:none; box-sizing:border-box;">
+                        </td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:center;">
+                            ${isLocked
+                                ? '<span style="color:#cbd5e1; font-size:18px;">⛔</span>'
+                                : (isSelf
+                                    ? '<span style="color:#cbd5e1; font-size:11px; font-weight:600;">You</span>'
+                                    : `<button onclick="LayerManager._removeStaffRole('${email.replace(/'/g, "\\'")}')" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:18px;" title="Remove access">🗑️</button>`)
+                            }
+                        </td>
+                    </tr>`;
+            });
+
+            el.innerHTML = `
+                <div style="background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0; padding:16px; margin-bottom:16px;">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+                        <div style="width:40px; height:40px; border-radius:10px; background:#eff6ff; display:flex; align-items:center; justify-content:center;">
+                            <span class="material-icons-round" style="color:#2563eb; font-size:22px;">manage_accounts</span>
+                        </div>
+                        <div>
+                            <div style="font-weight:800; font-size:14px; color:#1e293b;">Staff Management</div>
+                            <div style="font-size:10px; color:#64748b; font-weight:600;">Manage login access and display names. 🔒 = from roles.json (cannot remove)</div>
+                        </div>
+                    </div>
+
+                    <div style="background:white; border-radius:10px; border:1px solid #e2e8f0; overflow:hidden; margin-bottom:12px;">
+                        <div style="max-height:300px; overflow-y:auto;">
+                            <table style="width:100%; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="position:sticky; top:0; background:#f8fafc;">
+                                        <th style="padding:10px 12px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:1px solid #e2e8f0;">Email</th>
+                                        <th style="padding:10px 12px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:1px solid #e2e8f0;">Role</th>
+                                        <th style="padding:10px 12px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:1px solid #e2e8f0;">Display Name</th>
+                                        <th style="padding:10px 12px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:1px solid #e2e8f0; width:50px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rowsHtml || '<tr><td colspan="4" style="padding:40px; text-align:center; color:#94a3b8; font-weight:700;">No staff emails found.</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Add new staff row -->
+                    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; background:white; border:1px dashed #cbd5e1; border-radius:10px; padding:12px;">
+                        <input type="email" id="staff-new-email" placeholder="✉️ email@example.com"
+                               style="flex:2; min-width:180px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:12px; outline:none;">
+                        <select id="staff-new-role" style="flex:1; min-width:90px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; font-size:12px; font-weight:700; background:white; outline:none;">
+                            <option value="field_staff">Staff</option>
+                            <option value="admins">Admin</option>
+                        </select>
+                        <button onclick="LayerManager._addStaffRole()" style="flex:0; background:#2563eb; color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:800; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap;">
+                            <span class="material-icons-round" style="font-size:16px;">person_add</span> Add
+                        </button>
+                    </div>
+
+                    <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
+                        <button onclick="LayerManager._saveAllStaffManagement()" class="secondary-btn" style="flex:1; margin:0; justify-content:center; background:#16a34a; color:white; border:none; padding:12px; border-radius:10px; font-weight:800; min-width:140px;">
+                            <span class="material-icons-round" style="font-size:18px;">cloud_done</span> Save All Changes
+                        </button>
+                        <button onclick="LayerManager._backfillStaffNames()" class="secondary-btn" style="flex:1; margin:0; justify-content:center; background:#2563eb; color:white; border:none; padding:12px; border-radius:10px; font-weight:800; min-width:160px;">
+                            <span class="material-icons-round" style="font-size:18px;">history</span> Backfill Historical Records
+                        </button>
+                    </div>
+                    <div id="staff-management-status" style="margin-top:12px; font-size:11px; font-weight:700; color:#64748b; text-align:center;"></div>
+                </div>`;
+        } catch (e) {
+            console.error("[StaffManagement] Error:", e);
+            el.innerHTML = '<div style="padding:40px; text-align:center; color:#ef4444; font-weight:800;">Failed to load staff data.</div>';
+        }
+    },
+
+    async _addStaffRole() {
+        const email = document.getElementById('staff-new-email');
+        const role = document.getElementById('staff-new-role');
+        if (!email || !role) return;
+        const val = email.value.trim().toLowerCase();
+        if (!val || !val.includes('@')) {
+            const s = document.getElementById('staff-management-status');
+            if (s) s.innerHTML = '<span style="color:#d97706;">Please enter a valid email address.</span>';
+            return;
+        }
+        email.value = '';
+        const statusEl = document.getElementById('staff-management-status');
+
+        try {
+            // Read existing staff_roles
+            let sr = { admins: [], field_staff: [] };
+            try {
+                const { data } = await window._supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'staff_roles')
+                    .single();
+                if (data && data.value) sr = data.value;
+            } catch (_) {}
+
+            const arr = sr[role.value] || [];
+            if (!arr.includes(val)) arr.push(val);
+            sr[role.value] = arr;
+
+            // Remove from the opposite role list to avoid duplicates
+            const otherRole = role.value === 'admins' ? 'field_staff' : 'admins';
+            sr[otherRole] = (sr[otherRole] || []).filter(e => e !== val);
+
+            const { error } = await window._supabase
+                .from('app_settings')
+                .upsert({ key: 'staff_roles', value: sr }, { onConflict: 'key' });
+            if (error) throw error;
+
+            statusEl.innerHTML = `<span style="color:#16a34a;">✓ Added ${val}</span>`;
+            setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+            this._fetchAndRenderStaffManagement();
+        } catch (e) {
+            statusEl.innerHTML = `<span style="color:#ef4444;">✗ Failed to add: ${e.message}</span>`;
+        }
+    },
+
+    async _removeStaffRole(email) {
+        if (!confirm(`Remove access for ${email}?`)) return;
+        const statusEl = document.getElementById('staff-management-status');
+
+        try {
+            let sr = { admins: [], field_staff: [] };
+            try {
+                const { data } = await window._supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'staff_roles')
+                    .single();
+                if (data && data.value) sr = data.value;
+            } catch (_) {}
+
+            sr.admins = (sr.admins || []).filter(e => e !== email);
+            sr.field_staff = (sr.field_staff || []).filter(e => e !== email);
+
+            const { error } = await window._supabase
+                .from('app_settings')
+                .upsert({ key: 'staff_roles', value: sr }, { onConflict: 'key' });
+            if (error) throw error;
+
+            statusEl.innerHTML = `<span style="color:#16a34a;">✓ Removed ${email}</span>`;
+            setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+            this._fetchAndRenderStaffManagement();
+        } catch (e) {
+            statusEl.innerHTML = `<span style="color:#ef4444;">✗ Failed to remove: ${e.message}</span>`;
+        }
+    },
+
+    async _saveAllStaffManagement() {
+        const statusEl = document.getElementById('staff-management-status');
+        if (!statusEl) return;
+
+        const baseRoles = window.USER_DB || {};
+        const baseSet = new Set([...(baseRoles.admins || []), ...(baseRoles.field_staff || [])].map(e => e.toLowerCase()));
+
+        // Collect display names from visible rows
+        let sr = { admins: [], field_staff: [] };
+        try {
+            const { data } = await window._supabase
+                .from('app_settings')
+                .select('value')
+                .eq('key', 'staff_roles')
+                .single();
+            if (data && data.value) sr = data.value;
+        } catch (_) {}
+
+        // Collect all emails currently known: base + supabase
+        const allEmails = [...new Set([
+            ...(baseRoles.admins || []),
+            ...(baseRoles.field_staff || []),
+            ...(sr.admins || []),
+            ...(sr.field_staff || [])
+        ])].filter(Boolean);
+
+        const staffNames = {};
+        allEmails.forEach(email => {
+            const safeEmail = email.replace(/[^a-z0-9@._-]/gi, '_');
+            const input = document.getElementById(`staff-name-${safeEmail}`);
+            const val = input ? input.value.trim() : '';
+            if (val) staffNames[email] = val;
+        });
+
+        statusEl.innerHTML = '<span style="color:#2563eb;">Saving...</span>';
+
+        try {
+            // Save display names to delivery_config
+            let existingConfig = {};
+            try {
+                const { data } = await window._supabase
+                    .from('app_settings')
+                    .select('value')
+                    .eq('key', 'delivery_config')
+                    .single();
+                if (data && data.value) existingConfig = data.value;
+            } catch (_) {}
+
+            const { error: cfgErr } = await window._supabase
+                .from('app_settings')
+                .upsert({
+                    key: 'delivery_config',
+                    value: { ...existingConfig, staff_names: { ...(existingConfig.staff_names || {}), ...staffNames } }
+                }, { onConflict: 'key' });
+            if (cfgErr) throw cfgErr;
+
+            this._staffNamesCache = { ...staffNames };
+            statusEl.innerHTML = '<span style="color:#16a34a;">✓ Staff management saved successfully!</span>';
+            setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+        } catch (e) {
+            console.error("[StaffManagement] Save error:", e);
+            statusEl.innerHTML = `<span style="color:#ef4444;">✗ Save failed: ${e.message}</span>`;
+        }
+    },
+
+    async _backfillStaffNames() {
+        const statusEl = document.getElementById('staff-management-status');
+        if (!statusEl) return;
+        if (!this._staffNamesCache || Object.keys(this._staffNamesCache).length === 0) {
+            statusEl.innerHTML = '<span style="color:#d97706;">Save staff names first before backfilling.</span>';
+            return;
+        }
+
+        statusEl.innerHTML = '<span style="color:#2563eb;">Backfilling historical records...</span>';
+
+        let updated = 0;
+        let failed = 0;
+
+        for (const [email, displayName] of Object.entries(this._staffNamesCache)) {
+            try {
+                const { error } = await window._supabase
+                    .from('delivery_log')
+                    .update({ staff_name: displayName })
+                    .eq('staff_email', email)
+                    .is('staff_name', null);
+
+                if (error) {
+                    failed++;
+                } else {
+                    updated++;
+                }
+            } catch (_) {
+                failed++;
+            }
+        }
+
+        statusEl.innerHTML = `<span style="color:#16a34a;">✓ Backfill complete: ${updated} records updated${failed ? `, ${failed} failed` : ''}.</span>`;
+        setTimeout(() => { statusEl.innerHTML = ''; }, 5000);
+    },
+
+    // ─── Delivery Activity Panel ─────────────────
+    _deliveryActivityOpen: false,
+    _deliveryActivityData: null,
+    _deliveryActivityLastFetch: null,
+    _deliveryActivityTimer: null,
+    _deliveryActivityTickTimer: null,
+    _activityMarkerGroup: null,
+
+    toggleDeliveryActivityPanel() {
+        if (this._deliveryActivityOpen) {
+            this._closeDeliveryActivityPanel();
+        } else {
+            this._openDeliveryActivityPanel();
+        }
+    },
+
+    _openDeliveryActivityPanel() {
+        let el = document.getElementById('delivery-activity-panel');
+        if (!el) this._setupDeliveryActivityPanel();
+        const panel = document.getElementById('delivery-activity-panel');
+        panel.style.display = 'flex';
+        this._deliveryActivityOpen = true;
+        this._startDeliveryActivityTimer();
+        if (!this._deliveryActivityData) {
+            this._fetchDeliveryActivityData(false);
+        } else {
+            this._updateDeliveryActivityPanel(this._deliveryActivityData);
+            this._fetchDeliveryActivityData(true);
+        }
+    },
+
+    _closeDeliveryActivityPanel() {
+        const panel = document.getElementById('delivery-activity-panel');
+        if (panel) panel.style.display = 'none';
+        this._deliveryActivityOpen = false;
+        this._stopDeliveryActivityTimer();
+        this._clearAllActivityMarkers();
+    },
+
+    _setupDeliveryActivityPanel() {
+        if (document.getElementById('delivery-activity-panel')) return;
+        const panel = document.createElement('div');
+        panel.id = 'delivery-activity-panel';
+        panel.innerHTML =
+            '<div class="dap-drag-handle">' +
+                '<span style="font-weight:800; font-size:13px; color:#1e293b; display:flex; align-items:center; gap:6px;">' +
+                    '<span class="material-icons-round" style="font-size:18px; color:#8b5cf6;">assignment_turned_in</span>' +
+                    'Delivery Activity' +
+                '</span>' +
+                '<div style="display:flex; gap:4px;">' +
+                    '<button onclick="LayerManager._minimizeDeliveryActivityPanel()" style="background:none; border:none; cursor:pointer; color:#94a3b8; padding:2px; display:flex;" title="Minimize">' +
+                        '<span class="material-icons-round" style="font-size:18px;">remove</span>' +
+                    '</button>' +
+                    '<button onclick="LayerManager._closeDeliveryActivityPanel()" style="background:none; border:none; cursor:pointer; color:#94a3b8; padding:2px; display:flex;" title="Close">' +
+                        '<span class="material-icons-round" style="font-size:18px;">close</span>' +
+                    '</button>' +
+                '</div>' +
+            '</div>' +
+            '<div class="dap-body">' +
+                '<div class="dap-kpi-row">' +
+                    '<div class="dap-kpi-card"><div class="dap-kpi-val" id="dap-total">—</div><div class="dap-kpi-label">Today</div></div>' +
+                    '<div class="dap-kpi-card"><div class="dap-kpi-val" id="dap-delivered">—</div><div class="dap-kpi-label">Delivered</div></div>' +
+                    '<div class="dap-kpi-card"><div class="dap-kpi-val" id="dap-unsent">—</div><div class="dap-kpi-label">Unsent</div></div>' +
+                    '<div class="dap-kpi-card"><div class="dap-kpi-val" id="dap-staff-count">—</div><div class="dap-kpi-label">Staff</div></div>' +
+                '</div>' +
+                '<div style="display:flex; gap:6px; margin-bottom:10px; align-items:center;">' +
+                    '<select id="dap-filter" onchange="LayerManager._deliveryActivityFilterChange()" style="flex:1; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
+                        '<option value="all">All Deliveries</option>' +
+                    '</select>' +
+                '</div>' +
+                '<div style="margin-bottom:10px;">' +
+                    '<div style="font-weight:700; color:#64748b; font-size:10px; margin-bottom:4px;">ACTIVE STAFF</div>' +
+                    '<div id="dap-staff-list" style="display:flex; flex-wrap:wrap; gap:4px;"></div>' +
+                '</div>' +
+                '<div>' +
+                    '<div style="font-weight:700; color:#64748b; font-size:10px; margin-bottom:4px;">RECENT DELIVERIES</div>' +
+                    '<div id="dap-recent-list" style="border:1px solid #f1f5f9; border-radius:8px; overflow:hidden;"></div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="dap-footer">' +
+                '<span id="dap-updated">Last updated: —</span>' +
+                '<span id="dap-count"></span>' +
+            '</div>' +
+            '<div class="dap-resize-handle"></div>';
+        document.getElementById('main-stage').appendChild(panel);
+        this._initPanelDrag();
+        this._initPanelResize();
+        panel.style.top = '60px';
+        panel.style.right = '12px';
+    },
+
+    _minimizeDeliveryActivityPanel() {
+        const body = document.getElementById('dap-body');
+        const footer = document.querySelector('#delivery-activity-panel .dap-footer');
+        if (body) body.style.display = body.style.display === 'none' ? '' : 'none';
+        if (footer) footer.style.display = footer.style.display === 'none' ? '' : 'none';
+    },
+
+    _initPanelDrag() {
+        let isDragging = false, startX, startY, origX, origY;
+        const handle = document.querySelector('#delivery-activity-panel .dap-drag-handle');
+        if (!handle) return;
+        const self = this;
+        handle.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            const panel = document.getElementById('delivery-activity-panel');
+            startX = e.clientX;
+            startY = e.clientY;
+            origX = parseInt(panel.style.left) || 0;
+            origY = parseInt(panel.style.top) || 60;
+            panel.style.right = 'auto';
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mouseup', stopDrag);
+        });
+        handle.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 0) return;
+            const t = e.touches[0];
+            isDragging = true;
+            const panel = document.getElementById('delivery-activity-panel');
+            startX = t.clientX;
+            startY = t.clientY;
+            origX = parseInt(panel.style.left) || 0;
+            origY = parseInt(panel.style.top) || 60;
+            panel.style.right = 'auto';
+            document.addEventListener('touchmove', onDragTouch, { passive: false });
+            document.addEventListener('touchend', stopDragTouch);
+        }, { passive: false });
+        function onDrag(e) { if (!isDragging) return; var panel = document.getElementById('delivery-activity-panel'); panel.style.left = (origX + (e.clientX - startX)) + 'px'; panel.style.top = Math.max(0, origY + (e.clientY - startY)) + 'px'; }
+        function onDragTouch(e) { if (!isDragging || e.touches.length === 0) return; var t = e.touches[0]; var panel = document.getElementById('delivery-activity-panel'); panel.style.left = (origX + (t.clientX - startX)) + 'px'; panel.style.top = Math.max(0, origY + (t.clientY - startY)) + 'px'; }
+        function stopDrag() { isDragging = false; document.removeEventListener('mousemove', onDrag); document.removeEventListener('mouseup', stopDrag); }
+        function stopDragTouch() { isDragging = false; document.removeEventListener('touchmove', onDragTouch); document.removeEventListener('touchend', stopDragTouch); }
+    },
+
+    _initPanelResize() {
+        let isResizing = false, startX, startY, startW, startH;
+        const handle = document.querySelector('#delivery-activity-panel .dap-resize-handle');
+        if (!handle) return;
+        handle.addEventListener('mousedown', function(e) {
+            isResizing = true;
+            const panel = document.getElementById('delivery-activity-panel');
+            startX = e.clientX;
+            startY = e.clientY;
+            startW = panel.offsetWidth;
+            startH = panel.offsetHeight;
+            document.addEventListener('mousemove', onResize);
+            document.addEventListener('mouseup', stopResize);
+        });
+        handle.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 0) return;
+            const t = e.touches[0];
+            isResizing = true;
+            const panel = document.getElementById('delivery-activity-panel');
+            startX = t.clientX;
+            startY = t.clientY;
+            startW = panel.offsetWidth;
+            startH = panel.offsetHeight;
+            document.addEventListener('touchmove', onResizeTouch, { passive: false });
+            document.addEventListener('touchend', stopResizeTouch);
+        }, { passive: false });
+        function onResize(e) { if (!isResizing) return; var panel = document.getElementById('delivery-activity-panel'); panel.style.width = Math.max(280, startW + (e.clientX - startX)) + 'px'; panel.style.height = Math.max(300, startH + (e.clientY - startY)) + 'px'; }
+        function onResizeTouch(e) { if (!isResizing || e.touches.length === 0) return; var t = e.touches[0]; var panel = document.getElementById('delivery-activity-panel'); panel.style.width = Math.max(280, startW + (t.clientX - startX)) + 'px'; panel.style.height = Math.max(300, startH + (t.clientY - startY)) + 'px'; }
+        function stopResize() { isResizing = false; document.removeEventListener('mousemove', onResize); document.removeEventListener('mouseup', stopResize); }
+        function stopResizeTouch() { isResizing = false; document.removeEventListener('touchmove', onResizeTouch); document.removeEventListener('touchend', stopResizeTouch); }
+    },
+
+    async _fetchDeliveryActivityData(incremental) {
+        if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
+        var now = new Date();
+        var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        try {
+            var q = window._supabase.from('delivery_log')
+                .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
+                .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                .gte('delivered_at', todayStart)
+                .order('delivered_at', { ascending: false });
+            if (incremental && this._deliveryActivityLastFetch) q = q.gt('delivered_at', this._deliveryActivityLastFetch);
+            if (!incremental) q = q.limit(5000);
+            var result = await q;
+            if (result.error) throw result.error;
+            var data = result.data || [];
+            this._deliveryActivityLastFetch = now.toISOString();
+            if (incremental && this._deliveryActivityData) {
+                if (data.length > 0) {
+                    var map = new Map();
+                    this._deliveryActivityData.forEach(function(r) { map.set(r.survey_id, r); });
+                    data.forEach(function(r) { map.set(r.survey_id, r); });
+                    this._deliveryActivityData = Array.from(map.values());
+                }
+            } else {
+                this._deliveryActivityData = data;
+            }
+            if (this._deliveryActivityData) this._updateDeliveryActivityPanel(this._deliveryActivityData);
+            this._updateLastUpdated();
+        } catch (e) { console.error('[DeliveryActivity] Fetch error:', e); }
+    },
+
+    _updateDeliveryActivityPanel(records) {
+        if (!records || !records.length) {
+            document.getElementById('dap-total').textContent = '0';
+            document.getElementById('dap-delivered').textContent = '0';
+            document.getElementById('dap-unsent').textContent = '0';
+            document.getElementById('dap-staff-count').textContent = '0';
+            this._renderDeliveryActivityStaff([]);
+            this._renderDeliveryActivityRecent([]);
+            this._clearAllActivityMarkers();
+            return;
+        }
+        var total = records.length;
+        var delivered = 0, unsent = 0, staffSet = new Set();
+        records.forEach(function(r) {
+            if (r.status === 'delivered') delivered++;
+            else if (r.status === 'unsent') unsent++;
+            if (r.staff_email) staffSet.add(r.staff_email);
+        });
+        document.getElementById('dap-total').textContent = total;
+        document.getElementById('dap-delivered').textContent = delivered;
+        document.getElementById('dap-unsent').textContent = unsent;
+        document.getElementById('dap-staff-count').textContent = staffSet.size;
+        this._buildDeliveryActivityFilters(records);
+        var filter = (document.getElementById('dap-filter') && document.getElementById('dap-filter').value) || 'all';
+        var filtered = this._applyDeliveryActivityFilter(records, filter);
+        this._renderDeliveryActivityStaff(filtered);
+        this._renderDeliveryActivityRecent(filtered);
+        this._showAllActivityMarkers(filtered);
+        var countEl = document.getElementById('dap-count');
+        if (countEl) countEl.textContent = filtered.length + ' records';
+    },
+
+    _buildDeliveryActivityFilters(records) {
+        var sel = document.getElementById('dap-filter');
+        if (!sel) return;
+        var currentVal = sel.value;
+        var staffEmails = [];
+        var staffSet = new Set();
+        records.forEach(function(r) { if (r.staff_email) staffSet.add(r.staff_email); });
+        staffEmails = Array.from(staffSet);
+        var cities = new Set(), mcs = new Set();
+        if (window.SID_MAP) {
+            records.forEach(function(r) {
+                var raw = window.SID_MAP.get(String(r.survey_id));
+                if (raw) {
+                    if (raw[11]) cities.add(raw[11]);
+                    if (raw[12]) mcs.add(raw[12]);
+                }
+            });
+        }
+        var html = '<option value="all">All Deliveries</option>';
+        staffEmails.forEach(function(e) { html += '<option value="staff:' + e + '">Staff: ' + e.split('@')[0] + '</option>'; });
+        Array.from(cities).sort().forEach(function(c) { html += '<option value="city:' + c + '">City: ' + c + '</option>'; });
+        Array.from(mcs).sort().forEach(function(m) { html += '<option value="mc:' + m + '">MC/UC: ' + m + '</option>'; });
+        sel.innerHTML = html;
+        if (currentVal) { sel.value = currentVal; }
+    },
+
+    _applyDeliveryActivityFilter(records, filter) {
+        if (!filter || filter === 'all') return records;
+        var parts = filter.split(':');
+        var type = parts[0], value = parts[1];
+        if (!value) return records;
+        if (type === 'staff') return records.filter(function(r) { return r.staff_email === value; });
+        if (type === 'city' || type === 'mc') {
+            return records.filter(function(r) {
+                if (!window.SID_MAP) return true;
+                var raw = window.SID_MAP.get(String(r.survey_id));
+                if (!raw) return true;
+                return type === 'city' ? raw[11] === value : raw[12] === value;
+            });
+        }
+        return records;
+    },
+
+    _renderDeliveryActivityStaff(records) {
+        var el = document.getElementById('dap-staff-list');
+        if (!el) return;
+        var staffMap = {};
+        records.forEach(function(r) { if (r.staff_email) staffMap[r.staff_email] = (staffMap[r.staff_email] || 0) + 1; });
+        var entries = Object.entries(staffMap).sort(function(a, b) { return b[1] - a[1]; });
+        if (!entries.length) { el.innerHTML = '<span style="color:#94a3b8; font-size:10px;">No staff activity</span>'; return; }
+        var self = this;
+        el.innerHTML = entries.map(function(item) {
+            var email = item[0], count = item[1];
+            var name = (self._staffNamesCache && self._staffNamesCache[email]) || email.split('@')[0];
+            return '<span style="background:#f0f7ff; color:#2563eb; padding:3px 8px; border-radius:6px; font-size:10px; font-weight:700; display:inline-flex; align-items:center; gap:4px; cursor:pointer;" title="' + email + '" onclick="document.getElementById(\'dap-filter\').value=\'staff:' + email + '\';LayerManager._deliveryActivityFilterChange()">' +
+                '<span>' + name + '</span>' +
+                '<span style="background:#2563eb; color:white; border-radius:4px; padding:1px 5px; font-size:9px;">' + count + '</span>' +
+            '</span>';
+        }).join('');
+    },
+
+    _renderDeliveryActivityRecent(records) {
+        var el = document.getElementById('dap-recent-list');
+        if (!el) return;
+        var recent = records.slice(0, 20);
+        if (!recent.length) { el.innerHTML = '<div style="padding:12px; text-align:center; color:#94a3b8; font-size:11px;">No deliveries yet today</div>'; return; }
+        var html = '';
+        var self = this;
+        recent.forEach(function(r) {
+            var isDel = r.status === 'delivered';
+            var isUnsent = r.status === 'unsent';
+            var dateStr = r.delivered_at ? new Date(r.delivered_at).toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'}) : '-';
+            var name = r.consumer_name ? r.consumer_name.substring(0, 12) : '-';
+            var staffName = (self._staffNamesCache && self._staffNamesCache[r.staff_email]) || (r.staff_name || '');
+            html += '<div onclick="LayerManager.showDeliveryOnMap(\'' + r.survey_id + '\')" style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-bottom:1px solid #f8fafc; cursor:pointer; font-size:10px; transition:background 0.15s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">' +
+                '<span style="font-weight:800; color:#8b5cf6; flex:0 0 48px;">#' + r.survey_id + '</span>' +
+                '<span style="flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; color:#1e293b;">' + name + '</span>' +
+                (staffName ? '<span style="color:#64748b; font-size:9px; flex:0 0 auto; max-width:60px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + staffName + '</span>' : '') +
+                '<span style="display:inline-flex; align-items:center; gap:2px; padding:1px 5px; border-radius:4px; font-size:8px; font-weight:800; background:' + (isDel ? '#dcfce7' : isUnsent ? '#fee2e2' : '#fef3c7') + '; color:' + (isDel ? '#15803d' : isUnsent ? '#b91c1c' : '#d97706') + ';">' +
+                    (isDel ? '&#10003;' : isUnsent ? '&#9888;' : '') + ' ' + (r.status || 'unknown') +
+                '</span>' +
+                (r.distance_to_target ? '<span style="color:#94a3b8; font-size:9px; flex:0 0 30px; text-align:right;">' + r.distance_to_target + 'm</span>' : '') +
+                '<span style="color:#94a3b8; font-size:9px; text-align:right; flex:0 0 40px;">' + dateStr + '</span>' +
+            '</div>';
+        });
+        el.innerHTML = html;
+    },
+
+    _showAllActivityMarkers(records) {
+        if (!State.map) return;
+        this._clearAllActivityMarkers();
+        if (!this._deliveryActivityOpen) return;
+        var withCoords = records.filter(function(r) { return r.target_lat && r.target_lng; });
+        if (!withCoords.length) return;
+        var self = this;
+        this._activityMarkerGroup = L.markerClusterGroup({
+            chunkedLoading: true,
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            disableClusteringAtZoom: 18,
+            iconCreateFunction: function(cluster) {
+                var count = cluster.getChildCount();
+                return L.divIcon({
+                    html: '<div style="background:#8b5cf6; color:white; border-radius:50%; width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:11px; border:3px solid white; box-shadow:0 2px 6px rgba(0,0,0,0.25);">' + count + '</div>',
+                    className: 'marker-cluster',
+                    iconSize: L.point(34, 34)
+                });
+            }
+        });
+        withCoords.forEach(function(r) {
+            var lat = parseFloat(r.target_lat), lng = parseFloat(r.target_lng);
+            if (isNaN(lat) || isNaN(lng)) return;
+            var color = r.status === 'delivered' ? '#16a34a' : '#dc2626';
+            var marker = L.circleMarker([lat, lng], { radius: 6, color: color, fillColor: color, fillOpacity: 0.35, weight: 2, opacity: 0.5 });
+            marker.bindTooltip('#' + r.survey_id + ' \u00b7 ' + (r.status || 'unknown') + (r.distance_to_target ? ' \u00b7 ' + r.distance_to_target + 'm' : ''), { permanent: false, direction: 'top' });
+            self._activityMarkerGroup.addLayer(marker);
+        });
+        this._activityMarkerGroup.addTo(State.map);
+    },
+
+    _clearAllActivityMarkers() {
+        if (this._activityMarkerGroup) {
+            if (State.map) State.map.removeLayer(this._activityMarkerGroup);
+            this._activityMarkerGroup = null;
+        }
+    },
+
+    _deliveryActivityFilterChange() {
+        if (!this._deliveryActivityData) return;
+        var filter = (document.getElementById('dap-filter') && document.getElementById('dap-filter').value) || 'all';
+        var filtered = this._applyDeliveryActivityFilter(this._deliveryActivityData, filter);
+        this._renderDeliveryActivityStaff(filtered);
+        this._renderDeliveryActivityRecent(filtered);
+        this._showAllActivityMarkers(filtered);
+        var countEl = document.getElementById('dap-count');
+        if (countEl) countEl.textContent = filtered.length + ' records';
+    },
+
+    _startDeliveryActivityTimer() {
+        this._stopDeliveryActivityTimer();
+        var self = this;
+        this._deliveryActivityTimer = setInterval(function() { if (self._deliveryActivityOpen) self._fetchDeliveryActivityData(true); }, 60000);
+        this._deliveryActivityTickTimer = setInterval(function() { self._updateLastUpdated(); }, 5000);
+    },
+
+    _stopDeliveryActivityTimer() {
+        if (this._deliveryActivityTimer) { clearInterval(this._deliveryActivityTimer); this._deliveryActivityTimer = null; }
+        if (this._deliveryActivityTickTimer) { clearInterval(this._deliveryActivityTickTimer); this._deliveryActivityTickTimer = null; }
+    },
+
+    _updateLastUpdated() {
+        var el = document.getElementById('dap-updated');
+        if (!el || !this._deliveryActivityLastFetch) return;
+        var seconds = Math.floor((Date.now() - new Date(this._deliveryActivityLastFetch).getTime()) / 1000);
+        el.textContent = seconds < 60 ? 'Updated ' + seconds + 's ago' : 'Updated ' + Math.floor(seconds / 60) + 'm ago';
     }
 };
 
@@ -21960,11 +22891,18 @@ window.DeliveryModule = {
 
         const email = document.getElementById('drive-email')?.value || '';
 
+        // Look up display name from cached staff names mapping
+        let staffName = '';
+        if (email && window.LayerManager && window.LayerManager._staffNamesCache) {
+            staffName = window.LayerManager._staffNamesCache[email] || '';
+        }
+
         const payload = {
             survey_id: sid,
             consumer_name: decodePII(r[4]),
             bill_month: billMonth,
             staff_email: email,
+            staff_name: staffName,
             capture_gps_lat: lat,
             capture_gps_lng: lng,
             capture_gps_accuracy: acc,
