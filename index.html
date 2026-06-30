@@ -3802,13 +3802,14 @@ body {
         pointer-events: auto;
 }
 
-.list-nav {
+.list-pagination {
         display: flex;
-        justify-content: space-between;
+        justify-content: center;
         align-items: center;
-        padding: 16px;
+        padding: 12px 16px;
         background: white;
-        border-bottom: 1px solid #e2e8f0;
+        border-top: 1px solid #e2e8f0;
+        flex-shrink: 0;
 }
 
 .map-nav {
@@ -9523,7 +9524,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.06.30.1450</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.06.30.1522</span>
             </div>
         </div>
         
@@ -10145,10 +10146,11 @@ input[type=number] {
 
     <!-- Persistent List View -->
     <div id="list-view-stage">
-        <div class="list-nav">
-            <div style="display:flex; gap:8px;">
-                <button onclick="Sidebar.toggle()" class="gal-btn mobile-sidebar-toggle" style="background:#eff6ff; color:var(--primary);" title="Filters"><span class="material-icons-round">tune</span></button>
-            </div>
+        <div id="lv-search-container" style="position:relative; margin: 12px auto; width: 96%; max-width: 560px; z-index:1002; flex-shrink:0;"></div>
+        <div class="record-card-container" style="flex:1; position:relative; overflow:auto; display:flex; flex-direction:column;">
+            <div id="lv-content" class="record-card"></div>
+        </div>
+        <div class="list-pagination">
             <div style="display:flex; gap:4px; align-items:center;">
                 <button onclick="ListView.goFirst()" class="gal-btn" style="background:#f1f5f9; color:var(--text); padding:4px 6px;" title="First"><span class="material-icons-round" style="font-size:16px;">first_page</span></button>
                 <button onclick="ListView.prev()" class="gal-btn" style="background:#f1f5f9; color:var(--text);"><span class="material-icons-round">chevron_left</span></button>
@@ -10157,10 +10159,6 @@ input[type=number] {
                 <button onclick="ListView.goLast()" class="gal-btn" style="background:#f1f5f9; color:var(--text); padding:4px 6px;" title="Last"><span class="material-icons-round" style="font-size:16px;">last_page</span></button>
                 <button onclick="ViewSwitcher.toMap()" class="gal-btn" style="background:var(--primary); color:white; margin-left:8px;" title="Go to Map"><span class="material-icons-round">map</span></button>
             </div>
-        </div>
-        <div class="record-card-container" style="flex:1; position:relative; overflow:hidden; display:flex; flex-direction:column;">
-            <div id="lv-search-container" style="position:relative; margin: 12px auto; width: 96%; max-width: 560px; z-index:1002;"></div>
-            <div id="lv-content" class="record-card"></div>
         </div>
     </div>
 
@@ -11059,7 +11057,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.06.30.1450";
+window.DATA_VERSION = "v2026.06.30.1522";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -12904,7 +12902,7 @@ const ListView = {
                         </div>
                         <div style="height:1px; background:repeating-linear-gradient(90deg, #e2e8f0 0px, #e2e8f0 4px, transparent 4px, transparent 8px);"></div>
                         <div id="delivery-gps-strip-${r[0]}" style="display:flex; align-items:center; gap:8px; font-size:10px; font-weight:700; color:#64748b; background:#f8fafc; padding:4px 10px 6px; transition: opacity 0.3s ease;">
-                            <span>Ã¢ÂÂ³ Acquiring GPS position...</span>
+                            <span>⏳ Acquiring GPS position...</span>
                         </div>
                     </div>
 
@@ -13674,14 +13672,14 @@ const ListView = {
 
         if (state === 'no-gps' || state === 'error') {
             strip.style.justifyContent = 'center';
-            strip.innerHTML = `<span style="color:#94a3b8;">Ã°Å¸â€œÂ GPS unavailable</span>`;
+            strip.innerHTML = `<span style="color:#94a3b8;">📍 GPS unavailable</span>`;
             return;
         }
 
         const gps = window.DeliveryModule ? DeliveryModule.currentGPS : null;
         if (!gps) {
             strip.style.justifyContent = 'center';
-            strip.innerHTML = `<span>Ã¢ÂÂ³ Acquiring GPS position...</span>`;
+            strip.innerHTML = `<span>⏳ Acquiring GPS position...</span>`;
             return;
         }
 
@@ -13697,7 +13695,7 @@ const ListView = {
 
         const accuracyBadge = `
             <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;background:#f1f5f9;">
-                <span>Ã°Å¸â€œÂ Ã‚Â±${accuracy}m</span>
+                <span>📍 ±${accuracy}m</span>
                 <span style="display:inline-flex;align-items:end;height:14px;">${barsHtml}</span>
                 <span style="font-weight:800;color:${sigColor};">${sigLabel}</span>
             </span>`;
