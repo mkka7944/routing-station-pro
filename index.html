@@ -9523,7 +9523,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.06.30.1445</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.06.30.1450</span>
             </div>
         </div>
         
@@ -11059,7 +11059,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.06.30.1445";
+window.DATA_VERSION = "v2026.06.30.1450";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -17571,27 +17571,44 @@ const LayerManager = {
                     if (!pageData.length || pageData.length < step) hasMore = false;
                 }
                 this._deliveryActivityStaffData = allStaffRows;
-            }
-            var q = window._supabase.from('delivery_log')
-                .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
-                .eq('bill_month', window.ACTIVE_BILLING_MONTH)
-                .gte('delivered_at', todayStart)
-                .order('delivered_at', { ascending: false });
-            if (incremental && this._deliveryActivityLastFetch) q = q.gt('delivered_at', this._deliveryActivityLastFetch);
-            var result = await q;
-            if (result.error) throw result.error;
-            var data = result.data || [];
-            this._deliveryActivityLastFetch = now.toISOString();
-            if (incremental && this._deliveryActivityData) {
-                if (data.length > 0) {
+                var mainFrom = 0;
+                var mainStep = 1000;
+                var mainHasMore = true;
+                while (mainHasMore) {
+                    var mainPage = await window._supabase.from('delivery_log')
+                        .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
+                        .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                        .gte('delivered_at', todayStart)
+                        .order('delivered_at', { ascending: false })
+                        .range(mainFrom, mainFrom + mainStep - 1);
+                    var mainPageData = mainPage.data || [];
+                    if (!this._deliveryActivityData) {
+                        this._deliveryActivityData = mainPageData;
+                    } else {
+                        this._deliveryActivityData = this._deliveryActivityData.concat(mainPageData);
+                    }
+                    mainFrom += mainStep;
+                    if (!mainPageData.length || mainPageData.length < mainStep) mainHasMore = false;
+                }
+            } else {
+                var q = window._supabase.from('delivery_log')
+                    .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
+                    .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                    .gte('delivered_at', todayStart)
+                    .order('delivered_at', { ascending: false });
+                if (this._deliveryActivityLastFetch) q = q.gt('delivered_at', this._deliveryActivityLastFetch);
+                var result = await q;
+                if (result.error) throw result.error;
+                var data = result.data || [];
+                if (this._deliveryActivityData && data.length > 0) {
                     var map = new Map();
                     this._deliveryActivityData.forEach(function(r) { map.set(r.survey_id, r); });
                     data.forEach(function(r) { map.set(r.survey_id, r); });
                     this._deliveryActivityData = Array.from(map.values());
                 }
-            } else {
-                this._deliveryActivityData = data;
+                if (!this._deliveryActivityData) this._deliveryActivityData = data;
             }
+            this._deliveryActivityLastFetch = now.toISOString();
             if (this._deliveryActivityData) this._updateDeliveryActivityPanel(this._deliveryActivityData);
             this._updateLastUpdated();
         } catch (e) { console.error('[DeliveryActivity] Fetch error:', e); }
