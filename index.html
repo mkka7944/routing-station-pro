@@ -1154,8 +1154,8 @@ path.leaflet-interactive:focus {
 /* Settings Modal Desktop Size */
 @media (min-width: 769px) {
     #modal-settings .modal-content {
-        max-width: 800px !important;
-        max-height: 85vh !important;
+        max-width: 1200px !important;
+        max-height: 92vh !important;
         height: auto !important;
     }
 }
@@ -8298,8 +8298,8 @@ input[type=number] {
 /* Settings Modal Desktop Size */
 @media (min-width: 769px) {
         #modal-settings .modal-content {
-                max-width: 800px !important;
-                max-height: 85vh !important;
+                max-width: 1200px !important;
+                max-height: 92vh !important;
                 height: auto !important;
         }
 }
@@ -9495,7 +9495,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.01.1127</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.01.1225</span>
             </div>
         </div>
         
@@ -10617,7 +10617,7 @@ input[type=number] {
 
 
 <div id="modal-settings" onclick="if(event.target===this) Settings.close()" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:30000; align-items:center; justify-content:center; padding:20px;">
-    <div class="modal-content" style="background:white; border-radius:16px; width:100%; max-width:640px; max-height: 85vh; height: auto; display:flex; flex-direction:column; box-shadow: 0 20px 50px rgba(0,0,0,0.2); overflow: hidden; position: relative;">
+    <div class="modal-content" style="background:white; border-radius:16px; width:100%; max-width:640px; max-height: 92vh; height: auto; display:flex; flex-direction:column; box-shadow: 0 20px 50px rgba(0,0,0,0.2); overflow: hidden; position: relative;">
         <div style="padding:14px 20px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center; background: #fafafa;">
             <div style="display:flex; align-items:center; gap:10px;">
                 <span class="material-icons-round" style="color:#10b981; font-size:24px;">settings_suggest</span>
@@ -11025,7 +11025,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.01.1127";
+window.DATA_VERSION = "v2026.07.01.1225";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -16846,6 +16846,16 @@ const LayerManager = {
             } else {
                 var self = this;
                 recordsHtml = '<div style="max-height:400px; overflow-y:auto;">' +
+                    '<div style="display:flex; align-items:center; gap:8px; padding:8px 10px; font-size:9px; font-weight:800; color:#64748b; background:#f8fafc; border-bottom:1px solid #e2e8f0; position:sticky; top:0; z-index:5;">' +
+                        '<div style="flex:0 0 55px;">SID</div>' +
+                        '<div style="flex:2; min-width:0;">Consumer</div>' +
+                        '<div style="flex:1; min-width:0;">Staff</div>' +
+                        '<div style="flex:0 0 65px; text-align:center;">Status</div>' +
+                        '<div style="flex:2; min-width:0; text-align:center;">Portal</div>' +
+                        '<div style="flex:2; min-width:0; text-align:center;">Capture</div>' +
+                        '<div style="flex:0 0 55px; text-align:right;">Dist</div>' +
+                        '<div style="flex:0 0 100px; text-align:right;">Date</div>' +
+                    '</div>' +
                     records.map(function(r) {
                         var isUnsent = self._isEffectiveUnsent(r);
                         var isDelivered = !isUnsent && r.status === 'delivered';
@@ -16856,18 +16866,18 @@ const LayerManager = {
                             ' style="display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background 0.15s; font-size:10px;"' +
                             ' onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">' +
                             '<div style="flex:0 0 55px; font-weight:800; color:var(--primary);">#' + r.survey_id + '</div>' +
-                            '<div style="flex:0 0 80px; min-width:0; font-weight:700; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (r.consumer_name || '-') + '</div>' +
-                            '<div style="flex:0 0 70px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (r.staff_name || r.staff_email || '-') + '</div>' +
-                            '<div style="flex:0 0 60px;">' +
+                            '<div style="flex:2; min-width:0; font-weight:700; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (r.consumer_name || '-') + '</div>' +
+                            '<div style="flex:1; min-width:0; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (r.staff_name || r.staff_email || '-') + '</div>' +
+                            '<div style="flex:0 0 65px;">' +
                             '<span style="display:inline-flex; align-items:center; gap:2px; padding:1px 6px; border-radius:4px; font-size:9px; font-weight:800;' +
                             ' background:' + (isDelivered ? '#dcfce7' : isUnsent ? '#fee2e2' : '#fef3c7') + ';' +
                             ' color:' + (isDelivered ? '#15803d' : isUnsent ? '#b91c1c' : '#d97706') + ';">' +
                             (isDelivered ? '&#10003;' : isUnsent ? '&#9888;' : '') + ' ' + (isUnsent ? 'unsent' : r.status || 'unknown') +
                             '</span>' +
                             '</div>' +
-                            '<div style="flex:1; min-width:0; font-family:monospace; font-size:9px; color:#64748b; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + portalCoords + '</div>' +
-                            '<div style="flex:1; min-width:0; font-family:monospace; font-size:9px; color:' + (isDelivered ? '#16a34a' : isUnsent ? '#dc2626' : '#64748b') + '; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + captureCoords + '</div>' +
-                            '<div style="flex:0 0 45px; text-align:right; font-weight:600; color:#64748b;">' +
+                            '<div style="flex:2; min-width:0; font-family:monospace; font-size:9px; color:#64748b; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + portalCoords + '</div>' +
+                            '<div style="flex:2; min-width:0; font-family:monospace; font-size:9px; color:' + (isDelivered ? '#16a34a' : isUnsent ? '#dc2626' : '#64748b') + '; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + captureCoords + '</div>' +
+                            '<div style="flex:0 0 55px; text-align:right; font-weight:600; color:#64748b;">' +
                             (r.distance_to_target ? r.distance_to_target + 'm' : '-') +
                             '</div>' +
                             '<div style="flex:0 0 100px; text-align:right; color:#94a3b8; font-size:9px;">' + dateStr + '</div>' +
@@ -16875,22 +16885,27 @@ const LayerManager = {
                     }).join('');
             }
 
+            var _btnBase = 'class="secondary-btn" style="width:32px;height:32px;border-radius:50%;padding:0;border:1px solid #e2e8f0;display:inline-flex;align-items:center;justify-content:center;transition:all 0.15s;color:#1e293b;';
             var paginationHtml = '';
             if (totalPages > 1) {
-                paginationHtml = '<div style="display:flex; align-items:center; justify-content:center; gap:8px; padding:10px; background:#f8fafc; border-top:1px solid #e2e8f0;">' +
-                    '<button onclick="LayerManager._fetchAndRenderDeliveryLog(1)"' +
-                    (page <= 1 ? ' disabled style="opacity:0.4;cursor:default;"' : ' style="cursor:pointer;"') +
-                    ' style="padding:6px 10px; border-radius:6px; border:1px solid #e2e8f0; background:white; font-size:12px; font-weight:700; transition:all 0.15s;">&#9198;</button>' +
-                    '<button onclick="LayerManager._fetchAndRenderDeliveryLog(' + (page - 1) + ')"' +
-                    (page <= 1 ? ' disabled style="opacity:0.4;cursor:default;"' : ' style="cursor:pointer;"') +
-                    ' style="padding:6px 10px; border-radius:6px; border:1px solid #e2e8f0; background:white; font-size:12px; font-weight:700; transition:all 0.15s;">&#9664;</button>' +
+                paginationHtml = '<div style="display:flex; align-items:center; justify-content:center; gap:4px; padding:12px; background:#fff; border-top:1px solid #e2e8f0;">' +
+                    '<button onclick="LayerManager._fetchAndRenderDeliveryLog(1)" ' + (page <= 1 ? 'disabled' : '') +
+                    ' style="' + _btnBase + (page <= 1 ? 'opacity:0.3;cursor:default;' : 'cursor:pointer;') + '">' +
+                        '<span class="material-icons-round" style="font-size:16px;">first_page</span>' +
+                    '</button>' +
+                    '<button onclick="LayerManager._fetchAndRenderDeliveryLog(' + (page - 1) + ')" ' + (page <= 1 ? 'disabled' : '') +
+                    ' style="' + _btnBase + (page <= 1 ? 'opacity:0.3;cursor:default;' : 'cursor:pointer;') + '">' +
+                        '<span class="material-icons-round" style="font-size:16px;">chevron_left</span>' +
+                    '</button>' +
                     '<span style="font-size:11px; font-weight:700; color:#1e293b; padding:0 8px;">Page ' + page + ' of ' + totalPages + '</span>' +
-                    '<button onclick="LayerManager._fetchAndRenderDeliveryLog(' + (page + 1) + ')"' +
-                    (page >= totalPages ? ' disabled style="opacity:0.4;cursor:default;"' : ' style="cursor:pointer;"') +
-                    ' style="padding:6px 10px; border-radius:6px; border:1px solid #e2e8f0; background:white; font-size:12px; font-weight:700; transition:all 0.15s;">&#9654;</button>' +
-                    '<button onclick="LayerManager._fetchAndRenderDeliveryLog(' + totalPages + ')"' +
-                    (page >= totalPages ? ' disabled style="opacity:0.4;cursor:default;"' : ' style="cursor:pointer;"') +
-                    ' style="padding:6px 10px; border-radius:6px; border:1px solid #e2e8f0; background:white; font-size:12px; font-weight:700; transition:all 0.15s;">&#9197;</button>' +
+                    '<button onclick="LayerManager._fetchAndRenderDeliveryLog(' + (page + 1) + ')" ' + (page >= totalPages ? 'disabled' : '') +
+                    ' style="' + _btnBase + (page >= totalPages ? 'opacity:0.3;cursor:default;' : 'cursor:pointer;') + '">' +
+                        '<span class="material-icons-round" style="font-size:16px;">chevron_right</span>' +
+                    '</button>' +
+                    '<button onclick="LayerManager._fetchAndRenderDeliveryLog(' + totalPages + ')" ' + (page >= totalPages ? 'disabled' : '') +
+                    ' style="' + _btnBase + (page >= totalPages ? 'opacity:0.3;cursor:default;' : 'cursor:pointer;') + '">' +
+                        '<span class="material-icons-round" style="font-size:16px;">last_page</span>' +
+                    '</button>' +
                     '</div>';
             }
 
@@ -16939,10 +16954,13 @@ const LayerManager = {
                            ' style="flex:1; min-width:140px; padding:8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:700;">' +
                 '</div>' +
                 '<div style="background:white; border-radius:12px; border:1px solid #f1f5f9; overflow:hidden;">' +
-                    recordsHtml +
                     paginationHtml +
+                    recordsHtml +
                 '</div>';
+            var _scrollEl = el.closest('.settings-scroll-area');
+            var _savedScroll = _scrollEl ? _scrollEl.scrollTop : 0;
             el.innerHTML = html;
+            if (_scrollEl) { setTimeout(function() { _scrollEl.scrollTop = _savedScroll; }, 0); }
         } catch (e) {
             console.error('[DeliveryLog] Fetch error:', e);
             el.innerHTML = '<div style="padding:40px; text-align:center; color:#ef4444; font-weight:800;">Failed to load delivery data.</div>';
@@ -18665,6 +18683,12 @@ const Settings = {
             if (error) throw error;
 
             window.ACTIVE_BILLING_MONTH = newMonth;
+
+            // Refresh delivery cache for the new month (clears stale entries from old month)
+            if (window.DeliveryModule) {
+                await DeliveryModule.loadDeliveryCache();
+            }
+
             if (typeof LayerManager !== 'undefined') {
                 LayerManager.showToast("Billing cycle updated to " + newMonth + " ✨");
                 LayerManager.renderSettingsUI();
