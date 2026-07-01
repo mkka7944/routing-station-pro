@@ -8520,35 +8520,6 @@ input[type=number] {
         transition: all 0.2s;
 }
 
-.marker-static-btn {
-    width: 30px;
-    height: 30px;
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.3);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    pointer-events: none; /* Explicitly static */
-}
-
-.marker-static-btn.delivered {
-    background: rgba(16, 185, 129, 0.2);
-    color: #34d399;
-    border-color: rgba(16, 185, 129, 0.3);
-}
-
-.marker-static-btn.unsent {
-    background: rgba(239, 68, 68, 0.15);
-    color: #f87171;
-    border-color: rgba(239, 68, 68, 0.3);
-}
-
-.marker-static-btn .material-icons-round {
-    font-size: 18px;
-}
-
 .marker-btn-list {
         flex-shrink: 0;
         background: rgba(255, 255, 255, 0.2);
@@ -9524,7 +9495,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.06.30.1522</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.01.1127</span>
             </div>
         </div>
         
@@ -10225,15 +10196,12 @@ input[type=number] {
                 </div>
 
                 <!-- Action buttons as overlay -->
-                <div class="marker-card-actions-overlay">
-                    <div id="marker-card-status-container" style="display:flex; align-items:center; gap:8px;">
-                        <!-- Delivery Indicator (Static) -->
-                        <div id="btn-delivery-modal" class="marker-static-btn" title="Delivery Status">
-                            <span class="material-icons-round">local_shipping</span>
+                    <div class="marker-card-actions-overlay">
+                        <div id="marker-card-status-container" style="display:flex; align-items:center; gap:8px;">
+                            <span id="marker-card-delivery-status" style="display:none; align-items:center; gap:4px; font-size:10px; font-weight:800; padding:3px 10px; border-radius:10px;"></span>
                         </div>
-                    </div>
-                    
-                    <button class="marker-btn-list" id="btn-modal-list-view">
+                        
+                        <button class="marker-btn-list" id="btn-modal-list-view">
                         <span class="material-icons-round">view_list</span> List
                     </button>
                 </div>
@@ -11057,7 +11025,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.06.30.1522";
+window.DATA_VERSION = "v2026.07.01.1127";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -12884,10 +12852,9 @@ const ListView = {
                                 title="View Pin">
                             <span class="material-icons-round" style="font-size:18px;">${(staging && staging.isManualPinned) ? 'location_on' : 'add_location_alt'}</span>
                         </button>
-                        <button type="button" id="btn-delivery-${r[0]}" title="Mark Delivered" disabled 
-                                style="background:#fef3c7; color:#d97706; border:none; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:default; opacity:0.6;">
+                        ${window.USER && window.USER.role === 'admin' ? `<button type="button" id="btn-delivery-${r[0]}" title="Quick Mark" disabled style="background:#fef3c7; color:#d97706; border:none; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:default; opacity:0.6;">
                             <span class="material-icons-round" style="font-size:18px;">local_shipping</span>
-                        </button>
+                        </button>` : ''}
                     </div>
                     <div id="verifier-info-${r[0]}" style="display:none; align-items:center; gap:4px; font-weight:800; font-size:10px; color:#64748b; margin-top:6px; padding:0 4px; white-space:normal; overflow-wrap:break-word;"></div>
                 </div>
@@ -13052,10 +13019,10 @@ const ListView = {
                     <div id="offline-warning-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}" style="margin-bottom:8px;"></div>
                     
                     <div class="sync-action-grid" style="grid-template-columns: repeat(2, 1fr);">
-                        <button onclick="DeliveryModule.handleCloudClick('${r[0]}', 'drive-input-camera')" class="sync-action-btn camera" style="background:linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color:white; border:3px solid #b45309; box-shadow:0 4px 12px rgba(180,83,9,0.3); font-weight:900; font-size:13px;">
+                        <button id="btn-cam-cloud-${r[0]}" onclick="DeliveryModule.handleCloudClick('${r[0]}', 'drive-input-camera')" class="sync-action-btn camera" style="background:linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color:white; border:3px solid #b45309; box-shadow:0 4px 12px rgba(180,83,9,0.3); font-weight:900; font-size:13px;">
                             <span class="material-icons-round" style="font-size:20px;">photo_camera</span> Direct Cloud
                         </button>
-                        <button onclick="DeliveryModule.handleCloudClick('${r[0]}', 'local-cam-input')" class="sync-action-btn" style="background:#e0e7ff; color:#4338ca; border:1px solid #c7d2fe; font-weight:700;">
+                        <button id="btn-save-phone-${r[0]}" onclick="DeliveryModule.handleCloudClick('${r[0]}', 'local-cam-input')" class="sync-action-btn" style="background:#e0e7ff; color:#4338ca; border:1px solid #c7d2fe; font-weight:700;">
                             <span class="material-icons-round" style="font-size:16px;">camera_enhance</span> Save to Phone
                         </button>
                     </div>
@@ -13096,16 +13063,23 @@ const ListView = {
                 verifierInfo.innerHTML = `<span class="material-icons-round" style="font-size:14px; color:#16a34a;">verified</span> <span style="color:#16a34a;">Verified by: ${cachedInfo.verified_by || 'Field Staff'}</span>`;
             }
 
-            // Sync Delivery UI if record says it is delivered
-            const houseRecord = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
-            if (houseRecord && houseRecord.is_delivered) {
-                this.updateDeliveryUI(sid, 'delivered');
-            }
-
-            // Also check delivery cache (covers SIDs not yet in verified_houses)
-            if (window.DeliveryModule && window.DeliveryModule._deliveryCache && !(houseRecord && houseRecord.is_delivered)) {
+            // Sync Delivery UI — check cache FIRST (has effective status + staff name)
+            var delStaffName = '';
+            var didUpdate = false;
+            if (window.DeliveryModule && window.DeliveryModule._deliveryCache) {
                 const cached = window.DeliveryModule._deliveryCache.get(sidStr);
-                if (cached) this.updateDeliveryUI(sid, cached);
+                if (cached) {
+                    delStaffName = cached.staffName || '';
+                    this.updateDeliveryUI(sid, cached.status, delStaffName);
+                    didUpdate = true;
+                }
+            }
+            if (!didUpdate) {
+                // Fallback: ALL_VERIFIED_DATA (only 'delivered', no staff name)
+                const houseRecord = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
+                if (houseRecord && houseRecord.is_delivered) {
+                    this.updateDeliveryUI(sid, 'delivered', delStaffName);
+                }
             }
 
             return;
@@ -13114,33 +13088,40 @@ const ListView = {
         // NO FALLBACK QUERIES HERE - Managed by batchSyncRoute
     },
 
-    async checkDeliveryStatus(sid) {
-        const btn = document.getElementById(`btn-delivery-${sid}`);
-        if (!btn) return;
+    async checkDeliveryStatus(sid, attempt) {
+        if (attempt === undefined) attempt = 0;
 
         const sidStr = String(sid);
-        
-        // DEPEGGED: Always prefer House-centric confirmed data from verified_houses
-        if (window.ALL_VERIFIED_DATA) {
-            const found = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
-            if (found && found.is_delivered) {
-                this.updateDeliveryUI(sid, 'delivered');
-                return;
-            }
-        }
+        var staffName = '';
 
-        // 2. Check delivery cache (batch-loaded from delivery_log)
+        // Check delivery cache FIRST (batch-loaded from delivery_log, has effective status)
         if (window.DeliveryModule && window.DeliveryModule._deliveryCache) {
             const cached = window.DeliveryModule._deliveryCache.get(sidStr);
             if (cached) {
-                this.updateDeliveryUI(sid, cached);
+                staffName = cached.staffName || '';
+                this.updateDeliveryUI(sid, cached.status, staffName);
                 return;
             }
         }
 
-        // Default state if not confirmed as delivered 
-        btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">local_shipping</span>`;
-        btn.style.opacity = '0.6';
+        // Retry once if cache is still loading (async race)
+        if ((!window.DeliveryModule || !window.DeliveryModule._deliveryCache) && attempt < 3) {
+            var self = this;
+            setTimeout(function() { self.checkDeliveryStatus(sid, attempt + 1); }, 300);
+            return;
+        }
+
+        // Fallback: ALL_VERIFIED_DATA (shows 'delivered', no staff name)
+        if (window.ALL_VERIFIED_DATA) {
+            const found = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
+            if (found && found.is_delivered) {
+                this.updateDeliveryUI(sid, 'delivered', staffName);
+                return;
+            }
+        }
+
+        // Default state — enable button for admin to Quick Mark, update badge for all users
+        this.updateDeliveryUI(sid);
     },
 
     async batchSyncRoute(sids) {
@@ -13196,32 +13177,55 @@ const ListView = {
         if (window.ListView) ListView.toggleActionPanel(sid, true);
     },
 
-    updateDeliveryUI(sid, status) {
-        const btn = document.getElementById(`btn-delivery-${sid}`);
-        if (!btn) return;
+    _updateBadgeOnly(badge, status, nameSuffix) {
+        if (!badge) return;
+        if (status === 'delivered') {
+            badge.style.display = 'inline-flex';
+            badge.style.alignItems = 'center';
+            badge.style.gap = '4px';
+            badge.style.background = '#dcfce7';
+            badge.style.color = '#15803d';
+            badge.style.fontSize = '10px';
+            badge.style.fontWeight = '800';
+            badge.style.padding = '2px 8px';
+            badge.style.borderRadius = '10px';
+            badge.innerHTML = `<span class="material-icons-round" style="font-size:12px;">check_circle</span> Delivered` + nameSuffix;
+        } else if (status === 'unsent') {
+            badge.style.display = 'inline-flex';
+            badge.style.alignItems = 'center';
+            badge.style.gap = '4px';
+            badge.style.background = '#fef3c7';
+            badge.style.color = '#92400e';
+            badge.style.fontSize = '10px';
+            badge.style.fontWeight = '800';
+            badge.style.padding = '2px 8px';
+            badge.style.borderRadius = '10px';
+            badge.innerHTML = `<span class="material-icons-round" style="font-size:12px;">warning</span> Unsent` + nameSuffix;
+        } else {
+            badge.style.display = 'none';
+        }
+    },
 
+    updateDeliveryUI(sid, status, staffName) {
         const badge = document.getElementById(`delivery-strip-badge-${sid}`);
+        var nameSuffix = staffName ? ' by ' + staffName : '';
+        this._updateBadgeOnly(badge, status, nameSuffix);
+
+        const btn = document.getElementById(`btn-delivery-${sid}`);
+        if (!btn) {
+            this._setDeliveryActionButtons(sid, status === 'delivered' || status === 'unsent');
+            return;
+        }
 
         if (status === 'delivered') {
             btn.style.background = '#dcfce7';
             btn.style.color = '#15803d';
             btn.style.border = 'none';
             btn.title = "Delivered";
-            btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">local_shipping</span>`;
+            btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">check_circle</span>`;
             btn.disabled = true;
             btn.style.opacity = '1';
-            if (badge) {
-                badge.style.display = 'inline-flex';
-                badge.style.alignItems = 'center';
-                badge.style.gap = '4px';
-                badge.style.background = '#dcfce7';
-                badge.style.color = '#15803d';
-                badge.style.fontSize = '10px';
-                badge.style.fontWeight = '800';
-                badge.style.padding = '2px 8px';
-                badge.style.borderRadius = '10px';
-                badge.innerHTML = `<span class="material-icons-round" style="font-size:12px;">check_circle</span> Delivered`;
-            }
+            this._setDeliveryActionButtons(sid, true);
         } else if (status === 'unsent') {
             btn.style.background = '#fee2e2';
             btn.style.color = '#b91c1c';
@@ -13230,30 +13234,41 @@ const ListView = {
             btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">location_off</span>`;
             btn.disabled = true;
             btn.style.opacity = '1';
-            if (badge) {
-                badge.style.display = 'inline-flex';
-                badge.style.alignItems = 'center';
-                badge.style.gap = '4px';
-                badge.style.background = '#fef3c7';
-                badge.style.color = '#92400e';
-                badge.style.fontSize = '10px';
-                badge.style.fontWeight = '800';
-                badge.style.padding = '2px 8px';
-                badge.style.borderRadius = '10px';
-                badge.innerHTML = `<span class="material-icons-round" style="font-size:12px;">warning</span> Unsent`;
-            }
+            this._setDeliveryActionButtons(sid, true);
         } else {
             btn.style.background = '#fef3c7';
             btn.style.color = '#d97706';
             btn.style.border = 'none';
-            btn.title = "Mark Delivered";
+            btn.title = "Quick Mark";
             btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">local_shipping</span>`;
-            btn.disabled = true;
-            btn.style.opacity = '0.6';
-            if (badge) {
-                badge.style.display = 'none';
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+            btn.onclick = function(e) { e.stopPropagation(); ListView.quickMarkDelivery(sid); };
+            this._setDeliveryActionButtons(sid, false);
+        }
+    },
+
+    _setDeliveryActionButtons(sid, disabled) {
+        var cam = document.getElementById('btn-cam-cloud-' + sid);
+        var phone = document.getElementById('btn-save-phone-' + sid);
+        if (cam) { cam.disabled = disabled; cam.style.opacity = disabled ? '0.5' : '1'; cam.style.pointerEvents = disabled ? 'none' : 'auto'; }
+        if (phone) { phone.disabled = disabled; phone.style.opacity = disabled ? '0.5' : '1'; phone.style.pointerEvents = disabled ? 'none' : 'auto'; }
+    },
+
+    quickMarkDelivery(sid) {
+        if (window.USER && window.USER.role !== 'admin') return;
+        if (!window.DeliveryModule) return;
+        if (window.DeliveryModule._deliveryCache && window.DeliveryModule._deliveryCache.get(String(sid))) return;
+        var status = 'delivered';
+        if (window.DeliveryModule.currentGPS) {
+            var r = State.filtered.find(function(x) { return x[0] == sid; });
+            if (r && r[1] && r[2]) {
+                var dist = DeliveryModule.haversine(DeliveryModule.currentGPS.lat, DeliveryModule.currentGPS.lng, r[1], r[2]);
+                if (dist > 50) status = 'unsent';
             }
         }
+        DeliveryModule.logDelivery(sid, null, status);
     },
 
     goFirst() { if (State.filtered.length > 0) { State.currentIdx = 0; this.render(); } },
@@ -15469,13 +15484,11 @@ const DriveSync = {
                 await this.saveOfflineImage(currentSid, newFiles[i], email);
             }
             
-            const status = window._pendingDeliveryStatus || 'delivered';
             if (window.DeliveryModule) {
-                DeliveryModule.logDelivery(currentSid, null, status);
-            }
-            if (window.ListView && typeof ListView.updateDeliveryUI === 'function') {
-                ListView.updateDeliveryUI(currentSid, status);
-                ListView._updateGPSStripUI('ready'); // Trigger strip refresh
+                DeliveryModule.logDelivery(currentSid, null, window._pendingDeliveryStatus || 'delivered');
+                if (window.ListView && typeof ListView._updateGPSStripUI === 'function') {
+                    ListView._updateGPSStripUI('ready');
+                }
             }
 
         } finally {
@@ -16938,8 +16951,12 @@ const LayerManager = {
 
     showDeliveryOnMap(sid) {
         const sidStr = String(sid).trim();
-        const records = this._deliveryLogRecords || [];
-        const r = records.find(x => String(x.survey_id).trim() === sidStr);
+
+        // Try delivery log records first, then DAP activity data
+        var r = this._deliveryLogRecords ? this._deliveryLogRecords.find(function(x) { return String(x.survey_id).trim() === sidStr; }) : null;
+        if (!r && this._deliveryActivityData) {
+            r = this._deliveryActivityData.find(function(x) { return String(x.survey_id).trim() === sidStr; });
+        }
         if (!r || !State.map) return;
 
         // Clean up previous markers
@@ -17004,9 +17021,14 @@ const LayerManager = {
             } else if (hasCapture) {
                 State.map.flyTo([capLat, capLng], 18, { duration: 0.6 });
             }
+
+            // Show marker card after map settles
+            if (window.SpatialRouter && typeof SpatialRouter.showMarkerCard === 'function') {
+                setTimeout(function() { SpatialRouter.showMarkerCard(sid); }, 500);
+            }
         }, 400); // Wait for toMap() CSS transitions
 
-        // Markers persist until user clicks another delivery row
+        // Markers persist until user clicks another delivery row or map
     },
 
     _clearDeliveryMarkers() {
@@ -19813,22 +19835,35 @@ const SpatialRouter = {
             btnManual.style.background = '#8b5cf6';
         }
 
-        // DELIVERY INDICATOR SYNC
-        const deliveryIndicator = document.getElementById('btn-delivery-modal');
-        if (deliveryIndicator) {
-            const cached = window.DeliveryModule && window.DeliveryModule._deliveryCache && window.DeliveryModule._deliveryCache.get(sidStr);
-            const inGlobalData = verifierInfo && verifierInfo.is_delivered;
-            
-            deliveryIndicator.classList.remove('delivered', 'unsent');
-            
-            if (cached === 'unsent') {
-                deliveryIndicator.classList.add('unsent');
-                deliveryIndicator.title = "Flagged Unsent";
-            } else if (cached === 'delivered' || inGlobalData) {
-                deliveryIndicator.classList.add('delivered');
-                deliveryIndicator.title = "Marked as Delivered";
+        // DELIVERY STATUS BADGE
+        const deliveryStatusEl = document.getElementById('marker-card-delivery-status');
+        console.log('[Router:showHouseInfo] delivery badge for', sidStr, 'elem:', !!deliveryStatusEl);
+        if (deliveryStatusEl) {
+            var dStatus = '';
+            var dStaffName = '';
+            if (window.DeliveryModule && window.DeliveryModule._deliveryCache) {
+                const cached = window.DeliveryModule._deliveryCache.get(sidStr);
+                console.log('[Router:showHouseInfo] Cache entry:', cached);
+                if (cached) {
+                    dStatus = cached.status;
+                    dStaffName = cached.staffName || '';
+                }
+            }
+            if (!dStatus && verifierInfo && verifierInfo.is_delivered) {
+                dStatus = 'delivered';
+            }
+            if (dStatus === 'delivered') {
+                deliveryStatusEl.style.display = 'inline-flex';
+                deliveryStatusEl.style.background = '#dcfce7';
+                deliveryStatusEl.style.color = '#15803d';
+                deliveryStatusEl.innerHTML = `<span class="material-icons-round" style="font-size:12px;">check_circle</span> Delivered${dStaffName ? ' by ' + dStaffName : ''}`;
+            } else if (dStatus === 'unsent') {
+                deliveryStatusEl.style.display = 'inline-flex';
+                deliveryStatusEl.style.background = '#fef3c7';
+                deliveryStatusEl.style.color = '#92400e';
+                deliveryStatusEl.innerHTML = `<span class="material-icons-round" style="font-size:12px;">warning</span> Unsent${dStaffName ? ' by ' + dStaffName : ''}`;
             } else {
-                deliveryIndicator.title = "Not Delivered";
+                deliveryStatusEl.style.display = 'none';
             }
         }
 
@@ -19949,18 +19984,35 @@ const SpatialRouter = {
         const sidStr = String(sid).trim();
         const verifierInfo = this.verifiedSIDs.get(`${sidStr}_${window.ACTIVE_BILLING_MONTH}`) || (window.ALL_VERIFIED_DATA && window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr));
 
-        // DELIVERY INDICATOR SYNC
-        const deliveryIndicator = document.getElementById('btn-delivery-modal');
-        if (deliveryIndicator) {
-            const cached = window.DeliveryModule && window.DeliveryModule._deliveryCache && window.DeliveryModule._deliveryCache.get(sidStr);
-            const committed = verifierInfo && verifierInfo.is_delivered;
-
-            deliveryIndicator.classList.remove('delivered', 'unsent');
-
-            if (cached === 'unsent') {
-                deliveryIndicator.classList.add('unsent');
-            } else if (cached === 'delivered' || committed) {
-                deliveryIndicator.classList.add('delivered');
+        // DELIVERY STATUS BADGE
+        const deliveryStatusEl = document.getElementById('marker-card-delivery-status');
+        console.log('[Router:refreshToolbar] delivery badge for', sidStr, 'elem:', !!deliveryStatusEl);
+        if (deliveryStatusEl) {
+            var dStatus = '';
+            var dStaffName = '';
+            if (window.DeliveryModule && window.DeliveryModule._deliveryCache) {
+                const cached = window.DeliveryModule._deliveryCache.get(sidStr);
+                console.log('[Router:refreshToolbar] Cache entry:', cached);
+                if (cached) {
+                    dStatus = cached.status;
+                    dStaffName = cached.staffName || '';
+                }
+            }
+            if (!dStatus && verifierInfo && verifierInfo.is_delivered) {
+                dStatus = 'delivered';
+            }
+            if (dStatus === 'delivered') {
+                deliveryStatusEl.style.display = 'inline-flex';
+                deliveryStatusEl.style.background = '#dcfce7';
+                deliveryStatusEl.style.color = '#15803d';
+                deliveryStatusEl.innerHTML = `<span class="material-icons-round" style="font-size:12px;">check_circle</span> Delivered${dStaffName ? ' by ' + dStaffName : ''}`;
+            } else if (dStatus === 'unsent') {
+                deliveryStatusEl.style.display = 'inline-flex';
+                deliveryStatusEl.style.background = '#fef3c7';
+                deliveryStatusEl.style.color = '#92400e';
+                deliveryStatusEl.innerHTML = `<span class="material-icons-round" style="font-size:12px;">warning</span> Unsent${dStaffName ? ' by ' + dStaffName : ''}`;
+            } else {
+                deliveryStatusEl.style.display = 'none';
             }
         }
     },
@@ -23024,14 +23076,27 @@ window.DeliveryModule = {
     async loadDeliveryCache() {
         if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
         try {
-            const { data } = await window._supabase
-                .from('delivery_log')
-                .select('survey_id, status, distance_to_target')
-                .eq('bill_month', window.ACTIVE_BILLING_MONTH);
-            if (data) {
-                this._deliveryCache = new Map(data.map(d => {
+            var allData = [];
+            var from = 0;
+            var step = 1000;
+            while (true) {
+                var { data } = await window._supabase
+                    .from('delivery_log')
+                    .select('survey_id, status, distance_to_target, staff_email, staff_name')
+                    .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                    .order('delivered_at', { ascending: false })
+                    .range(from, from + step - 1);
+                if (!data || data.length === 0) break;
+                allData = allData.concat(data);
+                from += step;
+            }
+            if (allData.length > 0) {
+                this._deliveryCache = new Map(allData.map(d => {
                     var effectiveStatus = d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50) ? 'unsent' : 'delivered';
-                    return [String(d.survey_id), effectiveStatus];
+                    var staffName = '';
+                    if (d.staff_name) staffName = d.staff_name;
+                    else if (d.staff_email) staffName = d.staff_email.split('@')[0];
+                    return [String(d.survey_id), { status: effectiveStatus, staffName: staffName }];
                 }));
                 console.log(`[DeliveryModule] Loaded ${this._deliveryCache.size} delivery records`);
             }
@@ -23179,8 +23244,20 @@ window.DeliveryModule = {
             }
             
             var effectiveForUI = status === 'unsent' || (dist && dist > 50) ? 'unsent' : 'delivered';
+            var staffNameForUI = '';
+            if (window.LayerManager && window.LayerManager._staffNamesCache) {
+                staffNameForUI = window.LayerManager._staffNamesCache[email] || '';
+            }
+            if (!staffNameForUI) staffNameForUI = email.split('@')[0] || email;
+
+            // Update cache BEFORE UI so updateDeliveryUI can read the staff name
+            const sidStr = String(sid);
+            if (this._deliveryCache) {
+                this._deliveryCache.set(sidStr, { status: effectiveForUI, staffName: staffNameForUI });
+            }
+
             if (window.ListView && typeof ListView.updateDeliveryUI === 'function') {
-                ListView.updateDeliveryUI(sid, effectiveForUI);
+                ListView.updateDeliveryUI(sid, effectiveForUI, staffNameForUI);
                 ListView._updateGPSStripUI('ready');
             }
 
@@ -23192,14 +23269,10 @@ window.DeliveryModule = {
             } catch (_) {}
 
             // Update in-memory ALL_VERIFIED_DATA
-            const sidStr = String(sid);
             if (window.ALL_VERIFIED_DATA) {
                 const rec = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
                 if (rec) rec.is_delivered = true;
             }
-
-            // Update cache so subsequent checkDeliveryStatus calls find it
-            if (this._deliveryCache) this._deliveryCache.set(sidStr, effectiveForUI);
 
         } catch (err) {
             console.error("[DeliveryModule] Failed to log delivery:", err);
