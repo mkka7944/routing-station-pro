@@ -9495,7 +9495,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.01.1225</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.02.1311</span>
             </div>
         </div>
         
@@ -11025,7 +11025,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.01.1225";
+window.DATA_VERSION = "v2026.07.02.1311";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -16736,6 +16736,7 @@ const LayerManager = {
     _deliveryLogDateTo: null,
     _deliveryLogAllTime: false,
     _deliveryLogPage: 1,
+    _deliveryLogSelected: new Set(),
     _deliveryMarkers: null,
     _deliveryMoveHandler: null,
 
@@ -16758,6 +16759,9 @@ const LayerManager = {
         // Reset page if a filter changed (page parameter takes priority)
         if (page === undefined) { page = 1; this._deliveryLogPage = 1; }
         else { this._deliveryLogPage = page; }
+
+        // Clear row selection on filter or page change
+        this._deliveryLogSelected.clear();
 
         var now = new Date();
         var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
@@ -16835,8 +16839,28 @@ const LayerManager = {
             this._deliveryLogRecords = records;
             var totalPages = Math.ceil(totalCount / pageSize) || 1;
 
-            var staffEmails = [...new Set(records.map(function(r) { return r.staff_email; }).filter(Boolean))];
-            var staffOptions = staffEmails.map(function(e) {
+            var allStaffRows = [];
+            var staffFrom = 0;
+            var staffStep = 1000;
+            var staffHasMore = true;
+            while (staffHasMore) {
+                var staffPageQuery = window._supabase.from('delivery_log')
+                    .select('staff_email')
+                    .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                    .not('staff_email', 'is', null)
+                    .range(staffFrom, staffFrom + staffStep - 1);
+                if (!allTime) {
+                    if (dateFrom) staffPageQuery = staffPageQuery.gte('delivered_at', dateFrom + 'T00:00:00');
+                    if (dateTo) staffPageQuery = staffPageQuery.lte('delivered_at', dateTo + 'T23:59:59');
+                }
+                var staffPageResult = await staffPageQuery;
+                var pageData = staffPageResult.data || [];
+                allStaffRows = allStaffRows.concat(pageData);
+                staffFrom += staffStep;
+                if (!pageData.length || pageData.length < staffStep) staffHasMore = false;
+            }
+            var allStaffEmails = [...new Set(allStaffRows.map(function(r) { return r.staff_email; }).filter(Boolean))];
+            var staffOptions = allStaffEmails.map(function(e) {
                 return '<option value="' + e + '"' + (staffFilter === e ? ' selected' : '') + '>' + e + '</option>';
             }).join('');
 
@@ -16847,6 +16871,7 @@ const LayerManager = {
                 var self = this;
                 recordsHtml = '<div style="max-height:400px; overflow-y:auto;">' +
                     '<div style="display:flex; align-items:center; gap:8px; padding:8px 10px; font-size:9px; font-weight:800; color:#64748b; background:#f8fafc; border-bottom:1px solid #e2e8f0; position:sticky; top:0; z-index:5;">' +
+                        '<div style="flex:0 0 36px; display:flex; align-items:center; justify-content:center;"><input type="checkbox" onchange="LayerManager._toggleSelectAllDeliveryLog(this.checked)" style="margin:0; cursor:pointer;"></div>' +
                         '<div style="flex:0 0 55px;">SID</div>' +
                         '<div style="flex:2; min-width:0;">Consumer</div>' +
                         '<div style="flex:1; min-width:0;">Staff</div>' +
@@ -16862,9 +16887,11 @@ const LayerManager = {
                         var portalCoords = r.target_lat && r.target_lng ? parseFloat(r.target_lat).toFixed(5) + ', ' + parseFloat(r.target_lng).toFixed(5) : '-';
                         var captureCoords = r.capture_gps_lat && r.capture_gps_lng ? parseFloat(r.capture_gps_lat).toFixed(5) + ', ' + parseFloat(r.capture_gps_lng).toFixed(5) : '-';
                         var dateStr = r.delivered_at ? new Date(r.delivered_at).toLocaleString(undefined, {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'}) : '-';
+                        var _sel = self._deliveryLogSelected.has(String(r.survey_id));
                         return '<div onclick="Settings.close(); setTimeout(function() { LayerManager.showDeliveryOnMap(\'' + r.survey_id + '\') }, 150)"' +
                             ' style="display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background 0.15s; font-size:10px;"' +
                             ' onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">' +
+                            '<div style="flex:0 0 36px; display:flex; align-items:center; justify-content:center;"><input type="checkbox" data-sid="' + r.survey_id + '" ' + (_sel ? 'checked' : '') + ' onchange="LayerManager._toggleDeliveryLogSelect(\'' + r.survey_id + '\', this.checked)" onclick="event.stopPropagation()" style="margin:0; cursor:pointer;"></div>' +
                             '<div style="flex:0 0 55px; font-weight:800; color:var(--primary);">#' + r.survey_id + '</div>' +
                             '<div style="flex:2; min-width:0; font-weight:700; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (r.consumer_name || '-') + '</div>' +
                             '<div style="flex:1; min-width:0; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + (r.staff_name || r.staff_email || '-') + '</div>' +
@@ -16952,11 +16979,15 @@ const LayerManager = {
                     '<input id="dl-search" type="text" placeholder="Search SID or name..." value="' + searchQuery + '"' +
                            ' oninput="clearTimeout(this._timer); this._timer=setTimeout(() => LayerManager._fetchAndRenderDeliveryLog(), 400)"' +
                            ' style="flex:1; min-width:140px; padding:8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:700;">' +
+                    '<button onclick="LayerManager._fetchAndRenderDeliveryLog()" style="padding:8px 10px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Refresh data">' +
+                        '<span class="material-icons-round" style="font-size:16px;">refresh</span>' +
+                    '</button>' +
                 '</div>' +
                 '<div style="background:white; border-radius:12px; border:1px solid #f1f5f9; overflow:hidden;">' +
                     paginationHtml +
                     recordsHtml +
-                '</div>';
+                '</div>' +
+                this._buildDeliveryLogActionBar()
             var _scrollEl = el.closest('.settings-scroll-area');
             var _savedScroll = _scrollEl ? _scrollEl.scrollTop : 0;
             el.innerHTML = html;
@@ -17462,6 +17493,9 @@ const LayerManager = {
                     '<select id="dap-filter" onchange="LayerManager._deliveryActivityFilterChange()" style="flex:1; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
                         '<option value="all">All Deliveries</option>' +
                     '</select>' +
+                    '<button onclick="LayerManager._fetchDeliveryActivityData(false)" style="padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Refresh data">' +
+                        '<span class="material-icons-round" style="font-size:16px;">refresh</span>' +
+                    '</button>' +
                 '</div>' +
                 '<div style="margin-bottom:10px;">' +
                     '<div style="font-weight:700; color:#64748b; font-size:10px; margin-bottom:4px;">ACTIVE STAFF</div>' +
@@ -17609,6 +17643,7 @@ const LayerManager = {
                     if (!pageData.length || pageData.length < step) hasMore = false;
                 }
                 this._deliveryActivityStaffData = allStaffRows;
+                this._deliveryActivityData = null;
                 var mainFrom = 0;
                 var mainStep = 1000;
                 var mainHasMore = true;
@@ -17642,7 +17677,16 @@ const LayerManager = {
                     var map = new Map();
                     this._deliveryActivityData.forEach(function(r) { map.set(r.survey_id, r); });
                     data.forEach(function(r) { map.set(r.survey_id, r); });
-                    this._deliveryActivityData = Array.from(map.values());
+                    this._deliveryActivityData = Array.from(map.values()).sort(function(a, b) {
+                        return new Date(b.delivered_at) - new Date(a.delivered_at);
+                    });
+                    // Sync new/updated records into delivery cache so list view badges stay current
+                    if (window.DeliveryModule && window.DeliveryModule._deliveryCache) {
+                        data.forEach(function(r) {
+                            var eff = r.distance_to_target && Number(r.distance_to_target) > 50 ? 'unsent' : (r.status || 'delivered');
+                            window.DeliveryModule._deliveryCache.set(String(r.survey_id), { status: eff, staffName: r.staff_name || r.staff_email || '' });
+                        });
+                    }
                 }
                 if (!this._deliveryActivityData) this._deliveryActivityData = data;
             }
@@ -17668,10 +17712,10 @@ const LayerManager = {
         var filtered = this._applyDeliveryActivityFilter(records, filter);
         var self = this;
         if (filter === 'all') {
-            document.getElementById('dap-total').textContent = this._deliveryActivityCount || records.length;
-            document.getElementById('dap-delivered').textContent = this._deliveryActivityDeliveredCount || filtered.filter(function(r) { return r.status === 'delivered'; }).length;
-            document.getElementById('dap-unsent').textContent = this._deliveryActivityUnsentCount || filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
-            document.getElementById('dap-staff-count').textContent = this._deliveryActivityStaffCount || new Set(filtered.map(function(r) { return r.staff_email; }).filter(Boolean)).size;
+            document.getElementById('dap-total').textContent = records.length;
+            document.getElementById('dap-delivered').textContent = filtered.filter(function(r) { return r.status === 'delivered'; }).length;
+            document.getElementById('dap-unsent').textContent = filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
+            document.getElementById('dap-staff-count').textContent = new Set(filtered.map(function(r) { return r.staff_email; }).filter(Boolean)).size;
         } else {
             var deliv = filtered.filter(function(r) { return r.status === 'delivered'; }).length;
             var unsent = filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
@@ -17735,9 +17779,6 @@ const LayerManager = {
         var el = document.getElementById('dap-staff-list');
         if (!el) return;
         var self = this;
-        var filterEl = document.getElementById('dap-filter');
-        var useFullStaffData = filterEl && filterEl.value === 'all' && this._deliveryActivityStaffData;
-        if (useFullStaffData) records = this._deliveryActivityStaffData;
         if (!records || !records.length) { el.innerHTML = '<div style="padding:8px; text-align:center; color:#94a3b8; font-size:10px;">No staff activity</div>'; return; }
         var staffStats = {};
         records.forEach(function(r) {
@@ -17913,6 +17954,124 @@ const LayerManager = {
         var seconds = Math.ceil(remaining / 1000);
         el.textContent = 'Next refresh in ' + seconds + 's';
         el.style.color = '#16a34a';
+    },
+
+    _toggleDeliveryLogSelect(sid, checked) {
+        var key = String(sid);
+        if (checked) { this._deliveryLogSelected.add(key); }
+        else { this._deliveryLogSelected.delete(key); }
+        this._syncDeliveryLogActionBar();
+    },
+
+    _toggleSelectAllDeliveryLog(checked) {
+        var self = this;
+        var records = this._deliveryLogRecords || [];
+        records.forEach(function(r) {
+            var key = String(r.survey_id);
+            if (checked) { self._deliveryLogSelected.add(key); }
+            else { self._deliveryLogSelected.delete(key); }
+        });
+        // Sync visible checkboxes in the DOM
+        var el = document.getElementById('delivery-log-content');
+        if (el) {
+            var checkboxes = el.querySelectorAll('input[type="checkbox"][data-sid]');
+            checkboxes.forEach(function(cb) { cb.checked = checked; });
+        }
+        this._syncDeliveryLogActionBar();
+    },
+
+    _syncDeliveryLogActionBar() {
+        var el = document.getElementById('delivery-log-content');
+        if (!el) return;
+        var actionBar = el.querySelector('#dl-action-bar');
+        if (this._deliveryLogSelected.size > 0) {
+            var html = this._buildDeliveryLogActionBar();
+            if (actionBar) { actionBar.outerHTML = html; }
+            else { el.insertAdjacentHTML('beforeend', html); }
+        } else {
+            if (actionBar) actionBar.remove();
+        }
+    },
+
+    _clearDeliveryLogSelection() {
+        this._deliveryLogSelected.clear();
+        this._fetchAndRenderDeliveryLog(this._deliveryLogPage);
+    },
+
+    _buildDeliveryLogActionBar() {
+        var c = this._deliveryLogSelected.size;
+        if (c === 0) return '';
+        return '<div id="dl-action-bar" style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#fef2f2; border:1px solid #fecaca; border-radius:12px; margin-top:8px;">' +
+            '<span style="font-size:11px; font-weight:700; color:#991b1b;">' + c + ' selected</span>' +
+            '<div style="display:flex; gap:8px;">' +
+                '<button onclick="LayerManager._clearDeliveryLogSelection()" style="padding:6px 12px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; font-size:11px; font-weight:700; color:#64748b;">Clear</button>' +
+                '<button onclick="LayerManager._deleteSelectedDeliveryLogs()" style="padding:6px 12px; border-radius:8px; border:none; background:#ef4444; color:white; cursor:pointer; font-size:11px; font-weight:800;">Delete Selected</button>' +
+            '</div>' +
+        '</div>';
+    },
+
+    _deleteSelectedDeliveryLogs() {
+        var self = this;
+        var selected = Array.from(this._deliveryLogSelected);
+        if (!selected.length) return;
+
+        var msg = 'Delete ' + selected.length + ' delivery record' + (selected.length > 1 ? 's' : '') + '?\nThis cannot be undone.';
+        self._showConfirmModal(msg, async function() {
+            try {
+                // Delete from delivery_log in Supabase
+                var ids = Array.from(self._deliveryLogSelected);
+                var { error } = await window._supabase.from('delivery_log')
+                    .delete()
+                    .in('survey_id', ids)
+                    .eq('bill_month', window.ACTIVE_BILLING_MONTH);
+                if (error) throw error;
+
+                // Clear from delivery cache
+                if (window.DeliveryModule && window.DeliveryModule._deliveryCache) {
+                    ids.forEach(function(sid) { window.DeliveryModule._deliveryCache.delete(String(sid)); });
+                }
+
+                // Clear selection and refresh
+                self._deliveryLogSelected.clear();
+                self._fetchAndRenderDeliveryLog(self._deliveryLogPage);
+
+                // Refresh delivery activity panel if open
+                if (self._deliveryActivityOpen) self._fetchDeliveryActivityData(false);
+
+                // Refresh list view badges (cache was cleared above)
+                if (window.ListView) ListView.render();
+
+                if (typeof LayerManager !== 'undefined') LayerManager.showToast('Deleted ' + ids.length + ' record(s).');
+            } catch (e) {
+                console.error('[DeliveryLog] Delete error:', e);
+                if (typeof LayerManager !== 'undefined') LayerManager.showToast('Delete failed: ' + (e.message || 'Unknown error'));
+            }
+        });
+    },
+
+    _showConfirmModal(message, onConfirm) {
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;';
+        overlay.onclick = function(e) { if (e.target === overlay) { document.body.removeChild(overlay); } };
+
+        var card = document.createElement('div');
+        card.style.cssText = 'background:white;border-radius:16px;padding:28px;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);text-align:center;';
+        card.innerHTML =
+            '<div style="margin-bottom:8px;"><span class="material-icons-round" style="font-size:36px;color:#ef4444;">warning</span></div>' +
+            '<div style="font-size:14px;font-weight:600;color:#1e293b;margin-bottom:20px;line-height:1.5;">' + message + '</div>' +
+            '<div style="display:flex;gap:10px;justify-content:center;">' +
+                '<button id="modal-confirm-cancel" style="flex:1;padding:10px;border-radius:10px;border:1px solid #e2e8f0;background:white;cursor:pointer;font-weight:700;font-size:12px;color:#64748b;">Cancel</button>' +
+                '<button id="modal-confirm-ok" style="flex:1;padding:10px;border-radius:10px;border:none;background:#ef4444;color:white;cursor:pointer;font-weight:800;font-size:12px;">Delete</button>' +
+            '</div>';
+
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+
+        card.querySelector('#modal-confirm-cancel').onclick = function() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+        card.querySelector('#modal-confirm-ok').onclick = function() {
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            if (typeof onConfirm === 'function') onConfirm();
+        };
     }
 };
 
