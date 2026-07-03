@@ -9495,7 +9495,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.02.1311</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.03.1230</span>
             </div>
         </div>
         
@@ -9734,9 +9734,9 @@ input[type=number] {
                             <span class="material-icons-round" style="color:#8b5cf6;">assignment_turned_in</span>
                             <span style="font-size:10px; font-weight:700;">Performance</span>
                         </div>
-                        <div class="sub-tool-item" id="btn-rotate-map" onclick="MapRotation.toggle()" style="background:#f8fafc; border:1px solid #e2e8f0; justify-content:center; flex-direction:column; gap:4px; padding:12px; cursor:pointer; display:flex; align-items:center; height: 72px; box-sizing: border-box;">
-                            <span class="material-icons-round" style="color:#10b981;">rotate_right</span>
-                            <span style="font-size:10px; font-weight:700;">Rotate</span>
+                        <div class="sub-tool-item admin-only" onclick="StaffPerformanceModal.open()" style="background:#f8fafc; border:1px solid #e2e8f0; justify-content:center; flex-direction:column; gap:4px; padding:12px; height: 72px; box-sizing: border-box;">
+                            <span class="material-icons-round" style="color:#10b981;">bar_chart</span>
+                            <span style="font-size:10px; font-weight:700;">Performance Report</span>
                         </div>
                     </div>
                 </div>
@@ -11025,7 +11025,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.02.1311";
+window.DATA_VERSION = "v2026.07.03.1230";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -23500,6 +23500,779 @@ window.DeliveryModule = {
 };
 
 
+// === 30_staff_performance.js ===
+// 30_staff_performance.js
+// Staff Performance Report — Delivery & Survey tabs
+
+window.StaffPerformanceModal = {
+    _overlay: null,
+    _activeTab: 'delivery',
+    _startDate: '',
+    _endDate: '',
+    _selectedStaff: 'all',
+    _deliveryData: null,
+    _surveyData: null,
+    _staffOpts: [],
+    _sidToLoc: null,
+    _cachedRecords: null,
+    _cachedMonth: null,
+    _isLoading: false,
+
+    _fmt(d) { return d.toISOString().split('T')[0]; },
+
+    _fmtTime(iso) {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    },
+
+    _shortMC(mcFull) {
+        if (!mcFull) return '—';
+        const m = mcFull.match(/(MC|UC)[- ]?(\d+)/i);
+        return m ? `${m[1].toUpperCase()}-${m[2]}` : mcFull.split(' ')[0];
+    },
+
+    _hoursDiff(startISO, endISO) {
+        if (!startISO || !endISO) return '0h';
+        const diff = new Date(endISO) - new Date(startISO);
+        if (diff <= 0) return '0h';
+        const h = Math.floor(diff / 3600000);
+        const mn = Math.round((diff % 3600000) / 60000);
+        return h > 0 ? `${h}h${mn}m` : `${mn}m`;
+    },
+
+    _timeDiff(time1, time2) {
+        if (!time1 || !time2) return '0h';
+        const p1 = time1.split(':'), p2 = time2.split(':');
+        const m1 = parseInt(p1[0]) * 60 + parseInt(p1[1]);
+        const m2 = parseInt(p2[0]) * 60 + parseInt(p2[1]);
+        const diff = m2 - m1;
+        if (diff <= 0) return '0h';
+        const h = Math.floor(diff / 60);
+        const m = diff % 60;
+        return h > 0 ? `${h}h${m}m` : `${m}m`;
+    },
+
+    _buildSidToLoc() {
+        const m = new Map();
+        if (window.RAW_DATA) {
+            window.RAW_DATA.forEach(r => m.set(String(r[0]), { city: r[11] || '', mc: r[12] || '' }));
+        }
+        this._sidToLoc = m;
+    },
+
+    _loadStaff() {
+        const set = new Map();
+        if (window.LayerManager && LayerManager._staffNamesCache) {
+            Object.entries(LayerManager._staffNamesCache).forEach(([email, name]) => set.set(email.toLowerCase(), name));
+        }
+        if (this._cachedRecords) {
+            this._cachedRecords.forEach(d => {
+                if (d.staff_email) set.set(d.staff_email.toLowerCase(), '');
+            });
+        }
+        this._staffOpts = [...set.entries()]
+            .map(([email, name]) => ({ email, name: name || email.split('@')[0] }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    _staffName(email) {
+        if (!email) return 'Unknown';
+        const found = this._staffOpts.find(s => s.email === email.toLowerCase());
+        return found ? found.name : email.split('@')[0];
+    },
+
+    // ─── Fetch full month cache once, then filter in-memory ───
+    async _ensureCache() {
+        if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
+        if (this._cachedMonth === window.ACTIVE_BILLING_MONTH && this._cachedRecords) return;
+        const billMonth = window.ACTIVE_BILLING_MONTH;
+        const allData = [];
+        let from = 0, step = 1000;
+        while (true) {
+            const { data } = await window._supabase
+                .from('delivery_log')
+                .select('survey_id, status, delivered_at, staff_email, staff_name, distance_to_target')
+                .eq('bill_month', billMonth)
+                .order('delivered_at', { ascending: true })
+                .range(from, from + step - 1);
+            if (!data || data.length === 0) break;
+            allData.push(...data);
+            from += step;
+        }
+        if (!this._sidToLoc) this._buildSidToLoc();
+        allData.forEach(d => {
+            const loc = this._sidToLoc.get(String(d.survey_id)) || {};
+            d._city = loc.city || '—';
+            d._mc = loc.mc || '—';
+            d._shortMC = this._shortMC(d._mc);
+            d._effectiveStatus = (d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50)) ? 'unsent' : 'delivered';
+        });
+        this._cachedRecords = allData;
+        this._cachedMonth = billMonth;
+    },
+
+    async _fetchDeliveryData() {
+        await this._ensureCache();
+        const start = `${this._startDate}T00:00:00`;
+        const end = `${this._endDate}T23:59:59`;
+        const filtered = this._cachedRecords.filter(d => {
+            if (!d.delivered_at) return false;
+            if (d.delivered_at < start || d.delivered_at > end) return false;
+            if (this._selectedStaff !== 'all' && (!d.staff_email || d.staff_email.toLowerCase() !== this._selectedStaff)) return false;
+            return true;
+        });
+        return filtered;
+    },
+
+    _fetchSurveyData() {
+        if (!window.RAW_DATA) return [];
+        const start = this._startDate;
+        const end = this._endDate;
+        return window.RAW_DATA.filter(r => {
+            const s = String(r[6] || '').trim();
+            if (!s || s === '-' || s === 'Unknown') return false;
+            const date = r[7];
+            return date && String(date) >= start && String(date) <= end;
+        }).map(r => ({
+            surveyor: String(r[6] || 'Unknown'),
+            date: String(r[7]),
+            city: String(r[11] || ''),
+            mc: this._shortMC(String(r[12])),
+            fullMC: String(r[12] || ''),
+            time: String(r[8] || '00:00'),
+        }));
+    },
+
+    // ─── Gap detection ───
+    _computeDaySessions(timestamps) {
+        if (!timestamps || timestamps.length === 0) return { activeMs: 0, breakMs: 0, totalMs: 0, breakGaps: [] };
+        const sorted = timestamps.slice().sort();
+        const breakGaps = [];
+        let activeMs = 0;
+        let sessionStart = new Date(sorted[0]).getTime();
+        let prevTime = sessionStart;
+        for (let i = 1; i < sorted.length; i++) {
+            const t = new Date(sorted[i]).getTime();
+            const gap = t - prevTime;
+            if (gap > 30 * 60 * 1000) {
+                activeMs += prevTime - sessionStart;
+                breakGaps.push({ from: prevTime, to: t, duration: gap });
+                sessionStart = t;
+            }
+            prevTime = t;
+        }
+        activeMs += prevTime - sessionStart;
+        const totalMs = prevTime - new Date(sorted[0]).getTime();
+        return { activeMs, breakMs: totalMs - activeMs, totalMs, breakGaps };
+    },
+
+    async open() {
+        const today = new Date();
+        this._startDate = this._fmt(today);
+        this._endDate = this._fmt(today);
+        this._selectedStaff = 'all';
+        this._activeTab = 'delivery';
+        this._buildSidToLoc();
+        this._loadStaff();
+        this._renderOverlay();
+        await this._refreshData();
+    },
+
+    close() {
+        if (this._overlay) {
+            this._overlay.style.display = 'none';
+            if (this._overlay.parentNode) this._overlay.parentNode.removeChild(this._overlay);
+        }
+        this._overlay = null;
+        this._deliveryData = null;
+        this._surveyData = null;
+    },
+
+    async _refreshData() {
+        this._isLoading = true;
+        this._renderBody();
+        if (this._activeTab === 'delivery') {
+            this._deliveryData = await this._fetchDeliveryData();
+        } else {
+            this._surveyData = this._fetchSurveyData();
+        }
+        this._loadStaff();
+        this._isLoading = false;
+        this._renderBody();
+        this._syncStaffDropdown();
+    },
+
+    _syncStaffDropdown() {
+        const sel = document.getElementById('spm-staff-select');
+        if (!sel) return;
+        const currentVal = sel.value;
+        sel.innerHTML = `<option value="all">All Staff</option>
+            ${this._staffOpts.map(s => `<option value="${s.email}" ${s.email === currentVal ? 'selected' : ''}>${s.name}</option>`).join('')}`;
+    },
+
+    _renderOverlay() {
+        if (this._overlay) { this._overlay.style.display = 'flex'; return; }
+        const o = document.createElement('div');
+        o.id = 'modal-staff-performance';
+        o.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:31000; align-items:center; justify-content:center; padding:20px;';
+        o.addEventListener('click', (e) => { if (e.target === o) this.close(); });
+        o.innerHTML = `
+            <div style="background:white; border-radius:16px; width:100%; max-width:1100px; height:92vh; display:flex; flex-direction:column; box-shadow:0 25px 60px rgba(0,0,0,0.3); overflow:hidden;">
+                <div style="padding:14px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#fafafa; flex-shrink:0;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span class="material-icons-round" style="color:#8b5cf6; font-size:24px;">bar_chart</span>
+                        <h3 style="margin:0; font-size:16px; font-weight:800; letter-spacing:-0.3px;">Staff Performance Report</h3>
+                    </div>
+                    <button onclick="StaffPerformanceModal.close()" style="background:#f1f5f9; border:none; border-radius:50%; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b;">
+                        <span class="material-icons-round" style="font-size:18px;">close</span>
+                    </button>
+                </div>
+                <div id="spm-body" style="flex:1; display:flex; flex-direction:column; overflow:hidden;"></div>
+            </div>`;
+        document.body.appendChild(o);
+        this._overlay = o;
+    },
+
+    switchTab(tab) {
+        if (tab === this._activeTab) return;
+        this._activeTab = tab;
+        this._refreshData();
+    },
+
+    setPeriod(preset) {
+        const now = new Date();
+        switch (preset) {
+            case 'today':
+                this._startDate = this._fmt(now);
+                this._endDate = this._fmt(now);
+                break;
+            case 'week': {
+                const mon = new Date(now);
+                mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+                const sun = new Date(mon);
+                sun.setDate(sun.getDate() + 6);
+                this._startDate = this._fmt(mon);
+                this._endDate = this._fmt(sun);
+                break;
+            }
+            case 'month':
+                this._startDate = this._fmt(new Date(now.getFullYear(), now.getMonth(), 1));
+                this._endDate = this._fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+                break;
+        }
+        this._refreshData();
+    },
+
+    _applyDateFilter() {
+        const s = document.getElementById('spm-start-date');
+        const e = document.getElementById('spm-end-date');
+        if (s && e) { this._startDate = s.value; this._endDate = e.value; }
+        this._refreshData();
+    },
+
+    _applyStaffFilter() {
+        const sel = document.getElementById('spm-staff-select');
+        if (sel) this._selectedStaff = sel.value;
+        this._refreshData();
+    },
+
+    _renderBody() {
+        const body = document.getElementById('spm-body');
+        if (!body) return;
+        const isDelivery = this._activeTab === 'delivery';
+        const data = isDelivery ? this._deliveryData : this._surveyData;
+
+        let html = `
+            <div style="padding:12px 20px; border-bottom:1px solid #e2e8f0; background:#f8fafc; flex-shrink:0;">
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <div style="display:flex; gap:4px;">
+                        <button onclick="StaffPerformanceModal.setPeriod('today')" class="spm-period-btn" style="padding:5px 12px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-size:11px; font-weight:700; cursor:pointer; color:#475569;">Today</button>
+                        <button onclick="StaffPerformanceModal.setPeriod('week')" class="spm-period-btn" style="padding:5px 12px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-size:11px; font-weight:700; cursor:pointer; color:#475569;">Week</button>
+                        <button onclick="StaffPerformanceModal.setPeriod('month')" class="spm-period-btn" style="padding:5px 12px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-size:11px; font-weight:700; cursor:pointer; color:#475569;">Month</button>
+                    </div>
+                    <input type="date" id="spm-start-date" value="${this._startDate}" onchange="StaffPerformanceModal._applyDateFilter()" style="padding:4px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; outline:none;">
+                    <span style="color:#94a3b8; font-size:12px;">→</span>
+                    <input type="date" id="spm-end-date" value="${this._endDate}" onchange="StaffPerformanceModal._applyDateFilter()" style="padding:4px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; outline:none;">
+                    <select id="spm-staff-select" onchange="StaffPerformanceModal._applyStaffFilter()" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; outline:none; max-width:200px;">
+                        <option value="all">All Staff</option>
+                        ${this._staffOpts.map(s => `<option value="${s.email}">${s.name}</option>`).join('')}
+                    </select>
+                    <button onclick="StaffPerformanceModal._refreshData()" style="padding:5px 10px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:4px; color:#475569;">
+                        <span class="material-icons-round" style="font-size:14px;">refresh</span>
+                    </button>
+                    <button onclick="StaffPerformanceModal.exportCSV()" style="padding:5px 12px; border:none; border-radius:6px; background:#8b5cf6; color:white; font-size:11px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; margin-left:auto;">
+                        <span class="material-icons-round" style="font-size:14px;">download</span> Export CSV
+                    </button>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:0; border-bottom:1px solid #e2e8f0; flex-shrink:0;">
+                <button onclick="StaffPerformanceModal.switchTab('delivery')" style="flex:1; padding:10px; border:none; border-bottom:3px solid ${isDelivery ? '#8b5cf6' : 'transparent'}; background:${isDelivery ? '#f5f3ff' : 'transparent'}; font-size:13px; font-weight:800; color:${isDelivery ? '#7c3aed' : '#94a3b8'}; cursor:pointer;">🚚 Delivery</button>
+                <button onclick="StaffPerformanceModal.switchTab('survey')" style="flex:1; padding:10px; border:none; border-bottom:3px solid ${!isDelivery ? '#8b5cf6' : 'transparent'}; background:${!isDelivery ? '#f5f3ff' : 'transparent'}; font-size:13px; font-weight:800; color:${!isDelivery ? '#7c3aed' : '#94a3b8'}; cursor:pointer;">📋 Survey</button>
+            </div>
+
+            <div id="spm-content" style="flex:1; overflow-y:auto; padding:16px 20px;">
+                ${this._isLoading ? this._renderLoading() : (!data ? this._renderEmpty(isDelivery) : (isDelivery ? this._renderDeliveryContent(data) : this._renderSurveyContent(data)))}
+            </div>`;
+        body.innerHTML = html;
+    },
+
+    _renderLoading() {
+        return '<div style="text-align:center; padding:60px; color:#94a3b8; font-weight:700;"><span class="material-icons-round spinning" style="font-size:32px; display:block; margin:0 auto 12px; color:#8b5cf6;">refresh</span>Loading...</div>';
+    },
+
+    _renderEmpty(isDelivery) {
+        return `<div style="text-align:center; padding:60px; color:#94a3b8; font-weight:700;">No ${isDelivery ? 'delivery' : 'survey'} records for the selected period.</div>`;
+    },
+
+    _renderDeliveryContent(data) {
+        if (!data || data.length === 0) {
+            return '<div style="text-align:center; padding:60px; color:#94a3b8; font-weight:700;">No delivery records for the selected period.</div>';
+        }
+
+        let totalDelv = 0, totalUnsent = 0;
+        const staffMap = new Map();
+
+        data.forEach(d => {
+            const email = (d.staff_email || 'unknown').toLowerCase();
+            const date = d.delivered_at ? d.delivered_at.split('T')[0] : 'unknown';
+            const isDelv = d._effectiveStatus === 'delivered';
+            if (isDelv) totalDelv++; else totalUnsent++;
+
+            if (!staffMap.has(email)) staffMap.set(email, { name: this._staffName(d.staff_email), email: d.staff_email, days: new Map() });
+            const staff = staffMap.get(email);
+            if (!staff.days.has(date)) staff.days.set(date, new Map());
+            const mcMap = staff.days.get(date);
+            const mcKey = d._shortMC || '—';
+            if (!mcMap.has(mcKey)) mcMap.set(mcKey, { city: d._city, mc: d._mc, shortMC: mcKey, deliveries: [], unsents: [] });
+            const entry = mcMap.get(mcKey);
+            if (d.delivered_at) {
+                if (isDelv) entry.deliveries.push(d.delivered_at);
+                else entry.unsents.push(d.delivered_at);
+            }
+        });
+
+        const totalAll = totalDelv + totalUnsent;
+        const allTimes = data.filter(d => d.delivered_at).map(d => d.delivered_at).sort();
+        const overallStart = allTimes.length > 0 ? this._fmtTime(allTimes[0]) : '—';
+        const overallEnd = allTimes.length > 0 ? this._fmtTime(allTimes[allTimes.length - 1]) : '—';
+        const overallSpan = allTimes.length > 0 ? this._hoursDiff(allTimes[0], allTimes[allTimes.length - 1]) : '0h';
+        const overallSessions = this._computeDaySessions(allTimes);
+        const overallActive = this._fmtDuration(overallSessions.activeMs);
+        const overallBreak = this._fmtDuration(overallSessions.breakMs);
+
+        let html = `
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+                <div class="spm-card" style="flex:1; min-width:90px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Total</div>
+                    <div style="font-size:22px; font-weight:900; color:#1e293b;">${totalAll}</div>
+                    <div style="font-size:10px; color:#64748b;">Deliveries</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:90px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Delivered</div>
+                    <div style="font-size:22px; font-weight:900; color:#16a34a;">${totalDelv}</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:90px; background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Unsent</div>
+                    <div style="font-size:22px; font-weight:900; color:#dc2626;">${totalUnsent}</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:80px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Start</div>
+                    <div style="font-size:18px; font-weight:900; color:#2563eb;">${overallStart}</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:80px; background:#faf5ff; border:1px solid #e9d5ff; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">End</div>
+                    <div style="font-size:18px; font-weight:900; color:#7c3aed;">${overallEnd}</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:80px; background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; padding:12px; text-align:center; cursor:default;" title="Span: ${overallSpan} · Active: ${overallActive} · Break: ${overallBreak}">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Active</div>
+                    <div style="font-size:18px; font-weight:900; color:#ea580c;">${overallActive}</div>
+                </div>
+            </div>`;
+
+        if (this._selectedStaff === 'all') {
+            const staffRows = [...staffMap.entries()].sort((a, b) => {
+                const aTot = [...a[1].days.values()].reduce((s, mcM) => s + [...mcM.values()].reduce((ss, e) => ss + e.deliveries.length + e.unsents.length, 0), 0);
+                const bTot = [...b[1].days.values()].reduce((s, mcM) => s + [...mcM.values()].reduce((ss, e) => ss + e.deliveries.length + e.unsents.length, 0), 0);
+                return bTot - aTot;
+            });
+
+            html += `
+                <div style="background:white; border:1px solid #e2e8f0; border-radius:10px; overflow:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                        <thead>
+                            <tr style="background:#f8fafc;">
+                                <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Staff</th>
+                                <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">City</th>
+                                <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">MC</th>
+                                <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Total</th>
+                                <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Delv</th>
+                                <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Unst</th>
+                                <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Start</th>
+                                <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">End</th>
+                                <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Active</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${staffRows.map(([email, staff]) => {
+                                const days = [...staff.days.entries()].sort();
+                                const allMCs = [...new Set(days.flatMap(([, mcM]) => [...mcM.keys()]))];
+                                const allCities = [...new Set(days.flatMap(([, mcM]) => [...mcM.values()].map(e => e.city)))].filter(Boolean);
+                                const times = days.flatMap(([, mcM]) => [...mcM.values()].flatMap(e => [...e.deliveries, ...e.unsents])).filter(Boolean).sort();
+                                const tot = times.length;
+                                const delv = days.reduce((s, [, mcM]) => s + [...mcM.values()].reduce((ss, e) => ss + e.deliveries.length, 0), 0);
+                                const unst = times.length - delv;
+                                const start = times.length > 0 ? this._fmtTime(times[0]) : '—';
+                                const end = times.length > 0 ? this._fmtTime(times[times.length - 1]) : '—';
+                                const sessions = this._computeDaySessions(times);
+                                const active = this._fmtDuration(sessions.activeMs);
+                                const span = this._fmtDuration(sessions.totalMs);
+                                const breakStr = this._fmtDuration(sessions.breakMs);
+
+                                return `<tr onclick="StaffPerformanceModal._toggleStaffExpand('${email}')" style="cursor:pointer; border-bottom:1px solid #f1f5f9;">
+                                    <td style="padding:8px 10px; font-weight:700; color:#1e293b; white-space:nowrap;">${staff.name}</td>
+                                    <td style="padding:8px 10px; color:#64748b;">${allCities.join(', ')}</td>
+                                    <td style="padding:8px 10px; color:#64748b; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${allMCs.join(', ')}">${allMCs.join(', ')}</td>
+                                    <td style="padding:8px 10px; text-align:center; font-weight:700; color:#1e293b;">${tot}</td>
+                                    <td style="padding:8px 10px; text-align:center; color:#16a34a; font-weight:700;">${delv}</td>
+                                    <td style="padding:8px 10px; text-align:center; color:#dc2626; font-weight:700;">${unst}</td>
+                                    <td style="padding:8px 10px; text-align:center; color:#64748b; font-weight:600;">${start}</td>
+                                    <td style="padding:8px 10px; text-align:center; color:#64748b; font-weight:600;">${end}</td>
+                                    <td style="padding:8px 10px; text-align:center; font-weight:700; color:#ea580c; cursor:default;" title="Span: ${span} · Break: ${breakStr}">${active}</td>
+                                </tr>
+                                <tr id="spm-expand-${email}" style="display:none;">
+                                    <td colspan="9" style="padding:0;">
+                                        <div style="padding:12px 16px; background:#f8fafc; border-top:1px solid #e2e8f0;">
+                                            ${this._renderStaffDailyTable(staff)}
+                                        </div>
+                                    </td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+        } else {
+            const staff = staffMap.get(this._selectedStaff.toLowerCase());
+            if (!staff) html += '<div style="text-align:center; padding:40px; color:#94a3b8;">No records for this staff in the selected period.</div>';
+            else html += this._renderStaffDailyTable(staff);
+        }
+        return html;
+    },
+
+    _fmtDuration(ms) {
+        if (!ms || ms <= 0) return '0h';
+        const h = Math.floor(ms / 3600000);
+        const m = Math.round((ms % 3600000) / 60000);
+        return h > 0 ? `${h}h${m}m` : `${m}m`;
+    },
+
+    _renderStaffDailyTable(staff) {
+        const days = [...staff.days.entries()].sort();
+        let html = `
+            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                <thead>
+                    <tr style="background:#f1f5f9;">
+                        <th style="padding:6px 8px; text-align:left; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Date</th>
+                        <th style="padding:6px 8px; text-align:left; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">City</th>
+                        <th style="padding:6px 8px; text-align:left; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">MC</th>
+                        <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Total</th>
+                        <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Delv</th>
+                        <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Unst</th>
+                        <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Start</th>
+                        <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">End</th>
+                        <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Hours</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${days.map(([date, mcMap]) => {
+                        // Sort MC entries by first timestamp
+                        const mcEntries = [...mcMap.entries()].sort((a, b) => {
+                            const aTimes = [...a[1].deliveries, ...a[1].unsents].filter(Boolean).sort();
+                            const bTimes = [...b[1].deliveries, ...b[1].unsents].filter(Boolean).sort();
+                            if (aTimes.length === 0) return 1; if (bTimes.length === 0) return -1;
+                            return new Date(aTimes[0]) - new Date(bTimes[0]);
+                        });
+
+                        // All timestamps for this day (for session detection)
+                        const allDayTimes = mcEntries.flatMap(([, e]) => [...e.deliveries, ...e.unsents]).filter(Boolean).sort();
+                        const sessions = this._computeDaySessions(allDayTimes);
+                        const activeStr = this._fmtDuration(sessions.activeMs);
+                        const breakStr = this._fmtDuration(sessions.breakMs);
+                        const spanStr = this._fmtDuration(sessions.totalMs);
+
+                        // Build rows with break indicators between MCs
+                        let rows = '';
+                        mcEntries.forEach(([mcKey, entry], idx) => {
+                            const times = [...entry.deliveries, ...entry.unsents].filter(Boolean).sort();
+                            const start = times.length > 0 ? this._fmtTime(times[0]) : '—';
+                            const end = times.length > 0 ? this._fmtTime(times[times.length - 1]) : '—';
+                            const hours = times.length > 0 ? this._hoursDiff(times[0], times[times.length - 1]) : '0h';
+                            const tot = entry.deliveries.length + entry.unsents.length;
+
+                            rows += `<tr style="border-bottom:1px solid #f1f5f9;">
+                                <td style="padding:6px 8px; font-weight:700; color:#1e293b; white-space:nowrap;">${idx === 0 ? date : ''}</td>
+                                <td style="padding:6px 8px; color:#64748b;">${entry.city || '—'}</td>
+                                <td style="padding:6px 8px; color:#64748b;">${mcKey}</td>
+                                <td style="padding:6px 8px; text-align:center; font-weight:700; color:#1e293b;">${tot}</td>
+                                <td style="padding:6px 8px; text-align:center; color:#16a34a; font-weight:700;">${entry.deliveries.length}</td>
+                                <td style="padding:6px 8px; text-align:center; color:#dc2626; font-weight:700;">${entry.unsents.length}</td>
+                                <td style="padding:6px 8px; text-align:center; color:#64748b; font-weight:600;">${start}</td>
+                                <td style="padding:6px 8px; text-align:center; color:#64748b; font-weight:600;">${end}</td>
+                                <td style="padding:6px 8px; text-align:center; font-weight:700; color:#ea580c;">${hours}</td>
+                            </tr>`;
+
+                            // Check for break to next MC
+                            if (idx < mcEntries.length - 1) {
+                                const nextEntry = mcEntries[idx + 1][1];
+                                const nextTimes = [...nextEntry.deliveries, ...nextEntry.unsents].filter(Boolean).sort();
+                                if (times.length > 0 && nextTimes.length > 0) {
+                                    const currLast = times[times.length - 1];
+                                    const nextFirst = nextTimes[0];
+                                    const gapMs = new Date(nextFirst) - new Date(currLast);
+                                    if (gapMs > 30 * 60 * 1000) {
+                                        const gapStr = this._fmtDuration(gapMs);
+                                        const gapFrom = this._fmtTime(currLast);
+                                        const gapTo = this._fmtTime(nextFirst);
+                                        rows += `<tr style="background:#fffbeb;">
+                                            <td colspan="9" style="padding:4px 8px; font-size:10px; color:#d97706; font-weight:600;">
+                                                <span style="display:flex; align-items:center; gap:6px;">
+                                                    <span>☀</span>
+                                                    <span>Break ${gapStr} · ${gapFrom} → ${gapTo}</span>
+                                                </span>
+                                            </td>
+                                        </tr>`;
+                                    }
+                                }
+                            }
+                        });
+
+                        // Daily total row
+                        const dayTot = allDayTimes.length;
+                        const dayDelv = mcEntries.reduce((s, [, e]) => s + e.deliveries.length, 0);
+                        const dayUnst = dayTot - dayDelv;
+                        rows += `<tr style="background:#f8fafc; font-weight:700; border-top:2px solid #e2e8f0;">
+                            <td style="padding:6px 8px; font-size:10px; color:#475569;">Day total</td>
+                            <td colspan="2" style="padding:6px 8px; font-size:10px; color:#64748b;">Active: ${activeStr} · Break: ${breakStr}</td>
+                            <td style="padding:6px 8px; text-align:center;">${dayTot}</td>
+                            <td style="padding:6px 8px; text-align:center; color:#16a34a;">${dayDelv}</td>
+                            <td style="padding:6px 8px; text-align:center; color:#dc2626;">${dayUnst}</td>
+                            <td colspan="2" style="padding:6px 8px; text-align:center; font-size:10px; color:#64748b;">Span: ${spanStr}</td>
+                            <td style="padding:6px 8px; text-align:center; color:#ea580c;">${activeStr}</td>
+                        </tr>
+                        <tr><td colspan="9" style="padding:0; border-bottom:2px solid #e2e8f0;"></td></tr>`;
+                        return rows;
+                    }).join('')}
+                </tbody>
+            </table>`;
+        return html;
+    },
+
+    _toggleStaffExpand(email) {
+        const row = document.getElementById(`spm-expand-${email}`);
+        if (row) row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+    },
+
+    _renderSurveyContent(data) {
+        if (!data || data.length === 0) {
+            return '<div style="text-align:center; padding:60px; color:#94a3b8; font-weight:700;">No survey records for the selected period.</div>';
+        }
+
+        const surveyorMap = new Map();
+        data.forEach(r => {
+            if (!surveyorMap.has(r.surveyor)) surveyorMap.set(r.surveyor, { name: r.surveyor, days: new Map() });
+            const s = surveyorMap.get(r.surveyor);
+            if (!s.days.has(r.date)) s.days.set(r.date, { date: r.date, mcGroups: new Map() });
+            const day = s.days.get(r.date);
+            if (!day.mcGroups.has(r.mc)) day.mcGroups.set(r.mc, { city: r.city, mc: r.mc, times: [] });
+            day.mcGroups.get(r.mc).times.push(r.time);
+        });
+
+        const uniqueSurveyors = surveyorMap.size;
+        const daysSet = new Set(data.map(r => r.date));
+        const mcSet = new Set(data.map(r => r.mc));
+
+        let html = `
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+                <div class="spm-card" style="flex:1; min-width:110px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Total Surveys</div>
+                    <div style="font-size:22px; font-weight:900; color:#1e293b;">${data.length}</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:110px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Surveyors</div>
+                    <div style="font-size:22px; font-weight:900; color:#16a34a;">${uniqueSurveyors}</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:110px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Areas (MC)</div>
+                    <div style="font-size:22px; font-weight:900; color:#2563eb;">${mcSet.size}</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:110px; background:#faf5ff; border:1px solid #e9d5ff; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Days</div>
+                    <div style="font-size:22px; font-weight:900; color:#7c3aed;">${daysSet.size}</div>
+                </div>
+            </div>
+
+            <div style="background:white; border:1px solid #e2e8f0; border-radius:10px; overflow:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                    <thead>
+                        <tr style="background:#f8fafc;">
+                            <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Surveyor</th>
+                            <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Date</th>
+                            <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">City</th>
+                            <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">MC</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Survey Done</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">First Scan</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Last Scan</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${[...surveyorMap.entries()].sort((a, b) => {
+                            const aTot = [...a[1].days.values()].reduce((s, d) => s + [...d.mcGroups.values()].reduce((ss, g) => ss + g.times.length, 0), 0);
+                            const bTot = [...b[1].days.values()].reduce((s, d) => s + [...d.mcGroups.values()].reduce((ss, g) => ss + g.times.length, 0), 0);
+                            return bTot - aTot;
+                        }).map(([name, s]) => {
+                            const dayEntries = [...s.days.entries()].sort();
+                            let surveyorTotal = 0;
+                            let surveyorFirst = null, surveyorLast = null;
+                            let nameShown = false;
+                            const rows = dayEntries.map(([date, day]) => {
+                                const mcEntries = [...day.mcGroups.entries()].sort();
+                                return mcEntries.map(([mcKey, group]) => {
+                                    const sortedTimes = group.times.slice().sort();
+                                    const firstScan = sortedTimes[0];
+                                    const lastScan = sortedTimes[sortedTimes.length - 1];
+                                    const duration = this._timeDiff(firstScan, lastScan);
+                                    surveyorTotal += group.times.length;
+                                    if (!surveyorFirst || firstScan < surveyorFirst) surveyorFirst = firstScan;
+                                    if (!surveyorLast || lastScan > surveyorLast) surveyorLast = lastScan;
+                                    const showName = !nameShown ? name : '';
+                                    nameShown = true;
+                                    return `<tr style="border-bottom:1px solid #f1f5f9;">
+                                        <td style="padding:8px 10px; font-weight:700; color:#1e293b; white-space:nowrap;">${showName}</td>
+                                        <td style="padding:8px 10px; color:#64748b; white-space:nowrap;">${date}</td>
+                                        <td style="padding:8px 10px; color:#64748b;">${group.city || '—'}</td>
+                                        <td style="padding:8px 10px; color:#64748b;">${mcKey}</td>
+                                        <td style="padding:8px 10px; text-align:center; font-weight:700; color:#1e293b;">${group.times.length}</td>
+                                        <td style="padding:8px 10px; text-align:center; color:#64748b; font-weight:600;">${firstScan}</td>
+                                        <td style="padding:8px 10px; text-align:center; color:#64748b; font-weight:600;">${lastScan}</td>
+                                        <td style="padding:8px 10px; text-align:center; color:#ea580c; font-weight:600;">${duration}</td>
+                                    </tr>`;
+                                }).join('');
+                            }).join('');
+                            const subtotalRow = `<tr style="background:#eff6ff; font-weight:800; border-top:2px solid #93c5fd;">
+                                <td style="padding:6px 10px;"></td>
+                                <td style="padding:6px 10px; font-size:11px; color:#2563eb;">Subtotal</td>
+                                <td colspan="2" style="padding:6px 10px;"></td>
+                                <td style="padding:6px 10px; text-align:center; color:#1e293b;">${surveyorTotal}</td>
+                                <td style="padding:6px 10px; text-align:center; color:#94a3b8;">—</td>
+                                <td style="padding:6px 10px; text-align:center; color:#94a3b8;">—</td>
+                                <td style="padding:6px 10px; text-align:center; color:#94a3b8;">—</td>
+                            </tr>
+                            <tr><td colspan="8" style="padding:0; border-bottom:3px solid #cbd5e1;"></td></tr>`;
+                            return rows + subtotalRow;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>`;
+        return html;
+    },
+
+    exportCSV() {
+        const isDelivery = this._activeTab === 'delivery';
+        const data = isDelivery ? this._deliveryData : this._surveyData;
+        if (!data || data.length === 0) {
+            if (window.App && App.showToast) App.showToast('No data to export.');
+            return;
+        }
+
+        let rows;
+        if (isDelivery) {
+            const staffMap = new Map();
+            data.forEach(d => {
+                const email = (d.staff_email || 'unknown').toLowerCase();
+                const date = d.delivered_at ? d.delivered_at.split('T')[0] : 'unknown';
+                const isDelv = d._effectiveStatus === 'delivered';
+                if (!staffMap.has(email)) staffMap.set(email, { name: this._staffName(d.staff_email), email, days: new Map() });
+                const staff = staffMap.get(email);
+                if (!staff.days.has(date)) staff.days.set(date, new Map());
+                const mcMap = staff.days.get(date);
+                const mcKey = d._shortMC || '—';
+                if (!mcMap.has(mcKey)) mcMap.set(mcKey, { city: d._city, mc: d._mc, shortMC: mcKey, deliveries: [], unsents: [] });
+                const entry = mcMap.get(mcKey);
+                if (d.delivered_at) {
+                    if (isDelv) entry.deliveries.push(d.delivered_at);
+                    else entry.unsents.push(d.delivered_at);
+                }
+            });
+
+            const headers = ['Staff Name', 'Email', 'Date', 'City', 'MC', 'Total', 'Delivered', 'Unsent', 'Start', 'End', 'Active Hours', 'Span'];
+            rows = [headers];
+            [...staffMap.entries()].sort().forEach(([email, staff]) => {
+                [...staff.days.entries()].sort().forEach(([date, mcMap]) => {
+                    const mcEntries = [...mcMap.entries()].sort();
+                    mcEntries.forEach(([mcKey, entry], idx) => {
+                        const times = [...entry.deliveries, ...entry.unsents].filter(Boolean).sort();
+                        const start = times.length > 0 ? this._fmtTime(times[0]) : '—';
+                        const end = times.length > 0 ? this._fmtTime(times[times.length - 1]) : '—';
+                        const hours = times.length > 0 ? this._hoursDiff(times[0], times[times.length - 1]) : '0h';
+                        rows.push([
+                            staff.name, email, date, entry.city || '—', mcKey,
+                            entry.deliveries.length + entry.unsents.length,
+                            entry.deliveries.length, entry.unsents.length,
+                            start, end, hours, ''
+                        ]);
+                    });
+                    // Add a day summary row
+                    const allTimes = mcEntries.flatMap(([, e]) => [...e.deliveries, ...e.unsents]).filter(Boolean).sort();
+                    const sessions = this._computeDaySessions(allTimes);
+                    const activeHrs = this._fmtDuration(sessions.activeMs);
+                    const spanHrs = this._fmtDuration(sessions.totalMs);
+                    const staffName = staff.name;
+                    const emailCol = email;
+                    rows.push([staffName, emailCol, date, '—', '—DAY TOTAL—',
+                        allTimes.length,
+                        mcEntries.reduce((s, [, e]) => s + e.deliveries.length, 0),
+                        allTimes.length - mcEntries.reduce((s, [, e]) => s + e.deliveries.length, 0),
+                        this._fmtTime(allTimes[0]), this._fmtTime(allTimes[allTimes.length - 1]),
+                        activeHrs, spanHrs
+                    ]);
+                });
+            });
+        } else {
+            const headers = ['Surveyor', 'Date', 'City', 'MC', 'Surveys Done', 'First Scan', 'Last Scan', 'Duration'];
+            rows = [headers];
+            const grouped = {};
+            data.forEach(r => {
+                const key = `${r.surveyor}|${r.date}|${r.mc}`;
+                if (!grouped[key]) grouped[key] = { surveyor: r.surveyor, date: r.date, city: r.city, mc: r.mc, count: 0, times: [] };
+                grouped[key].count++;
+                grouped[key].times.push(r.time);
+            });
+            Object.values(grouped).sort((a, b) => a.surveyor.localeCompare(b.surveyor) || a.date.localeCompare(b.date)).forEach(g => {
+                const sortedTimes = g.times.slice().sort();
+                const firstScan = sortedTimes[0];
+                const lastScan = sortedTimes[sortedTimes.length - 1];
+                rows.push([g.surveyor, g.date, g.city, g.mc, g.count, firstScan, lastScan, this._timeDiff(firstScan, lastScan)]);
+            });
+        }
+
+        const csvContent = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        const tabLabel = isDelivery ? 'Delivery' : 'Survey';
+        link.setAttribute('download', `StaffPerformance_${tabLabel}_${this._startDate}_${this._endDate}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        if (window.App && App.showToast) App.showToast('CSV exported ✅');
+    },
+};
+
+
 // === 99_init.js ===
 // === 99_init.js ===
 // Final initialization and global exposure
@@ -23522,6 +24295,7 @@ window.BillVerifier = BillVerifier;
 window.PaidBills = PaidBills;
 window.UniversalSearch = UniversalSearch;
 window.Stats = Stats;
+window.StaffPerformanceModal = StaffPerformanceModal;
 window.SpatialRouter = SpatialRouter;
 window.MapNavigator = MapNavigator;
 window.MapRotation = MapRotation;
