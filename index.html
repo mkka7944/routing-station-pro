@@ -9495,7 +9495,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.03.1729</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.05.1153</span>
             </div>
         </div>
         
@@ -11025,7 +11025,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.03.1729";
+window.DATA_VERSION = "v2026.07.05.1153";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -16743,6 +16743,8 @@ const LayerManager = {
     async _fetchAndRenderDeliveryLog(page) {
         const el = document.getElementById('delivery-log-content');
         if (!el || !window._supabase || !window.ACTIVE_BILLING_MONTH) return;
+        var dlIcon = document.getElementById('dl-refresh-icon');
+        if (dlIcon) dlIcon.classList.add('spinning');
 
         const statusFilter = document.getElementById('dl-status')?.value || '';
         const searchQuery = document.getElementById('dl-search')?.value?.trim() || '';
@@ -16750,6 +16752,7 @@ const LayerManager = {
         const dateFrom = document.getElementById('dl-date-from')?.value || '';
         const dateTo = document.getElementById('dl-date-to')?.value || '';
         const allTime = document.getElementById('dl-all-time')?.classList.contains('active') || false;
+        const cityFilter = document.getElementById('dl-city')?.value || '';
         const pageSize = 50;
 
         this._deliveryLogDateFrom = dateFrom;
@@ -16765,6 +16768,13 @@ const LayerManager = {
 
         var now = new Date();
         var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+        // Helper: check if a record's city matches the city filter
+        function _recordMatchesCity(r) {
+            if (!cityFilter || !window.SID_MAP) return true;
+            var raw = window.SID_MAP.get(String(r.survey_id));
+            return raw && raw[11] === cityFilter;
+        }
 
         function applyFilters(q) {
             q = q.eq('bill_month', window.ACTIVE_BILLING_MONTH);
@@ -16813,7 +16823,6 @@ const LayerManager = {
             if (searchQuery) {
                 todayQ = todayQ.or('survey_id.ilike.%' + searchQuery + '%,consumer_name.ilike.%' + searchQuery + '%');
             }
-
             var countResults = await Promise.all([
                 countQ(null),
                 countQ('delivered'),
@@ -16826,16 +16835,46 @@ const LayerManager = {
             var unsentCount = countResults[2].count || 0;
             var todayCount = countResults[3].count || 0;
 
-            var dataQ = applyFilters(window._supabase.from('delivery_log')
-                .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target', { count: 'exact' }))
-                .order('delivered_at', { ascending: false })
-                .range((page - 1) * pageSize, page * pageSize - 1);
-
-            var dataResult = await dataQ;
-            if (dataResult.error) throw dataResult.error;
-
-            var records = dataResult.data || [];
-            var totalCount = dataResult.count || 0;
+            var records;
+            var totalCount;
+            if (cityFilter && window.SID_MAP) {
+                // Fetch ALL matching records, filter by city in-memory, paginate client-side
+                var _all = [];
+                var _offset = 0;
+                var _step = 1000;
+                var _more = true;
+                while (_more) {
+                    var _pageQ = applyFilters(window._supabase.from('delivery_log')
+                        .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target'))
+                        .order('delivered_at', { ascending: false })
+                        .range(_offset, _offset + _step - 1);
+                    var _pageRes = await _pageQ;
+                    var _pageData = _pageRes.data || [];
+                    _all = _all.concat(_pageData);
+                    _offset += _step;
+                    if (!_pageData.length || _pageData.length < _step) _more = false;
+                }
+                var _cityFiltered = _all.filter(function(r) {
+                    var raw = window.SID_MAP.get(String(r.survey_id));
+                    return raw && raw[11] === cityFilter;
+                });
+                totalCount = _cityFiltered.length;
+                // Recompute KPI counts from city-filtered data
+                allCount = totalCount;
+                deliveredCount = _cityFiltered.filter(function(r) { return r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50); }).length;
+                unsentCount = _cityFiltered.filter(function(r) { return r.distance_to_target && Number(r.distance_to_target) > 50 || !r.status || r.status === 'unsent'; }).length;
+                todayCount = _cityFiltered.filter(function(r) { return r.delivered_at && r.delivered_at >= todayStart; }).length;
+                records = _cityFiltered.slice((page - 1) * pageSize, page * pageSize);
+            } else {
+                var dataQ = applyFilters(window._supabase.from('delivery_log')
+                    .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target', { count: 'exact' }))
+                    .order('delivered_at', { ascending: false })
+                    .range((page - 1) * pageSize, page * pageSize - 1);
+                var dataResult = await dataQ;
+                if (dataResult.error) throw dataResult.error;
+                records = dataResult.data || [];
+                totalCount = dataResult.count || 0;
+            }
             this._deliveryLogRecords = records;
             var totalPages = Math.ceil(totalCount / pageSize) || 1;
 
@@ -16862,6 +16901,17 @@ const LayerManager = {
             var allStaffEmails = [...new Set(allStaffRows.map(function(r) { return r.staff_email; }).filter(Boolean))];
             var staffOptions = allStaffEmails.map(function(e) {
                 return '<option value="' + e + '"' + (staffFilter === e ? ' selected' : '') + '>' + e + '</option>';
+            }).join('');
+
+            // Build city options from SID_MAP
+            var citySet = {};
+            if (window.SID_MAP) {
+                window.SID_MAP.forEach(function(raw) {
+                    if (raw[11]) citySet[raw[11]] = true;
+                });
+            }
+            var cityOptions = Object.keys(citySet).sort().map(function(c) {
+                return '<option value="' + c + '"' + (cityFilter === c ? ' selected' : '') + '>' + c + '</option>';
             }).join('');
 
             var recordsHtml;
@@ -16976,13 +17026,19 @@ const LayerManager = {
                         '<option value="">All Staff</option>' +
                         staffOptions +
                     '</select>' +
+                    '<select id="dl-city" onchange="LayerManager._fetchAndRenderDeliveryLog()"' +
+                            ' style="flex:1; min-width:90px; padding:8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:700;">' +
+                        '<option value="">All Cities</option>' +
+                        cityOptions +
+                    '</select>' +
                     '<input id="dl-search" type="text" placeholder="Search SID or name..." value="' + searchQuery + '"' +
                            ' oninput="clearTimeout(this._timer); this._timer=setTimeout(() => LayerManager._fetchAndRenderDeliveryLog(), 400)"' +
                            ' style="flex:1; min-width:140px; padding:8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:700;">' +
-                    '<button onclick="LayerManager._fetchAndRenderDeliveryLog()" style="padding:8px 10px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Refresh data">' +
-                        '<span class="material-icons-round" style="font-size:16px;">refresh</span>' +
+                    '<button onclick="LayerManager._fetchAndRenderDeliveryLog()" style="padding:8px 10px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Refresh data" id="dl-refresh-btn">' +
+                        '<span class="material-icons-round" id="dl-refresh-icon" style="font-size:16px;">refresh</span>' +
                     '</button>' +
                 '</div>' +
+                (cityFilter ? '<div style="font-size:10px; color:#8b5cf6; font-weight:700; margin-bottom:8px;">' + cityFilter + ' — ' + totalCount + ' records</div>' : '') +
                 '<div style="background:white; border-radius:12px; border:1px solid #f1f5f9; overflow:hidden;">' +
                     paginationHtml +
                     recordsHtml +
@@ -16996,6 +17052,7 @@ const LayerManager = {
             console.error('[DeliveryLog] Fetch error:', e);
             el.innerHTML = '<div style="padding:40px; text-align:center; color:#ef4444; font-weight:800;">Failed to load delivery data.</div>';
         }
+        if (dlIcon) dlIcon.classList.remove('spinning');
     },
 
     showDeliveryOnMap(sid) {
@@ -17493,8 +17550,11 @@ const LayerManager = {
                     '<select id="dap-filter" onchange="LayerManager._deliveryActivityFilterChange()" style="flex:1; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
                         '<option value="all">All Deliveries</option>' +
                     '</select>' +
+                    '<select id="dap-city" onchange="LayerManager._deliveryActivityFilterChange()" style="flex:0 0 auto; min-width:110px; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
+                        '<option value="all">All Cities</option>' +
+                    '</select>' +
                     '<button onclick="LayerManager._fetchDeliveryActivityData(false)" style="padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Refresh data">' +
-                        '<span class="material-icons-round" style="font-size:16px;">refresh</span>' +
+                        '<span class="material-icons-round" id="dap-refresh-icon" style="font-size:16px;">refresh</span>' +
                     '</button>' +
                 '</div>' +
                 '<div style="margin-bottom:10px;">' +
@@ -17594,6 +17654,8 @@ const LayerManager = {
 
     async _fetchDeliveryActivityData(incremental) {
         if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
+        var dapIcon = document.getElementById('dap-refresh-icon');
+        if (dapIcon) dapIcon.classList.add('spinning');
         var now = new Date();
         var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
         try {
@@ -17694,6 +17756,7 @@ const LayerManager = {
             if (this._deliveryActivityData) this._updateDeliveryActivityPanel(this._deliveryActivityData);
             this._updateLastUpdated();
         } catch (e) { console.error('[DeliveryActivity] Fetch error:', e); }
+        if (dapIcon) dapIcon.classList.remove('spinning');
     },
 
     _updateDeliveryActivityPanel(records) {
@@ -17710,21 +17773,15 @@ const LayerManager = {
         this._buildDeliveryActivityFilters(records);
         var filter = (document.getElementById('dap-filter') && document.getElementById('dap-filter').value) || 'all';
         var filtered = this._applyDeliveryActivityFilter(records, filter);
+        filtered = this._applyDeliveryActivityCityFilter(filtered);
         var self = this;
-        if (filter === 'all') {
-            document.getElementById('dap-total').textContent = records.length;
-            document.getElementById('dap-delivered').textContent = filtered.filter(function(r) { return r.status === 'delivered'; }).length;
-            document.getElementById('dap-unsent').textContent = filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
-            document.getElementById('dap-staff-count').textContent = new Set(filtered.map(function(r) { return r.staff_email; }).filter(Boolean)).size;
-        } else {
-            var deliv = filtered.filter(function(r) { return r.status === 'delivered'; }).length;
-            var unsent = filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
-            var staffSet = new Set(filtered.map(function(r) { return r.staff_email; }).filter(Boolean));
-            document.getElementById('dap-total').textContent = filtered.length;
-            document.getElementById('dap-delivered').textContent = deliv;
-            document.getElementById('dap-unsent').textContent = unsent;
-            document.getElementById('dap-staff-count').textContent = staffSet.size;
-        }
+        var deliv = filtered.filter(function(r) { return r.status === 'delivered'; }).length;
+        var unsent = filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
+        var staffSet = new Set(filtered.map(function(r) { return r.staff_email; }).filter(Boolean));
+        document.getElementById('dap-total').textContent = filtered.length;
+        document.getElementById('dap-delivered').textContent = deliv;
+        document.getElementById('dap-unsent').textContent = unsent;
+        document.getElementById('dap-staff-count').textContent = staffSet.size;
         this._renderDeliveryActivityStaff(filtered);
         this._renderDeliveryActivityRecent(filtered);
         this._showAllActivityMarkers(filtered);
@@ -17756,6 +17813,14 @@ const LayerManager = {
         Array.from(mcs).sort().forEach(function(m) { html += '<option value="mc:' + m + '">MC/UC: ' + m + '</option>'; });
         sel.innerHTML = html;
         if (currentVal) { sel.value = currentVal; }
+
+        var citySel = document.getElementById('dap-city');
+        if (citySel) {
+            var cityCurrent = citySel.value;
+            var cityHtml = '<option value="all">All Cities</option>';
+            Array.from(cities).sort().forEach(function(c) { cityHtml += '<option value="' + c + '"' + (c === cityCurrent ? ' selected' : '') + '>' + c + '</option>'; });
+            citySel.innerHTML = cityHtml;
+        }
     },
 
     _applyDeliveryActivityFilter(records, filter) {
@@ -17773,6 +17838,16 @@ const LayerManager = {
             });
         }
         return records;
+    },
+
+    _applyDeliveryActivityCityFilter(records) {
+        var cityFilter = document.getElementById('dap-city')?.value || '';
+        if (!cityFilter || cityFilter === 'all') return records;
+        return records.filter(function(r) {
+            if (!window.SID_MAP) return true;
+            var raw = window.SID_MAP.get(String(r.survey_id));
+            return raw && raw[11] === cityFilter;
+        });
     },
 
     _renderDeliveryActivityStaff(records) {
@@ -17794,7 +17869,7 @@ const LayerManager = {
         });
         var entries = Object.entries(staffStats).sort(function(a, b) { return b[1].total - a[1].total; });
         if (!entries.length) { el.innerHTML = '<div style="padding:8px; text-align:center; color:#94a3b8; font-size:10px;">No staff activity</div>'; return; }
-        var limit = this._deliveryActivityStaffShowAll ? entries.length : 5;
+        var limit = this._deliveryActivityStaffShowAll ? entries.length : Math.min(5, entries.length);
         if (this._deliveryActivityStaffShowAll && entries.length <= 5) this._deliveryActivityStaffShowAll = false;
         var html = '<table style="width:100%; border-collapse:collapse; font-size:10px;">' +
             '<thead><tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">' +
@@ -17825,7 +17900,7 @@ const LayerManager = {
         html += '</tbody></table>';
         if (entries.length > 5) {
             var btnText = this._deliveryActivityStaffShowAll ? 'Show Less' : 'Load More';
-            html += '<div onclick="LayerManager._deliveryActivityStaffShowAll=!LayerManager._deliveryActivityStaffShowAll;LayerManager._renderDeliveryActivityStaff(LayerManager._deliveryActivityData)" style="text-align:center; padding:6px; font-size:10px; font-weight:700; color:#2563eb; cursor:pointer; border-top:1px solid #e2e8f0; transition:background 0.1s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'transparent\'">' + btnText + ' &#9660;</div>';
+            html += '<div onclick="LayerManager._deliveryActivityStaffShowAll=!LayerManager._deliveryActivityStaffShowAll;LayerManager._deliveryActivityFilterChange()" style="text-align:center; padding:6px; font-size:10px; font-weight:700; color:#2563eb; cursor:pointer; border-top:1px solid #e2e8f0; transition:background 0.1s;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'transparent\'">' + btnText + ' &#9660;</div>';
         }
         el.innerHTML = html;
     },
@@ -17913,20 +17988,14 @@ const LayerManager = {
         var self = this;
         var filter = (document.getElementById('dap-filter') && document.getElementById('dap-filter').value) || 'all';
         var filtered = this._applyDeliveryActivityFilter(this._deliveryActivityData, filter);
-        if (filter === 'all') {
-            document.getElementById('dap-total').textContent = this._deliveryActivityCount || this._deliveryActivityData.length;
-            document.getElementById('dap-delivered').textContent = this._deliveryActivityDeliveredCount || filtered.filter(function(r) { return r.status === 'delivered'; }).length;
-            document.getElementById('dap-unsent').textContent = this._deliveryActivityUnsentCount || filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
-            document.getElementById('dap-staff-count').textContent = this._deliveryActivityStaffCount || new Set(filtered.map(function(r) { return r.staff_email; }).filter(Boolean)).size;
-        } else {
-            var deliv = filtered.filter(function(r) { return r.status === 'delivered'; }).length;
-            var unsent = filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
-            var staffSet = new Set(filtered.map(function(r) { return r.staff_email; }).filter(Boolean));
-            document.getElementById('dap-total').textContent = filtered.length;
-            document.getElementById('dap-delivered').textContent = deliv;
-            document.getElementById('dap-unsent').textContent = unsent;
-            document.getElementById('dap-staff-count').textContent = staffSet.size;
-        }
+        filtered = this._applyDeliveryActivityCityFilter(filtered);
+        var deliv = filtered.filter(function(r) { return r.status === 'delivered'; }).length;
+        var unsent = filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
+        var staffSet = new Set(filtered.map(function(r) { return r.staff_email; }).filter(Boolean));
+        document.getElementById('dap-total').textContent = filtered.length;
+        document.getElementById('dap-delivered').textContent = deliv;
+        document.getElementById('dap-unsent').textContent = unsent;
+        document.getElementById('dap-staff-count').textContent = staffSet.size;
         this._renderDeliveryActivityStaff(filtered);
         this._renderDeliveryActivityRecent(filtered);
         this._showAllActivityMarkers(filtered);
@@ -23399,7 +23468,7 @@ window.DeliveryModule = {
             }
         }
 
-        const email = document.getElementById('drive-email')?.value || '';
+        var email = document.getElementById('drive-email')?.value || (window.USER ? window.USER.email : '') || '';
 
         const payload = {
             survey_id: sid,
@@ -23517,6 +23586,8 @@ window.StaffPerformanceModal = {
     _cachedRecords: null,
     _cachedMonth: null,
     _isLoading: false,
+    _selectedCity: 'all',
+    _cityOpts: [],
 
     _fmt(d) { return d.toISOString().split('T')[0]; },
 
@@ -23576,16 +23647,28 @@ window.StaffPerformanceModal = {
             .sort((a, b) => a.name.localeCompare(b.name));
     },
 
-    _staffName(email) {
+    _loadCities() {
+        const cities = new Set();
+        if (this._cachedRecords) {
+            this._cachedRecords.forEach(d => { if (d._city && d._city !== '—') cities.add(d._city); });
+        }
+        if (this._surveyData) {
+            this._surveyData.forEach(r => { if (r.city) cities.add(r.city); });
+        }
+        this._cityOpts = [...cities].sort();
+    },
+
+    _staffName(email, staff_name) {
+        if (staff_name) return staff_name;
         if (!email) return 'Unknown';
         const found = this._staffOpts.find(s => s.email === email.toLowerCase());
         return found ? found.name : email.split('@')[0];
     },
 
     // ─── Fetch full month cache once, then filter in-memory ───
-    async _ensureCache() {
+    async _ensureCache(force) {
         if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
-        if (this._cachedMonth === window.ACTIVE_BILLING_MONTH && this._cachedRecords) return;
+        if (!force && this._cachedMonth === window.ACTIVE_BILLING_MONTH && this._cachedRecords) return;
         const billMonth = window.ACTIVE_BILLING_MONTH;
         const allData = [];
         let from = 0, step = 1000;
@@ -23612,14 +23695,15 @@ window.StaffPerformanceModal = {
         this._cachedMonth = billMonth;
     },
 
-    async _fetchDeliveryData() {
-        await this._ensureCache();
+    async _fetchDeliveryData(forceRefresh) {
+        await this._ensureCache(forceRefresh);
         const start = `${this._startDate}T00:00:00`;
         const end = `${this._endDate}T23:59:59`;
         const filtered = this._cachedRecords.filter(d => {
             if (!d.delivered_at) return false;
             if (d.delivered_at < start || d.delivered_at > end) return false;
             if (this._selectedStaff !== 'all' && (!d.staff_email || d.staff_email.toLowerCase() !== this._selectedStaff)) return false;
+            if (this._selectedCity !== 'all' && d._city !== this._selectedCity) return false;
             return true;
         });
         return filtered;
@@ -23633,7 +23717,12 @@ window.StaffPerformanceModal = {
             const s = String(r[6] || '').trim();
             if (!s || s === '-' || s === 'Unknown') return false;
             const date = r[7];
-            return date && String(date) >= start && String(date) <= end;
+            if (!date || String(date) < start || String(date) > end) return false;
+            if (this._selectedCity !== 'all') {
+                const city = String(r[11] || '');
+                if (city !== this._selectedCity) return false;
+            }
+            return true;
         }).map(r => ({
             surveyor: String(r[6] || 'Unknown'),
             date: String(r[7]),
@@ -23672,6 +23761,7 @@ window.StaffPerformanceModal = {
         this._startDate = this._fmt(today);
         this._endDate = this._fmt(today);
         this._selectedStaff = 'all';
+        this._selectedCity = 'all';
         this._activeTab = 'delivery';
         this._buildSidToLoc();
         this._loadStaff();
@@ -23689,18 +23779,20 @@ window.StaffPerformanceModal = {
         this._surveyData = null;
     },
 
-    async _refreshData() {
+    async _refreshData(forceRefresh) {
         this._isLoading = true;
         this._renderBody();
         if (this._activeTab === 'delivery') {
-            this._deliveryData = await this._fetchDeliveryData();
+            this._deliveryData = await this._fetchDeliveryData(forceRefresh);
         } else {
             this._surveyData = this._fetchSurveyData();
         }
         this._loadStaff();
+        this._loadCities();
         this._isLoading = false;
         this._renderBody();
         this._syncStaffDropdown();
+        this._syncCityDropdown();
     },
 
     _syncStaffDropdown() {
@@ -23777,6 +23869,20 @@ window.StaffPerformanceModal = {
         this._refreshData();
     },
 
+    _applyCityFilter() {
+        const sel = document.getElementById('spm-city-select');
+        if (sel) this._selectedCity = sel.value;
+        this._refreshData();
+    },
+
+    _syncCityDropdown() {
+        const sel = document.getElementById('spm-city-select');
+        if (!sel) return;
+        const currentVal = sel.value;
+        sel.innerHTML = `<option value="all">All Cities</option>
+            ${this._cityOpts.map(c => `<option value="${c}" ${c === currentVal ? 'selected' : ''}>${c}</option>`).join('')}`;
+    },
+
     _renderBody() {
         const body = document.getElementById('spm-body');
         if (!body) return;
@@ -23798,7 +23904,11 @@ window.StaffPerformanceModal = {
                         <option value="all">All Staff</option>
                         ${this._staffOpts.map(s => `<option value="${s.email}">${s.name}</option>`).join('')}
                     </select>
-                    <button onclick="StaffPerformanceModal._refreshData()" style="padding:5px 10px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:4px; color:#475569;">
+                    <select id="spm-city-select" onchange="StaffPerformanceModal._applyCityFilter()" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; outline:none; max-width:150px;">
+                        <option value="all">All Cities</option>
+                        ${this._cityOpts.map(c => `<option value="${c}" ${c === this._selectedCity ? 'selected' : ''}>${c}</option>`).join('')}
+                    </select>
+                    <button onclick="StaffPerformanceModal._refreshData(true)" style="padding:5px 10px; border:1px solid #cbd5e1; border-radius:6px; background:white; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:4px; color:#475569;">
                         <span class="material-icons-round" style="font-size:14px;">refresh</span>
                     </button>
                     <button onclick="StaffPerformanceModal.exportCSV()" style="padding:5px 12px; border:none; border-radius:6px; background:#8b5cf6; color:white; font-size:11px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; margin-left:auto;">
@@ -23835,12 +23945,19 @@ window.StaffPerformanceModal = {
         const staffMap = new Map();
 
         data.forEach(d => {
-            const email = (d.staff_email || 'unknown').toLowerCase();
+            const rawEmail = d.staff_email || '';
+            const rawName = d.staff_name || '';
+            let email = rawEmail.toLowerCase();
+            if (!email && !rawName) {
+                email = 'unknown_' + (d._city || 'unknown');
+            } else if (!email) {
+                email = 'unknown';
+            }
             const date = d.delivered_at ? d.delivered_at.split('T')[0] : 'unknown';
             const isDelv = d._effectiveStatus === 'delivered';
             if (isDelv) totalDelv++; else totalUnsent++;
 
-            if (!staffMap.has(email)) staffMap.set(email, { name: this._staffName(d.staff_email), email: d.staff_email, days: new Map() });
+            if (!staffMap.has(email)) staffMap.set(email, { name: this._staffName(rawEmail, rawName), email: rawEmail, days: new Map() });
             const staff = staffMap.get(email);
             if (!staff.days.has(date)) staff.days.set(date, new Map());
             const mcMap = staff.days.get(date);
@@ -24190,10 +24307,17 @@ window.StaffPerformanceModal = {
         if (isDelivery) {
             const staffMap = new Map();
             data.forEach(d => {
-                const email = (d.staff_email || 'unknown').toLowerCase();
+                const rawEmail = d.staff_email || '';
+                const rawName = d.staff_name || '';
+                let email = rawEmail.toLowerCase();
+                if (!email && !rawName) {
+                    email = 'unknown_' + (d._city || 'unknown');
+                } else if (!email) {
+                    email = 'unknown';
+                }
                 const date = d.delivered_at ? d.delivered_at.split('T')[0] : 'unknown';
                 const isDelv = d._effectiveStatus === 'delivered';
-                if (!staffMap.has(email)) staffMap.set(email, { name: this._staffName(d.staff_email), email, days: new Map() });
+                if (!staffMap.has(email)) staffMap.set(email, { name: this._staffName(rawEmail, rawName), email: rawEmail, days: new Map() });
                 const staff = staffMap.get(email);
                 if (!staff.days.has(date)) staff.days.set(date, new Map());
                 const mcMap = staff.days.get(date);
