@@ -8599,20 +8599,6 @@ input[type=number] {
         }
 }
 
-/* ─── Activity Report Styles ─── */
-.df-sessions-table th,
-.df-sessions-table td {
-        white-space: nowrap;
-}
-
-.df-sessions-table tr:hover {
-        background: #f8fafc;
-}
-
-.df-report .material-icons-round {
-        vertical-align: middle;
-}
-
 /* ─── Print Styles for Activity Report ─── */
 @media print {
         @page {
@@ -8620,7 +8606,6 @@ input[type=number] {
                 margin: 12mm;
         }
 
-        /* Render Settings modal as a normal document block for print */
         #modal-settings {
                 display: block !important;
                 position: relative !important;
@@ -8651,7 +8636,6 @@ input[type=number] {
                 height: auto !important;
         }
 
-        /* Hide chrome */
         .settings-tabs-row,
         .settings-footer,
         .settings-tab-btn,
@@ -8660,32 +8644,11 @@ input[type=number] {
                 display: none !important;
         }
 
-        /* Report takes full width */
         .df-report {
                 display: block !important;
                 max-width: 100% !important;
         }
 
-        .df-sessions-table {
-                font-size: 9pt !important;
-        }
-
-        .df-sessions-table th,
-        .df-sessions-table td {
-                padding: 4px 6px !important;
-        }
-
-        /* Expand all session details in print */
-        [id^="df-detail-"] {
-                display: table-row !important;
-        }
-
-        /* Keep KPI cards together */
-        .df-report div[style*="grid-template-columns"] {
-                break-inside: avoid;
-        }
-
-        /* Hide sidebar and map */
         .sidebar-container,
         #map {
                 display: none !important;
@@ -9588,7 +9551,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.06.1324</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.06.1344</span>
             </div>
         </div>
         
@@ -11118,7 +11081,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.06.1324";
+window.DATA_VERSION = "v2026.07.06.1344";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -24570,35 +24533,24 @@ window.StaffPerformanceModal = {
 
 // === 40_delivery_forensics.js ===
 // 40_delivery_forensics.js
-// Activity Report — Per-staff delivery pattern analysis
+// Activity Report — GPS clustering analysis of unsent deliveries
 
 window.DeliveryForensics = {
     _records: null,
     _staffEmail: null,
     _analysis: null,
 
-    _fmtPct(v) { return Math.round(v * 10) / 10 + '%'; },
-    _fmtNum(v) { return Number(v).toLocaleString(); },
     _fmtTime(iso) {
         if (!iso) return '—';
         const d = new Date(iso);
-        return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     },
     _fmtDate(iso) {
         if (!iso) return '—';
         const d = new Date(iso);
-        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     },
-
-    _haversine(lat1, lng1, lat2, lng2) {
-        var R = 6371000;
-        var dLat = (lat2 - lat1) * Math.PI / 180;
-        var dLng = (lng2 - lng1) * Math.PI / 180;
-        var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    },
+    _fmtNum(v) { return Number(v).toLocaleString(); },
 
     // ─── Fetch all records for one staff email ───
     async fetchAndAnalyze(staffEmail) {
@@ -24629,151 +24581,74 @@ window.DeliveryForensics = {
         return this._analysis;
     },
 
-    // ─── Core analysis ───
+    // ─── Analysis: group unsent records by GPS ───
     _analyze(records) {
         if (!records || records.length === 0) return null;
 
-        var enriched = records.map(function(d) {
+        var total = records.length;
+        var unsentTotal = 0;
+        var beyond500 = 0;
+
+        // Collect unsent records with valid GPS
+        var unsentRecords = [];
+        records.forEach(function(d) {
             var lat = parseFloat(d.capture_gps_lat) || 0;
             var lng = parseFloat(d.capture_gps_lng) || 0;
             var dist = parseInt(d.distance_to_target) || 0;
-            return {
-                survey_id: d.survey_id,
-                delivered_at: d.delivered_at,
-                status: d.status,
-                distance: dist,
-                lat: lat,
-                lng: lng,
-                effectiveUnsent: d.status === 'unsent' || dist > 50
-            };
-        });
-
-        // Split sessions (gap > 30 min = new session)
-        var sessions = [];
-        var cur = [enriched[0]];
-        for (var i = 1; i < enriched.length; i++) {
-            var gap = new Date(enriched[i].delivered_at) - new Date(enriched[i - 1].delivered_at);
-            if (gap > 30 * 60 * 1000) {
-                sessions.push(this._analyzeSession(cur));
-                cur = [enriched[i]];
-            } else {
-                cur.push(enriched[i]);
-            }
-        }
-        if (cur.length > 0) sessions.push(this._analyzeSession(cur));
-
-        // Aggregate
-        var totalDeliveries = records.length;
-        var allBursts = [];
-        var excessive500Count = 0;
-        var totalUnsent = 0;
-        var sessionsOver120 = 0;
-        var sessionsOver80 = 0;
-
-        sessions.forEach(function(s) {
-            if (s.ratePerHour > 120) sessionsOver120++;
-            if (s.ratePerHour > 80) sessionsOver80++;
-            s.bursts.forEach(function(b) { allBursts.push(b); });
-            excessive500Count += s.excessive500Count;
-            totalUnsent += s.unsentCount;
-        });
-
-        var hasExcessive500 = excessive500Count > 0;
-        var hasBursts = allBursts.length > 0;
-        var hasHighPace = sessionsOver120 > 0;
-        var hasModeratePace = sessionsOver80 > 0;
-
-        // Traffic light
-        var light = 'green';
-        if (hasExcessive500 || hasHighPace || hasBursts) {
-            light = 'red';
-        } else if (hasModeratePace) {
-            light = 'yellow';
-        }
-
-        // Average pace across all sessions
-        var totalDurationMin = sessions.reduce(function(acc, s) { return acc + s.durationMin; }, 0);
-        var avgPace = totalDurationMin > 0 ? (totalDeliveries / totalDurationMin * 60) : 0;
-
-        // Find fastest streak overall
-        var fastestStreak = allBursts.sort(function(a, b) { return a.avgGap - b.avgGap; })[0];
-
-        return {
-            total: totalDeliveries,
-            sessions: sessions,
-            totalSessions: sessions.length,
-            sessionsOver80: sessionsOver80,
-            sessionsOver120: sessionsOver120,
-            avgPace: Math.round(avgPace),
-            excessive500Count: excessive500Count,
-            totalUnsent: totalUnsent,
-            bursts: allBursts,
-            burstCount: allBursts.length,
-            fastestStreak: fastestStreak || null,
-            light: light,
-            staffEmail: this._staffEmail
-        };
-    },
-
-    _analyzeSession(records) {
-        var count = records.length;
-        var first = new Date(records[0].delivered_at);
-        var last = new Date(records[count - 1].delivered_at);
-        var durationMin = (last - first) / 60000;
-        var pace = durationMin > 0 ? (count / durationMin * 60) : 0;
-
-        // Burst detection: 5+ consecutive deliveries with avg gap < 15s
-        var bursts = [];
-        var streakCount = 1, streakSum = 0;
-
-        for (var i = 1; i < count; i++) {
-            var gapSec = (new Date(records[i].delivered_at) - new Date(records[i - 1].delivered_at)) / 1000;
-            if (gapSec <= 30) {
-                streakCount++;
-                streakSum += gapSec;
-            } else {
-                if (streakCount >= 5 && (streakSum / streakCount) < 15) {
-                    bursts.push({
-                        count: streakCount,
-                        avgGap: Math.round(streakSum / streakCount * 10) / 10,
-                        startIdx: i - streakCount,
-                        startTime: records[i - streakCount].delivered_at,
-                        endTime: records[i - 1].delivered_at,
-                        duration: Math.round(streakSum)
+            var isUnsent = d.status === 'unsent' || dist > 50;
+            if (isUnsent) {
+                unsentTotal++;
+                if (dist > 500) beyond500++;
+                if (lat !== 0 && lng !== 0) {
+                    unsentRecords.push({
+                        survey_id: d.survey_id,
+                        delivered_at: d.delivered_at,
+                        distance: dist,
+                        lat: Math.round(lat * 10000) / 10000,
+                        lng: Math.round(lng * 10000) / 10000,
+                        gpsKey: Math.round(lat * 10000) / 10000 + ',' + Math.round(lng * 10000) / 10000
                     });
                 }
-                streakCount = 1;
-                streakSum = 0;
             }
-        }
-        if (streakCount >= 5 && streakSum > 0 && (streakSum / streakCount) < 15) {
-            bursts.push({
-                count: streakCount,
-                avgGap: Math.round(streakSum / streakCount * 10) / 10,
-                startIdx: count - streakCount,
-                startTime: records[count - streakCount].delivered_at,
-                endTime: records[count - 1].delivered_at,
-                duration: Math.round(streakSum)
-            });
-        }
+        });
 
-        var excessive500Count = records.filter(function(r) { return r.distance > 500; }).length;
-        var unsentCount = records.filter(function(r) { return r.effectiveUnsent; }).length;
-        var unsentRecords = records.filter(function(r) { return r.effectiveUnsent; });
+        // Group by GPS key
+        var groups = {};
+        unsentRecords.forEach(function(r) {
+            if (!groups[r.gpsKey]) groups[r.gpsKey] = [];
+            groups[r.gpsKey].push(r);
+        });
+
+        // Sort groups by size descending, only keep those with 5+
+        var clusters = Object.keys(groups).map(function(key) {
+            return {
+                gpsKey: key,
+                lat: parseFloat(key.split(',')[0]),
+                lng: parseFloat(key.split(',')[1]),
+                count: groups[key].length,
+                records: groups[key]
+            };
+        }).filter(function(c) { return c.count >= 5; })
+        .sort(function(a, b) { return b.count - a.count; });
+
+        // Add time info to each cluster
+        clusters.forEach(function(c) {
+            c.firstTime = c.records[0].delivered_at;
+            c.lastTime = c.records[c.records.length - 1].delivered_at;
+            c.durationMin = Math.round((new Date(c.lastTime) - new Date(c.firstTime)) / 60000 * 10) / 10;
+        });
+
+        // Overall assessment
+        var light = (clusters.length > 0 || beyond500 > 0) ? 'red' : 'green';
 
         return {
-            count: count,
-            firstTime: records[0].delivered_at,
-            lastTime: records[count - 1].delivered_at,
-            date: records[0].delivered_at,
-            durationMin: Math.round(durationMin * 10) / 10,
-            ratePerHour: Math.round(pace),
-            bursts: bursts,
-            burstCount: bursts.length,
-            excessive500Count: excessive500Count,
-            unsentCount: unsentCount,
-            unsentRecords: unsentRecords,
-            records: records
+            total: total,
+            unsentTotal: unsentTotal,
+            beyond500: beyond500,
+            clusters: clusters,
+            clusterCount: clusters.length,
+            light: light,
+            staffEmail: this._staffEmail
         };
     },
 
@@ -24784,12 +24659,7 @@ window.DeliveryForensics = {
         }
 
         var light = analysis.light;
-        var lightColors = {
-            green: { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534', icon: 'check_circle', label: 'Normal — No unusual patterns' },
-            yellow: { bg: '#fefce8', border: '#fde68a', text: '#92400e', icon: 'warning', label: 'Review — Some sessions had a fast pace' },
-            red: { bg: '#fef2f2', border: '#fecaca', text: '#991b1b', icon: 'gpp_bad', label: 'Investigate — Patterns need a closer look' }
-        };
-        var lc = lightColors[light];
+        var isRed = light === 'red';
 
         var html = '<div class="df-report">';
 
@@ -24805,109 +24675,71 @@ window.DeliveryForensics = {
         html += '</div></div>';
 
         // ─── Assessment Banner ───
-        html += '<div style="background:' + lc.bg + '; border:1px solid ' + lc.border + '; border-radius:12px; padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:12px;">';
-        html += '<span class="material-icons-round" style="font-size:28px; color:' + lc.text + ';">' + lc.icon + '</span>';
-        html += '<div><div style="font-weight:800; font-size:14px; color:' + lc.text + ';">' + lc.label + '</div>';
-        html += '<div style="font-size:10px; color:' + lc.text + '; margin-top:4px; opacity:0.7;">Phone GPS can drift &plusmn;15&ndash;25m in hot weather. This report uses a wide threshold to avoid false flags.</div>';
-        html += '</div></div>';
-
-        // ─── Summary cards ───
-        html += '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:20px;">';
-        html += this._kpiCard('inventory_2', 'Deliveries', this._fmtNum(analysis.total), '#1e293b');
-        html += this._kpiCard('timer', 'Sessions', analysis.totalSessions, '#1e293b');
-        html += this._kpiCard('speed', 'Avg Pace', analysis.avgPace + '/hr', analysis.avgPace > 80 ? '#d97706' : '#1e293b');
-        html += this._kpiCard('calendar_today', 'Work Days', this._getWorkDays(analysis.sessions).length, '#1e293b');
-        html += this._kpiCard(analysis.excessive500Count > 0 ? 'report' : 'check_circle', 'Distant Del.', analysis.excessive500Count, analysis.excessive500Count > 0 ? '#dc2626' : '#16a34a');
+        var bannerBg = isRed ? '#fef2f2' : '#f0fdf4';
+        var bannerBorder = isRed ? '#fecaca' : '#bbf7d0';
+        var bannerText = isRed ? '#991b1b' : '#166534';
+        var bannerIcon = isRed ? 'gpp_bad' : 'check_circle';
+        var bannerLabel = isRed ? 'Investigate — Unsent deliveries share the same GPS location' : 'Normal — No unusual patterns found';
+        html += '<div style="background:' + bannerBg + '; border:1px solid ' + bannerBorder + '; border-radius:12px; padding:16px; margin-bottom:20px; display:flex; align-items:flex-start; gap:12px;">';
+        html += '<span class="material-icons-round" style="font-size:28px; color:' + bannerText + '; flex-shrink:0;">' + bannerIcon + '</span>';
+        html += '<div style="font-weight:800; font-size:14px; color:' + bannerText + ';">' + bannerLabel + '</div>';
         html += '</div>';
 
-        // ─── Findings (only if any flags were raised) ───
-        var hasFindings = analysis.excessive500Count > 0 || analysis.burstCount > 0 || analysis.sessionsOver120 > 0;
-        if (hasFindings) {
-            html += '<div style="border:1px solid #fecaca; border-radius:12px; padding:16px; background:#fef2f2; margin-bottom:16px;">';
-            html += '<div style="font-weight:800; font-size:11px; color:#991b1b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">Findings</div>';
+        // ─── Summary cards ───
+        html += '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:20px;">';
+        html += this._kpiCard('inventory_2', 'Total Deliveries', this._fmtNum(analysis.total), '#1e293b');
+        html += this._kpiCard('cancel', 'Unsent', analysis.unsentTotal, analysis.unsentTotal > 0 ? '#d97706' : '#16a34a');
+        html += this._kpiCard('my_location', 'GPS Clusters', analysis.clusterCount, analysis.clusterCount > 0 ? '#dc2626' : '#16a34a');
+        html += this._kpiCard(analysis.beyond500 > 0 ? 'report' : 'check_circle', 'Beyond 500m', analysis.beyond500, analysis.beyond500 > 0 ? '#dc2626' : '#16a34a');
+        html += '</div>';
 
-            if (analysis.excessive500Count > 0) {
-                html += '<div style="display:flex; align-items:flex-start; gap:8px; margin-bottom:6px; font-size:11px; color:#991b1b;">';
-                html += '<span class="material-icons-round" style="font-size:14px; color:#dc2626; flex-shrink:0;">gps_fixed</span>';
-                html += '<div><strong>' + analysis.excessive500Count + ' distant deliveries</strong> — these are more than 500m from where the phone was. Phone GPS cannot drift this far, so these were likely marked while sitting in one place.</div>';
+        // ─── GPS Clusters ───
+        if (analysis.clusters.length > 0) {
+            html += '<div style="border:1px solid #fecaca; border-radius:12px; overflow:hidden; margin-bottom:16px;">';
+            html += '<div style="padding:12px 16px; background:#fef2f2; border-bottom:1px solid #fecaca; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#991b1b;">GPS Clusters — Unsent Deliveries at the Same Location</div>';
+
+            var self = this;
+            analysis.clusters.forEach(function(cluster, ci) {
+                html += '<div style="padding:14px 16px;' + (ci < analysis.clusters.length - 1 ? ' border-bottom:1px solid #f1f5f9;' : '') + '">';
+                html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">';
+                html += '<div><span style="font-weight:800; font-size:12px;">GPS (' + cluster.lat.toFixed(4) + ', ' + cluster.lng.toFixed(4) + ')</span>';
+                html += '<span style="font-size:11px; color:#64748b; margin-left:8px;">' + cluster.count + ' deliveries over ' + cluster.durationMin + ' min</span></div>';
                 html += '</div>';
-            }
-
-            if (analysis.burstCount > 0 && analysis.fastestStreak) {
-                html += '<div style="display:flex; align-items:flex-start; gap:8px; margin-bottom:6px; font-size:11px; color:#991b1b;">';
-                html += '<span class="material-icons-round" style="font-size:14px; color:#dc2626; flex-shrink:0;">timer</span>';
-                html += '<div><strong>Fast streak: ' + analysis.fastestStreak.count + ' deliveries in ' + analysis.fastestStreak.duration + ' seconds</strong> (' + analysis.fastestStreak.avgGap + 's between each). This is too fast for walking house-to-house.</div>';
+                html += '<table style="width:100%; border-collapse:collapse; font-size:10px;">';
+                html += '<thead><tr style="background:#f1f5f9;">';
+                html += '<th style="padding:5px 8px; text-align:left; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Time</th>';
+                html += '<th style="padding:5px 8px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Distance</th>';
+                html += '<th style="padding:5px 8px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Gap</th>';
+                html += '<th style="padding:5px 8px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">GPS</th>';
+                html += '</tr></thead><tbody>';
+                cluster.records.forEach(function(r, ri) {
+                    var prevTime = ri > 0 ? cluster.records[ri - 1].delivered_at : null;
+                    var gapSec = prevTime ? Math.round((new Date(r.delivered_at) - new Date(prevTime)) / 1000) : null;
+                    var isFar = r.distance > 500;
+                    html += '<tr style="border-bottom:1px solid #f1f5f9;' + (isFar ? ' background:#fef2f2;' : '') + '">';
+                    html += '<td style="padding:5px 8px; font-weight:700;">' + self._fmtTime(r.delivered_at) + '</td>';
+                    html += '<td style="padding:5px 8px; text-align:right; font-weight:800; color:' + (isFar ? '#dc2626' : '#1e293b') + ';">' + r.distance + 'm</td>';
+                    html += '<td style="padding:5px 8px; text-align:right; color:#64748b;">' + (gapSec !== null ? gapSec + 's' : '&mdash;') + '</td>';
+                    html += '<td style="padding:5px 8px; text-align:right; color:#94a3b8; font-size:9px;">' + r.lat.toFixed(4) + ', ' + r.lng.toFixed(4) + '</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
                 html += '</div>';
-            }
+            });
 
-            if (analysis.sessionsOver120 > 0) {
-                html += '<div style="display:flex; align-items:flex-start; gap:8px; font-size:11px; color:#991b1b;">';
-                html += '<span class="material-icons-round" style="font-size:14px; color:#dc2626; flex-shrink:0;">speed</span>';
-                html += '<div><strong>' + analysis.sessionsOver120 + ' session(s)</strong> with pace over 120 deliveries per hour. This means less than 30 seconds per delivery without stopping &mdash; very difficult to do while walking from house to house.</div>';
-                html += '</div>';
-            }
-
+            html += '<div style="padding:10px 16px; background:#fafafa; font-size:10px; color:#64748b;">';
+            html += 'Deliveries at the same GPS coordinate within a short time window indicate the staff member was not walking between houses. Phone GPS accuracy is &plusmn;15&ndash;25m &mdash; these coordinates are identical to 4 decimal places, far beyond any normal drift.';
+            html += '</div>';
             html += '</div>';
         }
 
-        // ─── Sessions Table ───
-        html += '<div style="border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; margin-bottom:16px;">';
-        html += '<div style="padding:12px 16px; background:#f8fafc; border-bottom:1px solid #e2e8f0; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#475569;">Work Sessions</div>';
-
-        html += '<div style="overflow-x:auto;">';
-        html += '<table class="df-sessions-table" style="width:100%; border-collapse:collapse; font-size:11px;">';
-        html += '<thead><tr style="background:#f8fafc;">';
-        html += '<th style="padding:8px 12px; text-align:left; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">#</th>';
-        html += '<th style="padding:8px 12px; text-align:left; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Date</th>';
-        html += '<th style="padding:8px 12px; text-align:left; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Time</th>';
-        html += '<th style="padding:8px 12px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Count</th>';
-        html += '<th style="padding:8px 12px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Duration</th>';
-        html += '<th style="padding:8px 12px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Pace</th>';
-        html += '<th style="padding:8px 12px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">&gt;500m</th>';
-        html += '<th style="padding:8px 12px; text-align:center; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;"></th>';
-        html += '</tr></thead><tbody>';
-
-        var self = this;
-        analysis.sessions.forEach(function(s, i) {
-            var paceColor = s.ratePerHour > 120 ? '#dc2626' : (s.ratePerHour > 80 ? '#d97706' : '#16a34a');
-            var hasBadge = s.excessive500Count > 0 || s.burstCount > 0;
-            html += '<tr onclick="DeliveryForensics._toggleSession(' + i + ')" style="cursor:pointer; border-bottom:1px solid #f1f5f9;">';
-            html += '<td style="padding:10px 12px; font-weight:800; color:#94a3b8;">' + (i + 1) + '</td>';
-            html += '<td style="padding:10px 12px; font-weight:700;">' + self._fmtDate(s.date) + '</td>';
-            html += '<td style="padding:10px 12px; color:#64748b;">' + self._fmtTime(s.firstTime) + '&ndash;' + self._fmtTime(s.lastTime) + '</td>';
-            html += '<td style="padding:10px 12px; text-align:right; font-weight:800;">' + s.count + '</td>';
-            html += '<td style="padding:10px 12px; text-align:right; color:#64748b;">' + s.durationMin + 'm</td>';
-            html += '<td style="padding:10px 12px; text-align:right; font-weight:800; color:' + paceColor + ';">' + s.ratePerHour + '/h</td>';
-            html += '<td style="padding:10px 12px; text-align:right; font-weight:800; color:' + (s.excessive500Count > 0 ? '#dc2626' : '#16a34a') + ';">' + s.excessive500Count + '</td>';
-            html += '<td style="padding:10px 12px; text-align:center;">';
-            if (hasBadge) html += '<span class="material-icons-round" style="font-size:14px; color:#dc2626;">report</span>';
-            else html += '<span class="material-icons-round" style="font-size:14px; color:#94a3b8;">expand_more</span>';
-            html += '</td></tr>';
-            // Detail row (hidden by default)
-            html += '<tr id="df-detail-' + i + '" style="display:none;"><td colspan="8" style="padding:0; background:#f8fafc;">';
-            html += '<div style="padding:16px;">';
-            html += self._renderSessionDetail(s);
-            html += '</div></td></tr>';
-        });
-
-        html += '</tbody></table>';
-        html += '</div></div>';
-
         // ─── Footer ───
         html += '<div style="padding:12px 0; font-size:10px; color:#94a3b8; text-align:center; border-top:1px solid #f1f5f9;">';
-        html += 'Data: delivery_log &middot; Staff: ' + this._escapeHtml(analysis.staffEmail) + ' &middot; Month: ' + window.ACTIVE_BILLING_MONTH + ' &middot; ' + analysis.total + ' records';
+        html += 'Data: delivery_log &middot; ' + this._escapeHtml(analysis.staffEmail) + ' &middot; ' + window.ACTIVE_BILLING_MONTH + ' &middot; ' + analysis.total + ' records';
         html += '</div>';
 
         html += '</div>';
         return html;
-    },
-
-    _getWorkDays(sessions) {
-        var days = new Set();
-        sessions.forEach(function(s) {
-            days.add(new Date(s.date).toISOString().split('T')[0]);
-        });
-        return [...days].sort();
     },
 
     _kpiCard: function(icon, label, value, color) {
@@ -24917,81 +24749,37 @@ window.DeliveryForensics = {
             '<div style="font-size:16px; font-weight:900; color:#1e293b;">' + value + '</div></div>';
     },
 
-    _renderSessionDetail: function(session) {
-        var unsent = session.unsentRecords;
-        if (unsent.length === 0) {
-            return '<div style="font-size:11px; color:#64748b; padding:8px 0;">No unsent deliveries in this session.</div>';
-        }
-
-        var html = '<div style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">';
-        html += 'Unsent deliveries (' + unsent.length + ' records)';
-        html += '</div>';
-
-        html += '<div style="overflow-x:auto;">';
-        html += '<table style="width:100%; border-collapse:collapse; font-size:10px;">';
-        html += '<thead><tr style="background:#f1f5f9;">';
-        html += '<th style="padding:6px 8px; text-align:left; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Time</th>';
-        html += '<th style="padding:6px 8px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Distance</th>';
-        html += '<th style="padding:6px 8px; text-align:center; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">GPS</th>';
-        html += '<th style="padding:6px 8px; text-align:center; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Status</th>';
-        html += '</tr></thead><tbody>';
-
-        var self = this;
-        unsent.forEach(function(r) {
-            var isFar = r.distance > 500;
-            html += '<tr style="border-bottom:1px solid #f1f5f9;' + (isFar ? ' background:#fef2f2;' : '') + '">';
-            html += '<td style="padding:6px 8px; font-weight:700;">' + self._fmtTime(r.delivered_at) + '</td>';
-            html += '<td style="padding:6px 8px; text-align:right; font-weight:800; color:' + (isFar ? '#dc2626' : '#d97706') + ';">' + r.distance + 'm</td>';
-            html += '<td style="padding:6px 8px; text-align:center; color:#64748b;">' + (r.lat !== 0 ? r.lat.toFixed(4) + ', ' + r.lng.toFixed(4) : '&mdash;') + '</td>';
-            html += '<td style="padding:6px 8px; text-align:center; font-weight:800; color:' + (r.status === 'unsent' ? '#dc2626' : '#d97706') + ';">' + r.status + '</td>';
-            html += '</tr>';
-        });
-
-        html += '</tbody></table></div>';
-        return html;
-    },
-
-    _toggleSession: function(index) {
-        var row = document.getElementById('df-detail-' + index);
-        if (!row) return;
-        row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
-    },
-
     _print: function() {
         window.print();
     },
 
     _exportCSV: function() {
         var a = this._analysis;
-        if (!a || !a.sessions) return;
+        if (!a || !a.clusters) return;
         var rows = [];
-        rows.push('Session,Date,Start,End,Count,DurationMin,PacePerHour,Excessive500m,Unsent,Bursts');
-        a.sessions.forEach(function(s, i) {
-            rows.push([
-                i + 1,
-                new Date(s.date).toISOString().split('T')[0],
-                new Date(s.firstTime).toISOString(),
-                new Date(s.lastTime).toISOString(),
-                s.count,
-                s.durationMin,
-                s.ratePerHour,
-                s.excessive500Count,
-                s.unsentCount,
-                s.burstCount
-            ].join(','));
+        rows.push('Staff,Month,Total,Unsent,GPS_Cluster_Lat,GPS_Cluster_Lng,Cluster_Count,Time,Distance_Meters,Gap_Seconds');
+        a.clusters.forEach(function(c) {
+            c.records.forEach(function(r, ri) {
+                var prevTime = ri > 0 ? c.records[ri - 1].delivered_at : null;
+                var gapSec = prevTime ? Math.round((new Date(r.delivered_at) - new Date(prevTime)) / 1000) : '';
+                rows.push([
+                    a.staffEmail,
+                    window.ACTIVE_BILLING_MONTH,
+                    a.total,
+                    a.unsentTotal,
+                    c.lat.toFixed(4),
+                    c.lng.toFixed(4),
+                    c.count,
+                    r.delivered_at,
+                    r.distance,
+                    gapSec
+                ].join(','));
+            });
         });
         rows.push('');
         rows.push('Summary');
-        rows.push('Total,AvgPace,Sessions,SessionsOver80,SessionsOver120,Distant500m,Bursts');
-        rows.push([
-            a.total,
-            a.avgPace,
-            a.totalSessions,
-            a.sessionsOver80,
-            a.sessionsOver120,
-            a.excessive500Count,
-            a.burstCount
-        ].join(','));
+        rows.push('Staff,Month,Total,Unsent,Clusters,Beyond500m');
+        rows.push([a.staffEmail, window.ACTIVE_BILLING_MONTH, a.total, a.unsentTotal, a.clusterCount, a.beyond500].join(','));
 
         var csv = rows.join('\n');
         var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
