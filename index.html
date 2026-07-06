@@ -9551,7 +9551,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.06.1344</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.06.1438</span>
             </div>
         </div>
         
@@ -11081,7 +11081,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.06.1344";
+window.DATA_VERSION = "v2026.07.06.1438";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -14297,14 +14297,22 @@ const LocalCam = {
         async handleCapture(input, surveyId) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
-                const timestamp = Math.floor(Date.now() / 1000);
                 
                 try {
                     // Use DriveSync's compressor for consistency (WebP < 300KB)
                     const compressedFile = await DriveSync.compressImage(file);
                     
-                    // Create Filename
-                    const filename = `${surveyId}_img_${timestamp}.webp`;
+                    // Create Filename with readable timestamp (Pakistan time)
+                    var now = new Date();
+                    var pkt = new Date(now.getTime() + 5 * 60 * 60 * 1000);
+                    var y = pkt.getUTCFullYear();
+                    var mo = String(pkt.getUTCMonth() + 1).padStart(2, '0');
+                    var d = String(pkt.getUTCDate()).padStart(2, '0');
+                    var h = String(pkt.getUTCHours()).padStart(2, '0');
+                    var mi = String(pkt.getUTCMinutes()).padStart(2, '0');
+                    var s = String(pkt.getUTCSeconds()).padStart(2, '0');
+                    var dateStr = y + '-' + mo + '-' + d + '_' + h + '-' + mi + '-' + s;
+                    const filename = surveyId + '_img_' + dateStr + '.webp';
                     
                     // Create Blob URL from compressed file
                     const blobUrl = URL.createObjectURL(compressedFile);
@@ -24545,6 +24553,11 @@ window.DeliveryForensics = {
         const d = new Date(iso);
         return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     },
+    _fmtDateShort(iso) {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' });
+    },
     _fmtDate(iso) {
         if (!iso) return '—';
         const d = new Date(iso);
@@ -24708,16 +24721,19 @@ window.DeliveryForensics = {
                 html += '<table style="width:100%; border-collapse:collapse; font-size:10px;">';
                 html += '<thead><tr style="background:#f1f5f9;">';
                 html += '<th style="padding:5px 8px; text-align:left; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Time</th>';
+                html += '<th style="padding:5px 8px; text-align:left; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Date</th>';
                 html += '<th style="padding:5px 8px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Distance</th>';
                 html += '<th style="padding:5px 8px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Gap</th>';
                 html += '<th style="padding:5px 8px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">GPS</th>';
                 html += '</tr></thead><tbody>';
                 cluster.records.forEach(function(r, ri) {
                     var prevTime = ri > 0 ? cluster.records[ri - 1].delivered_at : null;
-                    var gapSec = prevTime ? Math.round((new Date(r.delivered_at) - new Date(prevTime)) / 1000) : null;
+                    var sameDay = prevTime && new Date(r.delivered_at).toDateString() === new Date(prevTime).toDateString();
+                    var gapSec = sameDay ? Math.round((new Date(r.delivered_at) - new Date(prevTime)) / 1000) : null;
                     var isFar = r.distance > 500;
                     html += '<tr style="border-bottom:1px solid #f1f5f9;' + (isFar ? ' background:#fef2f2;' : '') + '">';
                     html += '<td style="padding:5px 8px; font-weight:700;">' + self._fmtTime(r.delivered_at) + '</td>';
+                    html += '<td style="padding:5px 8px; color:#64748b;">' + self._fmtDateShort(r.delivered_at) + '</td>';
                     html += '<td style="padding:5px 8px; text-align:right; font-weight:800; color:' + (isFar ? '#dc2626' : '#1e293b') + ';">' + r.distance + 'm</td>';
                     html += '<td style="padding:5px 8px; text-align:right; color:#64748b;">' + (gapSec !== null ? gapSec + 's' : '&mdash;') + '</td>';
                     html += '<td style="padding:5px 8px; text-align:right; color:#94a3b8; font-size:9px;">' + r.lat.toFixed(4) + ', ' + r.lng.toFixed(4) + '</td>';
@@ -24757,11 +24773,12 @@ window.DeliveryForensics = {
         var a = this._analysis;
         if (!a || !a.clusters) return;
         var rows = [];
-        rows.push('Staff,Month,Total,Unsent,GPS_Cluster_Lat,GPS_Cluster_Lng,Cluster_Count,Time,Distance_Meters,Gap_Seconds');
+        rows.push('Staff,Month,Total,Unsent,GPS_Cluster_Lat,GPS_Cluster_Lng,Cluster_Count,Date,Time,Distance_Meters,Gap_Seconds');
         a.clusters.forEach(function(c) {
             c.records.forEach(function(r, ri) {
                 var prevTime = ri > 0 ? c.records[ri - 1].delivered_at : null;
-                var gapSec = prevTime ? Math.round((new Date(r.delivered_at) - new Date(prevTime)) / 1000) : '';
+                var sameDay = prevTime && new Date(r.delivered_at).toDateString() === new Date(prevTime).toDateString();
+                var gapSec = sameDay ? Math.round((new Date(r.delivered_at) - new Date(prevTime)) / 1000) : '';
                 rows.push([
                     a.staffEmail,
                     window.ACTIVE_BILLING_MONTH,
@@ -24770,6 +24787,7 @@ window.DeliveryForensics = {
                     c.lat.toFixed(4),
                     c.lng.toFixed(4),
                     c.count,
+                    new Date(r.delivered_at).toISOString().split('T')[0],
                     r.delivered_at,
                     r.distance,
                     gapSec
