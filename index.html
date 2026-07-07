@@ -8640,6 +8640,8 @@ input[type=number] {
         .settings-footer,
         .settings-tab-btn,
         #df-staff-select,
+        #mobile-unsent-banner,
+        #mobile-unsent-count,
         button {
                 display: none !important;
         }
@@ -9551,7 +9553,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.06.1438</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.07.1207</span>
             </div>
         </div>
         
@@ -11081,7 +11083,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.06.1438";
+window.DATA_VERSION = "v2026.07.07.1207";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -13790,7 +13792,14 @@ const ListView = {
                 <span style="font-weight:900;color:${dColor};">${dLabel}</span>
             </span>`;
 
-        strip.innerHTML = accuracyBadge + distanceBadge;
+        // Stale GPS indicator — shows when phone GPS hasn't updated recently
+        var gpsAge = (window.DeliveryModule && DeliveryModule._lastGpsUpdateTime)
+            ? Math.round((Date.now() - DeliveryModule._lastGpsUpdateTime) / 1000) : 0;
+        var staleBadge = (gpsAge > 30 && gps.accuracy > 50)
+            ? '<span style="margin-left:4px;padding:3px 8px;border-radius:20px;background:#fef3c7;color:#92400e;font-weight:800;font-size:10px;">' + gpsAge + 's stale</span>'
+            : '';
+
+        strip.innerHTML = accuracyBadge + staleBadge + distanceBadge;
     }
 };
 
@@ -23424,6 +23433,9 @@ window.DeliveryModule = {
     // ─── GPS State ────────────────────────────
     _gpsWatchId: null,
     currentGPS: null,
+    _lastGpsUpdateTime: null, // timestamp of last GPS fix from watchPosition
+    _gpsSnapshot: {},         // keyed by survey_id — GPS at click time for logDelivery
+    _gpsStaleOverride: {},    // keyed by survey_id — skip GPS logging when frozen
     _deliveryCache: null, // Map<sid, status> — batch-loaded via loadDeliveryCache()
 
     // ─── GPS ──────────────────────────────────
@@ -23440,12 +23452,13 @@ window.DeliveryModule = {
                     lng: pos.coords.longitude,
                     accuracy: pos.coords.accuracy
                 };
+                this._lastGpsUpdateTime = Date.now();
                 if (window.ListView) ListView._updateGPSStripUI('ready');
             },
             (err) => {
                 if (window.ListView) ListView._updateGPSStripUI('error');
             },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     },
 
@@ -23508,25 +23521,41 @@ window.DeliveryModule = {
             return;
         }
 
+        // Snapshot GPS at click time for consistent check + logDelivery
+        const sidStr = String(sid);
+        if (this.currentGPS) {
+            this._gpsSnapshot[sidStr] = {
+                lat: this.currentGPS.lat,
+                lng: this.currentGPS.lng,
+                accuracy: this.currentGPS.accuracy
+            };
+        }
+
         const targetLat = r[1], targetLng = r[2];
+        const gps = this._gpsSnapshot[sidStr];
         let dist = 0;
         let hasGps = false;
-        
-        if (this.currentGPS && targetLat && targetLng) {
-            dist = this.haversine(
-                this.currentGPS.lat, 
-                this.currentGPS.lng, 
-                targetLat, 
-                targetLng
-            );
+
+        if (gps && targetLat && targetLng) {
+            dist = this.haversine(gps.lat, gps.lng, targetLat, targetLng);
             hasGps = true;
             console.log(`[DeliveryModule] GPS Active. Target: ${targetLat},${targetLng} | Dist: ${dist}m`);
         } else {
             console.log(`[DeliveryModule] No active GPS or target coords. hasGps=false`);
         }
 
-        const threshold = 50;
+        // Stale GPS check — overrides the standard Out-of-Range modal when GPS is frozen
+        if (hasGps && dist > 50 && gps) {
+            const gpsAge = this._lastGpsUpdateTime ? Math.round((Date.now() - this._lastGpsUpdateTime) / 1000) : 0;
+            if (gpsAge > 30 && gps.accuracy > 50) {
+                console.log(`[DeliveryModule] Stale GPS (${gpsAge}s old). Showing stale-GPS modal...`);
+                this.showStaleGpsModal(sid, inputId, Math.round(dist), gpsAge);
+                return;
+            }
+        }
 
+        // Standard 50m check
+        const threshold = 50;
         if (hasGps && dist > threshold) {
             console.log(`[DeliveryModule] Out of range! Showing modal...`);
             this.showUnsentModal(sid, inputId, Math.round(dist));
@@ -23591,6 +23620,58 @@ window.DeliveryModule = {
         }
     },
 
+    showStaleGpsModal(sid, inputId, dist, gpsAge) {
+        const existing = document.getElementById('unsent-modal');
+        if (existing) existing.remove();
+
+        const html = `
+            <div id="unsent-modal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:99999; display:flex; align-items:center; justify-content:center; padding:20px; font-family:'Inter', sans-serif;">
+                <div style="background:#fff; border-radius:16px; padding:24px; max-width:400px; width:100%; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+                        <span class="material-icons-round" style="color:#f59e0b; font-size:32px;">gps_fixed</span>
+                        <h3 style="margin:0; font-size:18px; color:#1e293b;">GPS Not Updating</h3>
+                    </div>
+                    
+                    <p style="margin:0 0 12px 0; font-size:14px; color:#475569; line-height:1.5;">
+                        Your phone GPS hasn't updated in <strong>${gpsAge} seconds</strong>.
+                        You appear to be <strong>${dist}m</strong> from the target, but your GPS position may not be accurate.
+                    </p>
+                    
+                    <p style="margin:0 0 20px 0; font-size:14px; color:#475569; line-height:1.5;">
+                        Wait for GPS to update, or save this delivery as <strong>Unsent</strong> without GPS data.
+                    </p>
+                    
+                    <div style="display:flex; gap:12px; justify-content:flex-end;">
+                        <button onclick="document.getElementById('unsent-modal').remove()" style="padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; color:#475569; font-weight:600; cursor:pointer;">Wait for GPS</button>
+                        <button onclick="DeliveryModule.proceedStaleGps('${sid}', '${inputId}')" style="padding:10px 16px; border-radius:8px; border:none; background:#f59e0b; color:#fff; font-weight:600; cursor:pointer;">Save as Unsent</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', html);
+    },
+
+    proceedStaleGps(sid, inputId) {
+        console.log(`[DeliveryModule] proceedStaleGps triggered for sid: ${sid}`);
+        const modal = document.getElementById('unsent-modal');
+        if (modal) modal.remove();
+
+        // Skip GPS logging entirely — the phone position can't be trusted
+        this._gpsStaleOverride[String(sid)] = true;
+        delete this._gpsSnapshot[String(sid)];
+
+        window._pendingDeliveryStatus = 'unsent';
+
+        const el = document.getElementById(inputId);
+        if (!el) {
+            console.error(`[DeliveryModule] ERROR in proceedStaleGps: Element ${inputId} not found!`);
+        } else {
+            console.log(`[DeliveryModule] proceedStaleGps: Triggering click on ${inputId}`);
+            el.click();
+        }
+    },
+
     async logDelivery(sid, fileId, explicitStatus) {
         if (!window._supabase) return;
 
@@ -23601,12 +23682,27 @@ window.DeliveryModule = {
         const billMonth = window.ACTIVE_BILLING_MONTH || 'Unknown';
 
         let lat = null, lng = null, acc = null, dist = null;
-        if (this.currentGPS) {
-            lat = this.currentGPS.lat;
-            lng = this.currentGPS.lng;
-            acc = this.currentGPS.accuracy;
-            if (r[1] && r[2]) {
-                dist = Math.round(this.haversine(lat, lng, r[1], r[2]));
+        const sidStr = String(sid);
+
+        // Stale-GPS override — don't log any GPS data
+        if (this._gpsStaleOverride[sidStr]) {
+            delete this._gpsStaleOverride[sidStr];
+        } else {
+            // Use snapshot from handleCloudClick if available, else live GPS
+            let gpsForLog = this._gpsSnapshot[sidStr];
+            if (gpsForLog) {
+                delete this._gpsSnapshot[sidStr];
+            } else if (this.currentGPS) {
+                gpsForLog = this.currentGPS;
+            }
+
+            if (gpsForLog) {
+                lat = gpsForLog.lat;
+                lng = gpsForLog.lng;
+                acc = gpsForLog.accuracy;
+                if (r[1] && r[2]) {
+                    dist = Math.round(this.haversine(lat, lng, r[1], r[2]));
+                }
             }
         }
 
@@ -23730,6 +23826,7 @@ window.StaffPerformanceModal = {
     _isLoading: false,
     _selectedCity: 'all',
     _cityOpts: [],
+    _expandedCity: null,
 
     _fmt(d) { return d.toISOString().split('T')[0]; },
 
@@ -23926,8 +24023,10 @@ window.StaffPerformanceModal = {
         this._renderBody();
         if (this._activeTab === 'delivery') {
             this._deliveryData = await this._fetchDeliveryData(forceRefresh);
-        } else {
+        } else if (this._activeTab === 'survey') {
             this._surveyData = this._fetchSurveyData();
+        } else {
+            await this._ensureCache(forceRefresh);
         }
         this._loadStaff();
         this._loadCities();
@@ -24028,8 +24127,10 @@ window.StaffPerformanceModal = {
     _renderBody() {
         const body = document.getElementById('spm-body');
         if (!body) return;
-        const isDelivery = this._activeTab === 'delivery';
-        const data = isDelivery ? this._deliveryData : this._surveyData;
+        const tab = this._activeTab;
+        const isDelivery = tab === 'delivery';
+        const isMc = tab === 'mc';
+        const data = isMc ? null : (isDelivery ? this._deliveryData : this._surveyData);
 
         let html = `
             <div style="padding:12px 20px; border-bottom:1px solid #e2e8f0; background:#f8fafc; flex-shrink:0;">
@@ -24042,10 +24143,11 @@ window.StaffPerformanceModal = {
                     <input type="date" id="spm-start-date" value="${this._startDate}" onchange="StaffPerformanceModal._applyDateFilter()" style="padding:4px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; outline:none;">
                     <span style="color:#94a3b8; font-size:12px;">→</span>
                     <input type="date" id="spm-end-date" value="${this._endDate}" onchange="StaffPerformanceModal._applyDateFilter()" style="padding:4px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; outline:none;">
+                    ${isMc ? '' : `
                     <select id="spm-staff-select" onchange="StaffPerformanceModal._applyStaffFilter()" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; outline:none; max-width:200px;">
                         <option value="all">All Staff</option>
                         ${this._staffOpts.map(s => `<option value="${s.email}">${s.name}</option>`).join('')}
-                    </select>
+                    </select>`}
                     <select id="spm-city-select" onchange="StaffPerformanceModal._applyCityFilter()" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; outline:none; max-width:150px;">
                         <option value="all">All Cities</option>
                         ${this._cityOpts.map(c => `<option value="${c}" ${c === this._selectedCity ? 'selected' : ''}>${c}</option>`).join('')}
@@ -24060,12 +24162,13 @@ window.StaffPerformanceModal = {
             </div>
 
             <div style="display:flex; gap:0; border-bottom:1px solid #e2e8f0; flex-shrink:0;">
-                <button onclick="StaffPerformanceModal.switchTab('delivery')" style="flex:1; padding:10px; border:none; border-bottom:3px solid ${isDelivery ? '#8b5cf6' : 'transparent'}; background:${isDelivery ? '#f5f3ff' : 'transparent'}; font-size:13px; font-weight:800; color:${isDelivery ? '#7c3aed' : '#94a3b8'}; cursor:pointer;">🚚 Delivery</button>
-                <button onclick="StaffPerformanceModal.switchTab('survey')" style="flex:1; padding:10px; border:none; border-bottom:3px solid ${!isDelivery ? '#8b5cf6' : 'transparent'}; background:${!isDelivery ? '#f5f3ff' : 'transparent'}; font-size:13px; font-weight:800; color:${!isDelivery ? '#7c3aed' : '#94a3b8'}; cursor:pointer;">📋 Survey</button>
+                <button onclick="StaffPerformanceModal.switchTab('delivery')" style="flex:1; padding:10px; border:none; border-bottom:3px solid ${tab === 'delivery' ? '#8b5cf6' : 'transparent'}; background:${tab === 'delivery' ? '#f5f3ff' : 'transparent'}; font-size:13px; font-weight:800; color:${tab === 'delivery' ? '#7c3aed' : '#94a3b8'}; cursor:pointer;">🚚 Delivery</button>
+                <button onclick="StaffPerformanceModal.switchTab('survey')" style="flex:1; padding:10px; border:none; border-bottom:3px solid ${tab === 'survey' ? '#8b5cf6' : 'transparent'}; background:${tab === 'survey' ? '#f5f3ff' : 'transparent'}; font-size:13px; font-weight:800; color:${tab === 'survey' ? '#7c3aed' : '#94a3b8'}; cursor:pointer;">📋 Survey</button>
+                <button onclick="StaffPerformanceModal.switchTab('mc')" style="flex:1; padding:10px; border:none; border-bottom:3px solid ${isMc ? '#8b5cf6' : 'transparent'}; background:${isMc ? '#f5f3ff' : 'transparent'}; font-size:13px; font-weight:800; color:${isMc ? '#7c3aed' : '#94a3b8'}; cursor:pointer;">📍 MC/UC</button>
             </div>
 
             <div id="spm-content" style="flex:1; overflow-y:auto; padding:16px 20px;">
-                ${this._isLoading ? this._renderLoading() : (!data ? this._renderEmpty(isDelivery) : (isDelivery ? this._renderDeliveryContent(data) : this._renderSurveyContent(data)))}
+                ${this._isLoading ? this._renderLoading() : (isMc ? this._renderMcContent() : (!data ? this._renderEmpty(isDelivery) : (isDelivery ? this._renderDeliveryContent(data) : this._renderSurveyContent(data))))}
             </div>`;
         body.innerHTML = html;
     },
@@ -24437,7 +24540,392 @@ window.StaffPerformanceModal = {
         return html;
     },
 
+    // ─── MC/UC Tab ─────────────────────────
+    _renderMcContent() {
+        // Build city → MC map from RAW_DATA (includes MCs with zero deliveries)
+        const cityMap = new Map();
+        this._sidToLoc.forEach((loc, sid) => {
+            if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
+            const city = loc.city || '—';
+            if (!cityMap.has(city)) {
+                cityMap.set(city, {
+                    city, totalHouses: 0, delivered: 0, unsent: 0,
+                    staffSet: new Set(), lastTime: null, mcMap: new Map()
+                });
+            }
+            cityMap.get(city).totalHouses++;
+        });
+
+        // Enrich with delivery data from cache (NO date filter — overall billing month)
+        const deliveryRecords = this._cachedRecords || [];
+        deliveryRecords.forEach(d => {
+            if (this._selectedCity !== 'all' && d._city !== this._selectedCity) return;
+            const cityEntry = cityMap.get(d._city);
+            if (!cityEntry) return;
+            const email = (d.staff_email || '').toLowerCase();
+            if (!email) return;
+
+            cityEntry.delivered += d._effectiveStatus === 'delivered' ? 1 : 0;
+            cityEntry.unsent += d._effectiveStatus === 'unsent' ? 1 : 0;
+            cityEntry.staffSet.add(email);
+            if (!cityEntry.lastTime || d.delivered_at > cityEntry.lastTime) cityEntry.lastTime = d.delivered_at;
+
+            if (!cityEntry.mcMap.has(d._shortMC)) {
+                cityEntry.mcMap.set(d._shortMC, {
+                    shortMC: d._shortMC, fullMC: d._mc, city: d._city,
+                    totalHouses: 0, delivered: 0, unsent: 0,
+                    staffSet: new Set(), lastTime: null, staffMap: new Map()
+                });
+            }
+            const mc = cityEntry.mcMap.get(d._shortMC);
+            mc.delivered += d._effectiveStatus === 'delivered' ? 1 : 0;
+            mc.unsent += d._effectiveStatus === 'unsent' ? 1 : 0;
+            mc.staffSet.add(email);
+            if (!mc.lastTime || d.delivered_at > mc.lastTime) mc.lastTime = d.delivered_at;
+
+            if (!mc.staffMap.has(email)) {
+                mc.staffMap.set(email, {
+                    name: this._staffName(d.staff_email, d.staff_name),
+                    email: d.staff_email || '',
+                    total: 0, delivered: 0, unsent: 0, firstTime: null, lastTime: null
+                });
+            }
+            const ss = mc.staffMap.get(email);
+            ss.total++;
+            if (d._effectiveStatus === 'delivered') ss.delivered++; else ss.unsent++;
+            if (!ss.firstTime || d.delivered_at < ss.firstTime) ss.firstTime = d.delivered_at;
+            if (!ss.lastTime || d.delivered_at > ss.lastTime) ss.lastTime = d.delivered_at;
+        });
+
+        // Count houses per MC from RAW_DATA
+        this._sidToLoc.forEach((loc, sid) => {
+            if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
+            const cityEntry = cityMap.get(loc.city);
+            if (!cityEntry) return;
+            const short = this._shortMC(loc.mc);
+            if (!cityEntry.mcMap.has(short)) {
+                cityEntry.mcMap.set(short, {
+                    shortMC: short, fullMC: loc.mc, city: loc.city,
+                    totalHouses: 0, delivered: 0, unsent: 0,
+                    staffSet: new Set(), lastTime: null, staffMap: new Map()
+                });
+            }
+            cityEntry.mcMap.get(short).totalHouses++;
+        });
+
+        const cityList = [...cityMap.values()].sort((a, b) => a.city.localeCompare(b.city));
+
+        if (cityList.length === 0) {
+            return '<div style="text-align:center; padding:60px; color:#94a3b8; font-weight:700;">No MC/UC records found for the selected filters.</div>';
+        }
+
+        // Summary stats
+        const totalCities = cityList.length;
+        const totalMCAll = cityList.reduce((s, c) => s + c.mcMap.size, 0);
+        const totalHousesAll = cityList.reduce((s, c) => s + c.totalHouses, 0);
+        const totalDelvAll = cityList.reduce((s, c) => s + c.delivered, 0);
+        const totalUnstAll = cityList.reduce((s, c) => s + c.unsent, 0);
+        const grandRate = totalHousesAll > 0 ? Math.round((totalDelvAll / totalHousesAll) * 100) : 0;
+
+        // Auto-expand if a specific city is selected
+        if (this._selectedCity !== 'all') {
+            this._expandedCity = 'city_' + this._selectedCity.replace(/[^a-zA-Z0-9]/g, '_');
+        }
+
+        // ─── Render city rows ──────────────────────
+        let cityRowsHtml = cityList.map(city => {
+            const cityKey = 'city_' + city.city.replace(/[^a-zA-Z0-9]/g, '_');
+            const mcCount = city.mcMap.size;
+            const cityRate = city.totalHouses > 0 ? Math.round((city.delivered / city.totalHouses) * 100) : 0;
+            const cityRateColor = cityRate >= 80 ? '#16a34a' : cityRate >= 50 ? '#d97706' : '#dc2626';
+            const isExpanded = this._expandedCity === cityKey;
+
+            // Pre-build MC table for this city
+            const mcList = [...city.mcMap.values()].sort((a, b) => a.shortMC.localeCompare(b.shortMC));
+            let mcTableHtml = '';
+            if (mcList.length > 0) {
+                mcTableHtml = `
+                    <div style="padding:8px 16px 16px;">
+                        <div style="font-size:11px; font-weight:800; color:#475569; margin-bottom:8px;">MC/UC in ${city.city}:</div>
+                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                            <thead>
+                                <tr style="background:#e2e8f0;">
+                                    <th style="padding:5px 8px; text-align:left; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">MC/UC</th>
+                                    <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Houses</th>
+                                    <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Total</th>
+                                    <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Delv</th>
+                                    <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Unst</th>
+                                    <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Rate</th>
+                                    <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Staff</th>
+                                    <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Last Act.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${mcList.map((mc, mcIdx) => {
+                                    const mcKey = cityKey + '_m' + mcIdx;
+                                    const mcRate = mc.totalHouses > 0 ? Math.round((mc.delivered / mc.totalHouses) * 100) : 0;
+                                    const mcRateColor = mcRate >= 80 ? '#16a34a' : mcRate >= 50 ? '#d97706' : '#dc2626';
+
+                                    // Staff detail sub-table
+                                    let staffHtml = '';
+                                    if (mc.staffMap.size > 0) {
+                                        const sortedStaff = [...mc.staffMap.values()].sort((a, b) => b.total - a.total);
+                                        staffHtml = `
+                                            <div style="padding:8px 12px;">
+                                                <div style="font-size:10px; font-weight:800; color:#475569; margin-bottom:6px;">Staff in ${mc.shortMC}:</div>
+                                                <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                                                    <thead>
+                                                        <tr style="background:#e2e8f0;">
+                                                            <th style="padding:3px 6px; text-align:left; font-size:8px; font-weight:800; color:#64748b; text-transform:uppercase;">Name</th>
+                                                            <th style="padding:3px 6px; text-align:center; font-size:8px; font-weight:800; color:#64748b; text-transform:uppercase;">Total</th>
+                                                            <th style="padding:3px 6px; text-align:center; font-size:8px; font-weight:800; color:#64748b; text-transform:uppercase;">Delv</th>
+                                                            <th style="padding:3px 6px; text-align:center; font-size:8px; font-weight:800; color:#64748b; text-transform:uppercase;">Unst</th>
+                                                            <th style="padding:3px 6px; text-align:center; font-size:8px; font-weight:800; color:#64748b; text-transform:uppercase;">First</th>
+                                                            <th style="padding:3px 6px; text-align:center; font-size:8px; font-weight:800; color:#64748b; text-transform:uppercase;">Last</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        ${sortedStaff.map(ss => `
+                                                            <tr style="border-bottom:1px solid #f1f5f9;">
+                                                                <td style="padding:3px 6px; font-weight:700; color:#1e293b;">${ss.name}</td>
+                                                                <td style="padding:3px 6px; text-align:center; font-weight:700; color:#1e293b;">${ss.total}</td>
+                                                                <td style="padding:3px 6px; text-align:center; color:#16a34a; font-weight:700;">${ss.delivered}</td>
+                                                                <td style="padding:3px 6px; text-align:center; color:#dc2626; font-weight:700;">${ss.unsent}</td>
+                                                                <td style="padding:3px 6px; text-align:center; color:#64748b; font-size:9px;">${ss.firstTime ? this._fmtTime(ss.firstTime) : '—'}</td>
+                                                                <td style="padding:3px 6px; text-align:center; color:#64748b; font-size:9px;">${ss.lastTime ? this._fmtTime(ss.lastTime) : '—'}</td>
+                                                            </tr>
+                                                        `).join('')}
+                                                    </tbody>
+                                                </table>
+                                            </div>`;
+                                    } else {
+                                        staffHtml = '<div style="padding:10px 12px; text-align:center; color:#94a3b8; font-weight:600; font-size:11px;">No delivery activity in this MC yet.</div>';
+                                    }
+
+                                    return `
+                                        <tr id="spm-mc-row-${mcKey}" onclick="StaffPerformanceModal._toggleMcExpand('${mcKey}')" style="cursor:pointer; border-bottom:1px solid #f1f5f9;">
+                                            <td style="padding:5px 8px; font-weight:700; color:#1e293b; white-space:nowrap;">
+                                                <span id="spm-mc-arrow-${mcKey}">▸</span> ${mc.shortMC}
+                                            </td>
+                                            <td style="padding:5px 8px; text-align:center; font-weight:700; color:#1e293b;">${mc.totalHouses}</td>
+                                            <td style="padding:5px 8px; text-align:center; font-weight:700; color:#1e293b;">${mc.delivered + mc.unsent}</td>
+                                            <td style="padding:5px 8px; text-align:center; color:#16a34a; font-weight:700;">${mc.delivered}</td>
+                                            <td style="padding:5px 8px; text-align:center; color:#dc2626; font-weight:700;">${mc.unsent}</td>
+                                            <td style="padding:5px 8px; text-align:center; font-weight:800; color:${mcRateColor};">${mcRate}%</td>
+                                            <td style="padding:5px 8px; text-align:center; font-weight:700; color:#1e293b;">${mc.staffSet.size}</td>
+                                            <td style="padding:5px 8px; text-align:center; color:#64748b; font-size:10px;">${mc.lastTime ? mc.lastTime.split('T')[0] : '—'}</td>
+                                        </tr>
+                                        <tr id="spm-mc-detail-${mcKey}" style="display:none;">
+                                            <td colspan="8" style="padding:0; background:#fafafa; border-bottom:1px solid #e2e8f0;">
+                                                ${staffHtml}
+                                            </td>
+                                        </tr>`;
+                                }).join('')}
+                            </tbody>
+                            <tfoot>
+                                <tr style="background:#f1f5f9; font-weight:800; border-top:2px solid #cbd5e1;">
+                                    <td style="padding:5px 8px; font-size:10px; color:#475569;">Subtotal →</td>
+                                    <td style="padding:5px 8px; text-align:center; color:#1e293b;">${city.totalHouses}</td>
+                                    <td style="padding:5px 8px; text-align:center; color:#1e293b;">${city.delivered + city.unsent}</td>
+                                    <td style="padding:5px 8px; text-align:center; color:#16a34a;">${city.delivered}</td>
+                                    <td style="padding:5px 8px; text-align:center; color:#dc2626;">${city.unsent}</td>
+                                    <td style="padding:5px 8px; text-align:center; font-weight:800; color:${cityRateColor};">${cityRate}%</td>
+                                    <td style="padding:5px 8px; text-align:center; color:#1e293b;">${city.staffSet.size}</td>
+                                    <td style="padding:5px 8px; text-align:center; color:#64748b; font-size:10px;">${city.lastTime ? city.lastTime.split('T')[0] : '—'}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>`;
+            }
+
+            return `
+                <tr id="spm-city-row-${cityKey}" onclick="StaffPerformanceModal._toggleCityExpand('${cityKey}')" style="cursor:pointer; border-bottom:1px solid #e2e8f0;">
+                    <td style="padding:8px 10px; font-weight:700; color:#1e293b; white-space:nowrap;">
+                        <span id="spm-city-arrow-${cityKey}">${isExpanded ? '▾' : '▸'}</span> ${city.city}
+                    </td>
+                    <td style="padding:8px 10px; text-align:center; font-weight:700; color:#1e293b;">${mcCount}</td>
+                    <td style="padding:8px 10px; text-align:center; font-weight:700; color:#1e293b;">${city.totalHouses}</td>
+                    <td style="padding:8px 10px; text-align:center; font-weight:700; color:#1e293b;">${city.delivered + city.unsent}</td>
+                    <td style="padding:8px 10px; text-align:center; color:#16a34a; font-weight:700;">${city.delivered}</td>
+                    <td style="padding:8px 10px; text-align:center; color:#dc2626; font-weight:700;">${city.unsent}</td>
+                    <td style="padding:8px 10px; text-align:center; font-weight:800; color:${cityRateColor};">${cityRate}%</td>
+                    <td style="padding:8px 10px; text-align:center; font-weight:700; color:#1e293b;">${city.staffSet.size}</td>
+                    <td style="padding:8px 10px; text-align:center; color:#64748b; font-size:11px;">${city.lastTime ? city.lastTime.split('T')[0] : '—'}</td>
+                </tr>
+                <tr id="spm-city-detail-${cityKey}" style="display:${isExpanded ? 'table-row' : 'none'};">
+                    <td colspan="9" style="padding:0; background:#fafafa;">
+                        ${mcTableHtml}
+                    </td>
+                </tr>`;
+        }).join('');
+
+        const grandRateColor = grandRate >= 80 ? '#16a34a' : grandRate >= 50 ? '#d97706' : '#dc2626';
+
+        return `
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+                <div class="spm-card" style="flex:1; min-width:90px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Cities</div>
+                    <div style="font-size:22px; font-weight:900; color:#1e293b;">${totalCities}</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:90px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">MC/UC</div>
+                    <div style="font-size:22px; font-weight:900; color:#16a34a;">${totalMCAll}</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:90px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Houses</div>
+                    <div style="font-size:22px; font-weight:900; color:#1e293b;">${totalHousesAll}</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:90px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Delivered</div>
+                    <div style="font-size:22px; font-weight:900; color:#16a34a;">${totalDelvAll}</div>
+                </div>
+                <div class="spm-card" style="flex:1; min-width:90px; background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Unsent</div>
+                    <div style="font-size:22px; font-weight:900; color:#dc2626;">${totalUnstAll}</div>
+                </div>
+            </div>
+
+            <div style="background:white; border:1px solid #e2e8f0; border-radius:10px; overflow:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                    <thead>
+                        <tr style="background:#f8fafc;">
+                            <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">City</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">MC/UC</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Houses</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Total</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Delivered</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Unsent</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Rate</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Staff</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Last Activity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${cityRowsHtml}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background:#1e293b; font-weight:900; border-top:3px solid #0f172a;">
+                            <td style="padding:10px 12px; color:#f8fafc; font-size:12px;">GRAND TOTAL</td>
+                            <td style="padding:10px 12px; text-align:center; color:#f8fafc; font-size:12px;">${totalMCAll}</td>
+                            <td style="padding:10px 12px; text-align:center; color:#f8fafc; font-size:12px;">${totalHousesAll}</td>
+                            <td style="padding:10px 12px; text-align:center; color:#f8fafc; font-size:12px;">${totalDelvAll + totalUnstAll}</td>
+                            <td style="padding:10px 12px; text-align:center; color:#86efac; font-size:12px;">${totalDelvAll}</td>
+                            <td style="padding:10px 12px; text-align:center; color:#fca5a5; font-size:12px;">${totalUnstAll}</td>
+                            <td style="padding:10px 12px; text-align:center; font-weight:900; color:${grandRateColor}; font-size:12px;">${grandRate}%</td>
+                            <td style="padding:10px 12px; text-align:center; color:#f8fafc; font-size:12px;">—</td>
+                            <td style="padding:10px 12px; text-align:center; color:#94a3b8; font-size:12px;">—</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>`;
+    },
+
+    _toggleCityExpand(cityKey) {
+        const detailRow = document.getElementById(`spm-city-detail-${cityKey}`);
+        const arrow = document.getElementById(`spm-city-arrow-${cityKey}`);
+        if (this._expandedCity && this._expandedCity !== cityKey) {
+            const prevDetail = document.getElementById(`spm-city-detail-${this._expandedCity}`);
+            const prevArrow = document.getElementById(`spm-city-arrow-${this._expandedCity}`);
+            if (prevDetail) prevDetail.style.display = 'none';
+            if (prevArrow) prevArrow.textContent = '▸';
+        }
+        if (detailRow) {
+            const isHidden = !detailRow.style.display || detailRow.style.display === 'none';
+            detailRow.style.display = isHidden ? 'table-row' : 'none';
+            if (arrow) arrow.textContent = isHidden ? '▾' : '▸';
+            this._expandedCity = isHidden ? cityKey : null;
+        }
+    },
+
+    _toggleMcExpand(mcKey) {
+        const detailRow = document.getElementById(`spm-mc-detail-${mcKey}`);
+        const arrow = document.getElementById(`spm-mc-arrow-${mcKey}`);
+        if (detailRow) {
+            detailRow.style.display = !detailRow.style.display || detailRow.style.display === 'none' ? 'table-row' : 'none';
+            if (arrow) arrow.textContent = detailRow.style.display === 'table-row' ? '▾' : '▸';
+        }
+    },
+
     exportCSV() {
+        const isMc = this._activeTab === 'mc';
+
+        if (isMc) {
+            // Build city → MC map (same logic as _renderMcContent, no date filter)
+            const cityMap = new Map();
+            this._sidToLoc.forEach((loc, sid) => {
+                if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
+                const city = loc.city || '—';
+                if (!cityMap.has(city)) {
+                    cityMap.set(city, { city, totalHouses: 0, delivered: 0, unsent: 0, staffSet: new Set(), lastTime: null, mcMap: new Map() });
+                }
+                cityMap.get(city).totalHouses++;
+            });
+
+            (this._cachedRecords || []).forEach(d => {
+                if (this._selectedCity !== 'all' && d._city !== this._selectedCity) return;
+                const cityEntry = cityMap.get(d._city);
+                if (!cityEntry) return;
+                const email = (d.staff_email || '').toLowerCase();
+                if (!email) return;
+
+                cityEntry.delivered += d._effectiveStatus === 'delivered' ? 1 : 0;
+                cityEntry.unsent += d._effectiveStatus === 'unsent' ? 1 : 0;
+                cityEntry.staffSet.add(email);
+                if (!cityEntry.lastTime || d.delivered_at > cityEntry.lastTime) cityEntry.lastTime = d.delivered_at;
+
+                if (!cityEntry.mcMap.has(d._shortMC)) {
+                    cityEntry.mcMap.set(d._shortMC, { shortMC: d._shortMC, totalHouses: 0, delivered: 0, unsent: 0, staffSet: new Set(), lastTime: null });
+                }
+                const mc = cityEntry.mcMap.get(d._shortMC);
+                mc.delivered += d._effectiveStatus === 'delivered' ? 1 : 0;
+                mc.unsent += d._effectiveStatus === 'unsent' ? 1 : 0;
+                mc.staffSet.add(email);
+                if (!mc.lastTime || d.delivered_at > mc.lastTime) mc.lastTime = d.delivered_at;
+            });
+
+            this._sidToLoc.forEach((loc, sid) => {
+                if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
+                const cityEntry = cityMap.get(loc.city);
+                if (!cityEntry) return;
+                const short = this._shortMC(loc.mc);
+                if (!cityEntry.mcMap.has(short)) {
+                    cityEntry.mcMap.set(short, { shortMC: short, totalHouses: 0, delivered: 0, unsent: 0, staffSet: new Set(), lastTime: null });
+                }
+                cityEntry.mcMap.get(short).totalHouses++;
+            });
+
+            const csvRows = [['City', 'MC/UC', 'Houses', 'Total', 'Delivered', 'Unsent', 'Rate %', 'Active Staff', 'Last Activity']];
+            let grandHouses = 0, grandDelv = 0, grandUnst = 0, grandStaffCount = 0, grandMC = 0;
+            [...cityMap.values()].sort((a, b) => a.city.localeCompare(b.city)).forEach(city => {
+                let cityHouses = 0, cityDelv = 0, cityUnst = 0, cityStaff = 0;
+                const mcList = [...city.mcMap.values()].sort((a, b) => a.shortMC.localeCompare(b.shortMC));
+                mcList.forEach(mc => {
+                    const rate = mc.totalHouses > 0 ? Math.round((mc.delivered / mc.totalHouses) * 100) : 0;
+                    const mcTotal = mc.delivered + mc.unsent;
+                    csvRows.push([city.city, mc.shortMC, mc.totalHouses, mcTotal, mc.delivered, mc.unsent, rate, mc.staffSet.size, mc.lastTime ? mc.lastTime.split('T')[0] : '—']);
+                    cityHouses += mc.totalHouses; cityDelv += mc.delivered; cityUnst += mc.unsent; cityStaff += mc.staffSet.size;
+                });
+                const cityTotal = cityDelv + cityUnst;
+                const cityRate = cityHouses > 0 ? Math.round((cityDelv / cityHouses) * 100) : 0;
+                csvRows.push([city.city + ' Subtotal', '', cityHouses, cityTotal, cityDelv, cityUnst, cityRate, cityStaff, city.lastTime ? city.lastTime.split('T')[0] : '—']);
+                grandHouses += cityHouses; grandDelv += cityDelv; grandUnst += cityUnst; grandStaffCount += cityStaff; grandMC += mcList.length;
+            });
+            const grandRate = grandHouses > 0 ? Math.round((grandDelv / grandHouses) * 100) : 0;
+            const grandTotal = grandDelv + grandUnst;
+            csvRows.push(['GRAND TOTAL', '', grandHouses, grandTotal, grandDelv, grandUnst, grandRate, grandStaffCount, '']);
+
+            const csvContent = csvRows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.setAttribute('href', URL.createObjectURL(blob));
+            link.setAttribute('download', `StaffPerformance_MCUC_Overall.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            if (window.App && App.showToast) App.showToast('CSV exported ✅');
+            return;
+        }
+
         const isDelivery = this._activeTab === 'delivery';
         const data = isDelivery ? this._deliveryData : this._surveyData;
         if (!data || data.length === 0) {
@@ -24601,6 +25089,7 @@ window.DeliveryForensics = {
         var total = records.length;
         var unsentTotal = 0;
         var beyond500 = 0;
+        var noGpsCount = 0;
 
         // Collect unsent records with valid GPS
         var unsentRecords = [];
@@ -24621,6 +25110,8 @@ window.DeliveryForensics = {
                         lng: Math.round(lng * 10000) / 10000,
                         gpsKey: Math.round(lat * 10000) / 10000 + ',' + Math.round(lng * 10000) / 10000
                     });
+                } else {
+                    noGpsCount++;
                 }
             }
         });
@@ -24632,8 +25123,8 @@ window.DeliveryForensics = {
             groups[r.gpsKey].push(r);
         });
 
-        // Sort groups by size descending, only keep those with 5+
-        var clusters = Object.keys(groups).map(function(key) {
+        // Split into grouped (5+) and sporadic (1-4)
+        var allGroups = Object.keys(groups).map(function(key) {
             return {
                 gpsKey: key,
                 lat: parseFloat(key.split(',')[0]),
@@ -24641,25 +25132,37 @@ window.DeliveryForensics = {
                 count: groups[key].length,
                 records: groups[key]
             };
-        }).filter(function(c) { return c.count >= 5; })
-        .sort(function(a, b) { return b.count - a.count; });
+        }).sort(function(a, b) { return b.count - a.count; });
 
-        // Add time info to each cluster
-        clusters.forEach(function(c) {
-            c.firstTime = c.records[0].delivered_at;
-            c.lastTime = c.records[c.records.length - 1].delivered_at;
-            c.durationMin = Math.round((new Date(c.lastTime) - new Date(c.firstTime)) / 60000 * 10) / 10;
+        var groupedClusters = [];
+        var sporadicRecords = [];
+        allGroups.forEach(function(g) {
+            g.firstTime = g.records[0].delivered_at;
+            g.lastTime = g.records[g.records.length - 1].delivered_at;
+            g.durationMin = Math.round((new Date(g.lastTime) - new Date(g.firstTime)) / 60000 * 10) / 10;
+            if (g.count >= 5) {
+                groupedClusters.push(g);
+            } else {
+                g.records.forEach(function(r) { sporadicRecords.push(r); });
+            }
         });
 
+        // Sort sporadic by time
+        sporadicRecords.sort(function(a, b) { return new Date(a.delivered_at) - new Date(b.delivered_at); });
+
         // Overall assessment
-        var light = (clusters.length > 0 || beyond500 > 0) ? 'red' : 'green';
+        var light = (groupedClusters.length > 0 || beyond500 > 0) ? 'red' : 'green';
+        if (light === 'green' && unsentTotal > 0) light = 'yellow';
 
         return {
             total: total,
             unsentTotal: unsentTotal,
             beyond500: beyond500,
-            clusters: clusters,
-            clusterCount: clusters.length,
+            noGpsCount: noGpsCount,
+            groupedClusters: groupedClusters,
+            groupedClusterCount: groupedClusters.length,
+            sporadicCount: sporadicRecords.length,
+            sporadicRecords: sporadicRecords,
             light: light,
             staffEmail: this._staffEmail
         };
@@ -24673,6 +25176,19 @@ window.DeliveryForensics = {
 
         var light = analysis.light;
         var isRed = light === 'red';
+        var isYellow = light === 'yellow';
+
+        var bannerBg, bannerBorder, bannerText, bannerIcon, bannerLabel;
+        if (isRed) {
+            bannerBg = '#fef2f2'; bannerBorder = '#fecaca'; bannerText = '#991b1b'; bannerIcon = 'gpp_bad';
+            bannerLabel = 'Investigate — Unsent deliveries share the same GPS location';
+        } else if (isYellow) {
+            bannerBg = '#fefce8'; bannerBorder = '#fde68a'; bannerText = '#92400e'; bannerIcon = 'warning';
+            bannerLabel = 'Review — Unsent deliveries found, scattered across different locations';
+        } else {
+            bannerBg = '#f0fdf4'; bannerBorder = '#bbf7d0'; bannerText = '#166534'; bannerIcon = 'check_circle';
+            bannerLabel = 'Normal — No unusual patterns found';
+        }
 
         var html = '<div class="df-report">';
 
@@ -24688,11 +25204,6 @@ window.DeliveryForensics = {
         html += '</div></div>';
 
         // ─── Assessment Banner ───
-        var bannerBg = isRed ? '#fef2f2' : '#f0fdf4';
-        var bannerBorder = isRed ? '#fecaca' : '#bbf7d0';
-        var bannerText = isRed ? '#991b1b' : '#166534';
-        var bannerIcon = isRed ? 'gpp_bad' : 'check_circle';
-        var bannerLabel = isRed ? 'Investigate — Unsent deliveries share the same GPS location' : 'Normal — No unusual patterns found';
         html += '<div style="background:' + bannerBg + '; border:1px solid ' + bannerBorder + '; border-radius:12px; padding:16px; margin-bottom:20px; display:flex; align-items:flex-start; gap:12px;">';
         html += '<span class="material-icons-round" style="font-size:28px; color:' + bannerText + '; flex-shrink:0;">' + bannerIcon + '</span>';
         html += '<div style="font-weight:800; font-size:14px; color:' + bannerText + ';">' + bannerLabel + '</div>';
@@ -24702,18 +25213,18 @@ window.DeliveryForensics = {
         html += '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:20px;">';
         html += this._kpiCard('inventory_2', 'Total Deliveries', this._fmtNum(analysis.total), '#1e293b');
         html += this._kpiCard('cancel', 'Unsent', analysis.unsentTotal, analysis.unsentTotal > 0 ? '#d97706' : '#16a34a');
-        html += this._kpiCard('my_location', 'GPS Clusters', analysis.clusterCount, analysis.clusterCount > 0 ? '#dc2626' : '#16a34a');
+        html += this._kpiCard('my_location', 'GPS Clusters', analysis.groupedClusterCount, analysis.groupedClusterCount > 0 ? '#dc2626' : '#16a34a');
         html += this._kpiCard(analysis.beyond500 > 0 ? 'report' : 'check_circle', 'Beyond 500m', analysis.beyond500, analysis.beyond500 > 0 ? '#dc2626' : '#16a34a');
         html += '</div>';
 
-        // ─── GPS Clusters ───
-        if (analysis.clusters.length > 0) {
+        // ─── GPS Clusters (5+ at same point) ───
+        var self = this;
+        if (analysis.groupedClusters.length > 0) {
             html += '<div style="border:1px solid #fecaca; border-radius:12px; overflow:hidden; margin-bottom:16px;">';
-            html += '<div style="padding:12px 16px; background:#fef2f2; border-bottom:1px solid #fecaca; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#991b1b;">GPS Clusters — Unsent Deliveries at the Same Location</div>';
+            html += '<div style="padding:12px 16px; background:#fef2f2; border-bottom:1px solid #fecaca; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#991b1b;">GPS Clusters — 5+ Unsent Deliveries at the Same Location</div>';
 
-            var self = this;
-            analysis.clusters.forEach(function(cluster, ci) {
-                html += '<div style="padding:14px 16px;' + (ci < analysis.clusters.length - 1 ? ' border-bottom:1px solid #f1f5f9;' : '') + '">';
+            analysis.groupedClusters.forEach(function(cluster, ci) {
+                html += '<div style="padding:14px 16px;' + (ci < analysis.groupedClusters.length - 1 ? ' border-bottom:1px solid #f1f5f9;' : '') + '">';
                 html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">';
                 html += '<div><span style="font-weight:800; font-size:12px;">GPS (' + cluster.lat.toFixed(4) + ', ' + cluster.lng.toFixed(4) + ')</span>';
                 html += '<span style="font-size:11px; color:#64748b; margin-left:8px;">' + cluster.count + ' deliveries over ' + cluster.durationMin + ' min</span></div>';
@@ -24749,6 +25260,45 @@ window.DeliveryForensics = {
             html += '</div>';
         }
 
+        // ─── Sporadic unsent (1-4 per GPS point) ───
+        if (analysis.sporadicCount > 0) {
+            html += '<div style="border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; margin-bottom:16px;">';
+            html += '<div style="padding:12px 16px; background:#fafafa; border-bottom:1px solid #e2e8f0; font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#475569;">Other Unsent Deliveries — ' + analysis.sporadicCount + ' records</div>';
+            html += '<div style="padding:0 16px 12px; font-size:10px; color:#64748b; margin-top:8px;">';
+            html += 'These unsent deliveries are spread across different GPS locations (fewer than 5 per point). Each one individually could be a genuine failed delivery attempt.';
+            html += '</div>';
+            html += '<table style="width:100%; border-collapse:collapse; font-size:10px;">';
+            html += '<thead><tr style="background:#f1f5f9;">';
+            html += '<th style="padding:5px 8px; text-align:left; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Time</th>';
+            html += '<th style="padding:5px 8px; text-align:left; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Date</th>';
+            html += '<th style="padding:5px 8px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Distance</th>';
+            html += '<th style="padding:5px 8px; text-align:right; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">GPS</th>';
+            html += '<th style="padding:5px 8px; text-align:center; font-weight:800; color:#64748b; border-bottom:1px solid #e2e8f0;">Status</th>';
+            html += '</tr></thead><tbody>';
+            analysis.sporadicRecords.forEach(function(r, ri) {
+                var isFar = r.distance > 500;
+                html += '<tr style="border-bottom:1px solid #f1f5f9;' + (isFar ? ' background:#fef2f2;' : '') + '">';
+                html += '<td style="padding:5px 8px; font-weight:700;">' + self._fmtTime(r.delivered_at) + '</td>';
+                html += '<td style="padding:5px 8px; color:#64748b;">' + self._fmtDateShort(r.delivered_at) + '</td>';
+                html += '<td style="padding:5px 8px; text-align:right; font-weight:800; color:' + (isFar ? '#dc2626' : '#1e293b') + ';">' + r.distance + 'm</td>';
+                html += '<td style="padding:5px 8px; text-align:right; color:#94a3b8; font-size:9px;">' + r.lat.toFixed(4) + ', ' + r.lng.toFixed(4) + '</td>';
+                html += '<td style="padding:5px 8px; text-align:center; font-weight:800; color:' + (r.distance > 50 ? '#d97706' : '#16a34a') + ';">' + (r.distance > 50 ? '&gt;50m' : 'unsent') + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            html += '</div>';
+        }
+
+        // ─── Unsent with no GPS ───
+        if (analysis.noGpsCount > 0) {
+            html += '<div style="border:1px solid #e2e8f0; border-radius:12px; padding:12px 16px; margin-bottom:16px; background:#fafafa;">';
+            html += '<div style="display:flex; align-items:center; gap:8px;">';
+            html += '<span class="material-icons-round" style="font-size:16px; color:#64748b;">gps_off</span>';
+            html += '<div><span style="font-weight:800; font-size:11px; color:#475569;">' + analysis.noGpsCount + ' unsent deliveries with no GPS data</span>';
+            html += '<div style="font-size:10px; color:#64748b;">These records have no GPS coordinates saved, so we cannot verify where they were marked.</div></div>';
+            html += '</div></div>';
+        }
+
         // ─── Footer ───
         html += '<div style="padding:12px 0; font-size:10px; color:#94a3b8; text-align:center; border-top:1px solid #f1f5f9;">';
         html += 'Data: delivery_log &middot; ' + this._escapeHtml(analysis.staffEmail) + ' &middot; ' + window.ACTIVE_BILLING_MONTH + ' &middot; ' + analysis.total + ' records';
@@ -24771,10 +25321,10 @@ window.DeliveryForensics = {
 
     _exportCSV: function() {
         var a = this._analysis;
-        if (!a || !a.clusters) return;
+        if (!a || !a.groupedClusters) return;
         var rows = [];
         rows.push('Staff,Month,Total,Unsent,GPS_Cluster_Lat,GPS_Cluster_Lng,Cluster_Count,Date,Time,Distance_Meters,Gap_Seconds');
-        a.clusters.forEach(function(c) {
+        a.groupedClusters.forEach(function(c) {
             c.records.forEach(function(r, ri) {
                 var prevTime = ri > 0 ? c.records[ri - 1].delivered_at : null;
                 var sameDay = prevTime && new Date(r.delivered_at).toDateString() === new Date(prevTime).toDateString();
@@ -24796,8 +25346,8 @@ window.DeliveryForensics = {
         });
         rows.push('');
         rows.push('Summary');
-        rows.push('Staff,Month,Total,Unsent,Clusters,Beyond500m');
-        rows.push([a.staffEmail, window.ACTIVE_BILLING_MONTH, a.total, a.unsentTotal, a.clusterCount, a.beyond500].join(','));
+        rows.push('Staff,Month,Total,Unsent,GroupedClusters,Sporadic,NoGPS,Beyond500m');
+        rows.push([a.staffEmail, window.ACTIVE_BILLING_MONTH, a.total, a.unsentTotal, a.groupedClusterCount, a.sporadicCount, a.noGpsCount, a.beyond500].join(','));
 
         var csv = rows.join('\n');
         var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
