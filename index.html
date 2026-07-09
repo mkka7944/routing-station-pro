@@ -9553,7 +9553,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.07.1207</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.09.1722</span>
             </div>
         </div>
         
@@ -11083,7 +11083,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.07.1207";
+window.DATA_VERSION = "v2026.07.09.1722";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -23560,15 +23560,8 @@ window.DeliveryModule = {
             console.log(`[DeliveryModule] Out of range! Showing modal...`);
             this.showUnsentModal(sid, inputId, Math.round(dist));
         } else {
-            console.log(`[DeliveryModule] Within range or fail-open. Triggering click on ${inputId}`);
-            window._pendingDeliveryStatus = 'delivered';
-            const el = document.getElementById(inputId);
-            if (!el) {
-                console.error(`[DeliveryModule] ERROR: Element with id ${inputId} not found in DOM!`);
-            } else {
-                el.click();
-                console.log(`[DeliveryModule] Click triggered successfully.`);
-            }
+            console.log(`[DeliveryModule] Within range or fail-open. Logging delivery directly (no photo).`);
+            this.logDelivery(sid, null, 'delivered');
         }
     },
 
