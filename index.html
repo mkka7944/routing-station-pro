@@ -9553,7 +9553,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.10.0925</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.15.1020</span>
             </div>
         </div>
         
@@ -11083,7 +11083,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.10.0925";
+window.DATA_VERSION = "v2026.07.15.1020";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -12875,8 +12875,8 @@ const ListView = {
             verifiedInfoHtml = `
                 <div style="margin-top:4px; display:flex; align-items:center; gap:6px; font-size:10px; font-weight:800; color:#10b981; background:#f0fdf4; padding:2px 8px; border-radius:6px; border:1px solid #dcfce7; width:fit-content;">
                     <span class="material-icons-round" style="font-size:12px;">verified</span>
-                    ${activeIntel.street_no || 'C'} Ã¢â‚¬Â¢ Seq ${activeIntel.sequence_no || 0} Ã¢â‚¬Â¢ ${sideStr}
-                    ${activeIntel.is_delivered ? ' Ã¢â‚¬Â¢ <span style="color:#059669">Delivered</span>' : ''}
+                    ${activeIntel.street_no || 'C'} • Seq ${activeIntel.sequence_no || 0} • ${sideStr}
+                    ${activeIntel.is_delivered ? ' • <span style="color:#059669">Delivered</span>' : ''}
                 </div>
             `;
         }
@@ -12922,7 +12922,7 @@ const ListView = {
                     <div style="border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; margin-bottom:10px;">
                         <div style="display:flex; align-items:center; gap:8px; font-weight:800; font-size:10px; color:#64748b; background:#f8fafc; padding:6px 10px;">
                             <span style="font-weight:900; font-size:13px; color:var(--text); letter-spacing:-0.4px;">#${r[0]}</span>
-                            ${hasPending ? `<span style="background:#ef4444; color:white; font-size:8px; padding:2px 8px; border-radius:4px; font-weight:900; letter-spacing:0.5px;">Ã¢Å¡Â Ã¯Â¸Â SAVE REQUIRED</span>` : ''}
+                            ${hasPending ? `<span style="background:#ef4444; color:white; font-size:8px; padding:2px 8px; border-radius:4px; font-weight:900; letter-spacing:0.5px;">⚠ SAVE REQUIRED</span>` : ''}
                             <span id="delivery-strip-badge-${r[0]}" style="margin-left:auto; display:none;"></span>
                         </div>
                         <div style="height:1px; background:repeating-linear-gradient(90deg, #e2e8f0 0px, #e2e8f0 4px, transparent 4px, transparent 8px);"></div>
@@ -13735,7 +13735,7 @@ const ListView = {
         this.toggleActionPanel(sid, true);
     },
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ GPS Strip UI Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+    // ─────────────── GPS Strip UI ────────────────────
     _updateGPSStripUI(state) {
         const r = State.filtered[State.currentIdx];
         if (!r) return;
