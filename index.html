@@ -9553,7 +9553,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.15.1519</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.17.1524</span>
             </div>
         </div>
         
@@ -11083,7 +11083,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.15.1519";
+window.DATA_VERSION = "v2026.07.17.1524";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -16795,6 +16795,7 @@ const LayerManager = {
     },
 
     renderDeliveryLogTab() {
+        this._deliveryLogMonth = window.ACTIVE_BILLING_MONTH || '';
         if (window.DeliveryModule && !window.DeliveryModule._deliveryCache) {
             DeliveryModule.loadDeliveryCache();
         }
@@ -16883,6 +16884,7 @@ const LayerManager = {
 
     // ─── Delivery Log Tab ─────────────────────────
     _deliveryLogRecords: null,
+    _deliveryLogMonth: '',
     _deliveryLogDateFrom: null,
     _deliveryLogDateTo: null,
     _deliveryLogAllTime: false,
@@ -16893,7 +16895,7 @@ const LayerManager = {
 
     async _fetchAndRenderDeliveryLog(page) {
         const el = document.getElementById('delivery-log-content');
-        if (!el || !window._supabase || !window.ACTIVE_BILLING_MONTH) return;
+        if (!el || !window._supabase || !this._deliveryLogMonth) return;
         var dlIcon = document.getElementById('dl-refresh-icon');
         if (dlIcon) dlIcon.classList.add('spinning');
 
@@ -16927,8 +16929,9 @@ const LayerManager = {
             return raw && raw[11] === cityFilter;
         }
 
+        var _dlMonth = this._deliveryLogMonth;
         function applyFilters(q) {
-            q = q.eq('bill_month', window.ACTIVE_BILLING_MONTH);
+            q = q.eq('bill_month', _dlMonth);
             if (statusFilter === 'unsent') {
                 q = q.or('status.eq.unsent,distance_to_target.gt.50');
             } else if (statusFilter) {
@@ -16962,7 +16965,7 @@ const LayerManager = {
         try {
             var todayQ = window._supabase.from('delivery_log')
                 .select('survey_id', { count: 'exact' })
-                .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                .eq('bill_month', _dlMonth)
                 .gte('delivered_at', todayStart)
                 .limit(1);
             if (statusFilter === 'unsent') {
@@ -17036,7 +17039,7 @@ const LayerManager = {
             while (staffHasMore) {
                 var staffPageQuery = window._supabase.from('delivery_log')
                     .select('staff_email')
-                    .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                    .eq('bill_month', _dlMonth)
                     .not('staff_email', 'is', null)
                     .range(staffFrom, staffFrom + staffStep - 1);
                 if (!allTime) {
@@ -17182,6 +17185,10 @@ const LayerManager = {
                         '<option value="">All Cities</option>' +
                         cityOptions +
                     '</select>' +
+                    '<select id="dl-month" onchange="LayerManager._deliveryLogMonthChange()"' +
+                            ' style="flex:0 0 auto; min-width:100px; padding:8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:700;">' +
+                        '<option value="' + this._deliveryLogMonth + '">' + this._deliveryLogMonth + '</option>' +
+                    '</select>' +
                     '<input id="dl-search" type="text" placeholder="Search SID or name..." value="' + searchQuery + '"' +
                            ' oninput="clearTimeout(this._timer); this._timer=setTimeout(() => LayerManager._fetchAndRenderDeliveryLog(), 400)"' +
                            ' style="flex:1; min-width:140px; padding:8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:700;">' +
@@ -17198,6 +17205,7 @@ const LayerManager = {
             var _scrollEl = el.closest('.settings-scroll-area');
             var _savedScroll = _scrollEl ? _scrollEl.scrollTop : 0;
             el.innerHTML = html;
+            this._populateDlMonthDropdown();
             if (_scrollEl) { setTimeout(function() { _scrollEl.scrollTop = _savedScroll; }, 0); }
         } catch (e) {
             console.error('[DeliveryLog] Fetch error:', e);
@@ -17206,7 +17214,12 @@ const LayerManager = {
         if (dlIcon) dlIcon.classList.remove('spinning');
     },
 
-    showDeliveryOnMap(sid) {
+    showDeliveryOnMap(sid, opts) {
+        opts = opts || {};
+        var showPortal = opts.showPortal !== false;
+        var useSimpleTooltip = opts.useSimpleTooltip || false;
+        var noFly = opts.noFly || false;
+        var noMarkerCard = opts.noMarkerCard || false;
         const sidStr = String(sid).trim();
 
         // Try delivery log records first, then DAP activity data
@@ -17224,10 +17237,10 @@ const LayerManager = {
         const capLat = parseFloat(r.capture_gps_lat);
         const capLng = parseFloat(r.capture_gps_lng);
 
-        const hasPortal = !isNaN(portalLat) && !isNaN(portalLng);
+        const hasPortal = !isNaN(portalLat) && !isNaN(portalLng) && showPortal;
         const hasCapture = !isNaN(capLat) && !isNaN(capLng);
 
-        ViewSwitcher.toMap();
+        if (!opts.noViewSwitch) ViewSwitcher.toMap();
 
         this._deliveryMarkers = [];
 
@@ -17248,8 +17261,13 @@ const LayerManager = {
                 radius: 12, color: color, fillColor: color,
                 fillOpacity: 0.35, weight: 3
             }).addTo(State.map);
-            const distText = r.distance_to_target ? ` (${r.distance_to_target}m from portal)` : '';
-            captureMarker.bindTooltip(`📸 Capture${distText}`, { permanent: false, direction: 'top' });
+            if (useSimpleTooltip) {
+                var dn = r.consumer_name || '#' + sid;
+                App.bindCustomTooltip(captureMarker, dn, true);
+            } else {
+                const distText = r.distance_to_target ? ` (${r.distance_to_target}m from portal)` : '';
+                captureMarker.bindTooltip(`📸 Capture${distText}`, { permanent: false, direction: 'top' });
+            }
             this._deliveryMarkers.push(captureMarker);
         }
 
@@ -17268,22 +17286,25 @@ const LayerManager = {
         this._deliveryClearClick = () => this._clearDeliveryMarkers();
         State.map.once('click', this._deliveryClearClick);
 
-        // Fly to fit both markers after map transition completes
-        setTimeout(() => {
-            if (hasPortal && hasCapture) {
-                const bounds = L.latLngBounds([portalLat, portalLng], [capLat, capLng]);
-                State.map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 19, duration: 0.8 });
-            } else if (hasPortal) {
-                State.map.flyTo([portalLat, portalLng], 18, { duration: 0.6 });
-            } else if (hasCapture) {
-                State.map.flyTo([capLat, capLng], 18, { duration: 0.6 });
-            }
-
-            // Show marker card after map settles
-            if (window.SpatialRouter && typeof SpatialRouter.showMarkerCard === 'function') {
-                setTimeout(function() { SpatialRouter.showMarkerCard(sid); }, 500);
-            }
-        }, 400); // Wait for toMap() CSS transitions
+        // Fly to location and show marker card after map transition
+        if (!noFly) {
+            var flyLat = hasCapture ? capLat : (hasPortal ? portalLat : null);
+            var flyLng = hasCapture ? capLng : (hasPortal ? portalLng : null);
+            var delay = useSimpleTooltip ? 0 : 400;
+            setTimeout(() => {
+                if (flyLat !== null && flyLng !== null) {
+                    if (useSimpleTooltip || !(hasPortal && hasCapture)) {
+                        State.map.flyTo([flyLat, flyLng], 18, { duration: useSimpleTooltip ? 0.3 : 0.6 });
+                    } else {
+                        const bounds = L.latLngBounds([portalLat, portalLng], [capLat, capLng]);
+                        State.map.flyToBounds(bounds, { padding: [60, 60], maxZoom: 19, duration: 0.8 });
+                    }
+                }
+                if (!noMarkerCard && window.SpatialRouter && typeof SpatialRouter.showMarkerCard === 'function') {
+                    setTimeout(function() { SpatialRouter.showMarkerCard(sid); }, 500);
+                }
+            }, delay);
+        }
 
         // Markers persist until user clicks another delivery row or map
     },
@@ -17635,6 +17656,27 @@ const LayerManager = {
     _activityMarkerGroup: null,
     _deliveryActivityStaffShowAll: false,
     _deliveryActivityStaffData: null,
+    _deliveryActivityMonth: '',
+    _deliveryActivityMonthCached: '',
+    _dapViewMode: 'summary',
+    _dapViewLevel: 0,
+    _dapViewCity: null,
+    _dapViewMc: null,
+    _dapViewStaff: null,
+    _dapDeliveryPage: 1,
+    _dapDeliveryFilteredCache: null,
+    _dapMcFilter: '',
+    _dapDateFrom: '',
+    _dapDateTo: '',
+    _dapActiveSid: null,
+    _dapAutoAdvance: false,
+    _dapAutoInterval: 3,
+    _dapAutoTimer: null,
+    _dapShowPortal: true,
+    _dapNavigatorActive: false,
+    _lastFilteredActivityRecords: null,
+    _portalMarkerGroup: null,
+    _dapDeliverySort: 'asc',
 
     _isEffectiveUnsent: function(r) {
         return r.status === 'unsent' || (r.distance_to_target && Number(r.distance_to_target) > 50);
@@ -17654,8 +17696,10 @@ const LayerManager = {
         const panel = document.getElementById('delivery-activity-panel');
         panel.style.display = 'flex';
         this._deliveryActivityOpen = true;
+        this._deliveryActivityMonth = window.ACTIVE_BILLING_MONTH || '';
+        this._populateDapMonthDropdown();
         this._startDeliveryActivityTimer();
-        if (!this._deliveryActivityData) {
+        if (!this._deliveryActivityData || this._deliveryActivityMonthCached !== this._deliveryActivityMonth) {
             this._fetchDeliveryActivityData(false);
         } else {
             this._updateDeliveryActivityPanel(this._deliveryActivityData);
@@ -17667,8 +17711,34 @@ const LayerManager = {
         const panel = document.getElementById('delivery-activity-panel');
         if (panel) panel.style.display = 'none';
         this._deliveryActivityOpen = false;
+        this._dapNavigatorActive = false;
         this._stopDeliveryActivityTimer();
         this._clearAllActivityMarkers();
+    },
+
+    async _populateDapMonthDropdown() {
+        const sel = document.getElementById('dap-month');
+        if (!sel) return;
+        const months = await window._fetchAvailableMonths();
+        const currentVal = this._deliveryActivityMonth || window.ACTIVE_BILLING_MONTH || '';
+        sel.innerHTML = months.map(m =>
+            `<option value="${m}" ${m === currentVal ? 'selected' : ''}>${m}</option>`
+        ).join('');
+        this._deliveryActivityMonth = currentVal;
+    },
+
+    async _deliveryActivityMonthChange() {
+        const sel = document.getElementById('dap-month');
+        if (!sel) return;
+        this._deliveryActivityMonth = sel.value;
+        this._deliveryActivityMonthCached = '';
+        this._deliveryActivityData = null;
+        if (this._deliveryActivityMonth === window.ACTIVE_BILLING_MONTH) {
+            this._startDeliveryActivityTimer();
+        } else {
+            this._stopDeliveryActivityTimer();
+        }
+        await this._fetchDeliveryActivityData(false);
     },
 
     _setupDeliveryActivityPanel() {
@@ -17680,6 +17750,7 @@ const LayerManager = {
                 '<span style="font-weight:800; font-size:13px; color:#1e293b; display:flex; align-items:center; gap:6px;">' +
                     '<span class="material-icons-round" style="font-size:18px; color:#8b5cf6;">assignment_turned_in</span>' +
                     'Delivery Activity' +
+                    '<span id="dap-mode-toggle" onclick="LayerManager._toggleDapViewMode()" style="margin-left:auto; font-size:9px; font-weight:800; padding:3px 8px; border-radius:6px; cursor:pointer; background:#e2e8f0; color:#475569; transition:all 0.15s;">Summary</span>' +
                 '</span>' +
                 '<div style="display:flex; gap:4px;">' +
                     '<button onclick="LayerManager._minimizeDeliveryActivityPanel()" style="background:none; border:none; cursor:pointer; color:#94a3b8; padding:2px; display:flex;" title="Minimize">' +
@@ -17692,7 +17763,7 @@ const LayerManager = {
             '</div>' +
             '<div class="dap-body">' +
                 '<div class="dap-kpi-row">' +
-                    '<div class="dap-kpi-card"><div class="dap-kpi-val" id="dap-total">—</div><div class="dap-kpi-label">Today</div></div>' +
+                    '<div class="dap-kpi-card"><div class="dap-kpi-val" id="dap-total">—</div><div class="dap-kpi-label" id="dap-total-label">Today</div></div>' +
                     '<div class="dap-kpi-card"><div class="dap-kpi-val" id="dap-delivered">—</div><div class="dap-kpi-label">Delivered</div></div>' +
                     '<div class="dap-kpi-card"><div class="dap-kpi-val" id="dap-unsent">—</div><div class="dap-kpi-label">Unsent</div></div>' +
                     '<div class="dap-kpi-card"><div class="dap-kpi-val" id="dap-staff-count">—</div><div class="dap-kpi-label">Staff</div></div>' +
@@ -17701,6 +17772,9 @@ const LayerManager = {
                     '<select id="dap-filter" onchange="LayerManager._deliveryActivityFilterChange()" style="flex:1; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
                         '<option value="all">All Deliveries</option>' +
                     '</select>' +
+                    '<select id="dap-month" onchange="LayerManager._deliveryActivityMonthChange()" style="flex:0 0 auto; min-width:100px; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
+                        '<option value="">Loading...</option>' +
+                    '</select>' +
                     '<select id="dap-city" onchange="LayerManager._deliveryActivityFilterChange()" style="flex:0 0 auto; min-width:110px; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
                         '<option value="all">All Cities</option>' +
                     '</select>' +
@@ -17708,14 +17782,17 @@ const LayerManager = {
                         '<span class="material-icons-round" id="dap-refresh-icon" style="font-size:16px;">refresh</span>' +
                     '</button>' +
                 '</div>' +
-                '<div style="margin-bottom:10px;">' +
-                    '<div style="font-weight:700; color:#64748b; font-size:10px; margin-bottom:4px;">ACTIVE STAFF</div>' +
-                    '<div id="dap-staff-list" style="width:100%;"></div>' +
+                '<div id="dap-summary-sections">' +
+                    '<div style="margin-bottom:10px;">' +
+                        '<div style="font-weight:700; color:#64748b; font-size:10px; margin-bottom:4px;">ACTIVE STAFF</div>' +
+                        '<div id="dap-staff-list" style="width:100%;"></div>' +
+                    '</div>' +
+                    '<div>' +
+                        '<div style="font-weight:700; color:#64748b; font-size:10px; margin-bottom:4px;">RECENT DELIVERIES</div>' +
+                        '<div id="dap-recent-list" style="border:1px solid #f1f5f9; border-radius:8px; overflow:hidden;"></div>' +
+                    '</div>' +
                 '</div>' +
-                '<div>' +
-                    '<div style="font-weight:700; color:#64748b; font-size:10px; margin-bottom:4px;">RECENT DELIVERIES</div>' +
-                    '<div id="dap-recent-list" style="border:1px solid #f1f5f9; border-radius:8px; overflow:hidden;"></div>' +
-                '</div>' +
+                '<div id="dap-analysis-content" style="display:none;"></div>' +
             '</div>' +
             '<div class="dap-footer">' +
                 '<span id="dap-updated">Last updated: —</span>' +
@@ -17804,35 +17881,39 @@ const LayerManager = {
     },
 
     async _fetchDeliveryActivityData(incremental) {
-        if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
+        if (!window._supabase || !this._deliveryActivityMonth) return;
+        if (incremental && this._deliveryActivityMonth !== window.ACTIVE_BILLING_MONTH) return;
         var dapIcon = document.getElementById('dap-refresh-icon');
         if (dapIcon) dapIcon.classList.add('spinning');
         var now = new Date();
         var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        var isCurrentMonth = this._deliveryActivityMonth === window.ACTIVE_BILLING_MONTH;
+        var dayFilter = function(q) {
+            return isCurrentMonth ? q.gte('delivered_at', todayStart) : q;
+        };
         try {
             if (!incremental) {
                 function countQ(extraFilter) {
                     var q = window._supabase.from('delivery_log')
                         .select('survey_id', { count: 'exact' })
-                        .eq('bill_month', window.ACTIVE_BILLING_MONTH)
-                        .gte('delivered_at', todayStart)
+                        .eq('bill_month', self._deliveryActivityMonth)
                         .limit(1);
+                    q = dayFilter(q);
                     if (extraFilter) q = q.eq('status', extraFilter);
                     return q;
                 }
+                var self = this;
                 var results = await Promise.all([
                     countQ(null),
                     countQ('delivered'),
-                    window._supabase.from('delivery_log')
+                    dayFilter(window._supabase.from('delivery_log')
                         .select('survey_id', { count: 'exact' })
-                        .eq('bill_month', window.ACTIVE_BILLING_MONTH)
-                        .gte('delivered_at', todayStart)
+                        .eq('bill_month', this._deliveryActivityMonth)
                         .or('status.eq.unsent,distance_to_target.gt.50')
-                        .limit(1),
-                    window._supabase.from('delivery_log')
+                        .limit(1)),
+                    dayFilter(window._supabase.from('delivery_log')
                         .select('staff_email')
-                        .eq('bill_month', window.ACTIVE_BILLING_MONTH)
-                        .gte('delivered_at', todayStart)
+                        .eq('bill_month', this._deliveryActivityMonth))
                 ]);
                 this._deliveryActivityCount = results[0].count || 0;
                 this._deliveryActivityDeliveredCount = results[1].count || 0;
@@ -17844,12 +17925,11 @@ const LayerManager = {
                 var step = 1000;
                 var hasMore = true;
                 while (hasMore) {
-                    var staffPage = await window._supabase.from('delivery_log')
+                    var staffPage = await dayFilter(window._supabase.from('delivery_log')
                         .select('staff_email, status, survey_id, distance_to_target')
-                        .eq('bill_month', window.ACTIVE_BILLING_MONTH)
-                        .gte('delivered_at', todayStart)
+                        .eq('bill_month', this._deliveryActivityMonth)
                         .order('delivered_at', { ascending: false })
-                        .range(pageFrom, pageFrom + step - 1);
+                        .range(pageFrom, pageFrom + step - 1));
                     var pageData = staffPage.data || [];
                     allStaffRows = allStaffRows.concat(pageData);
                     pageFrom += step;
@@ -17861,12 +17941,11 @@ const LayerManager = {
                 var mainStep = 1000;
                 var mainHasMore = true;
                 while (mainHasMore) {
-                    var mainPage = await window._supabase.from('delivery_log')
+                    var mainPage = await dayFilter(window._supabase.from('delivery_log')
                         .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
-                        .eq('bill_month', window.ACTIVE_BILLING_MONTH)
-                        .gte('delivered_at', todayStart)
+                        .eq('bill_month', this._deliveryActivityMonth)
                         .order('delivered_at', { ascending: false })
-                        .range(mainFrom, mainFrom + mainStep - 1);
+                        .range(mainFrom, mainFrom + mainStep - 1));
                     var mainPageData = mainPage.data || [];
                     if (!this._deliveryActivityData) {
                         this._deliveryActivityData = mainPageData;
@@ -17879,9 +17958,9 @@ const LayerManager = {
             } else {
                 var q = window._supabase.from('delivery_log')
                     .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
-                    .eq('bill_month', window.ACTIVE_BILLING_MONTH)
-                    .gte('delivered_at', todayStart)
+                    .eq('bill_month', this._deliveryActivityMonth)
                     .order('delivered_at', { ascending: false });
+                q = dayFilter(q);
                 if (this._deliveryActivityLastFetch) q = q.gt('delivered_at', this._deliveryActivityLastFetch);
                 var result = await q;
                 if (result.error) throw result.error;
@@ -17903,6 +17982,7 @@ const LayerManager = {
                 }
                 if (!this._deliveryActivityData) this._deliveryActivityData = data;
             }
+            this._deliveryActivityMonthCached = this._deliveryActivityMonth;
             this._deliveryActivityLastFetch = now.toISOString();
             if (this._deliveryActivityData) this._updateDeliveryActivityPanel(this._deliveryActivityData);
             this._updateLastUpdated();
@@ -17911,6 +17991,9 @@ const LayerManager = {
     },
 
     _updateDeliveryActivityPanel(records) {
+        var isCurrentMonth = this._deliveryActivityMonth === window.ACTIVE_BILLING_MONTH;
+        var totalLabel = document.getElementById('dap-total-label');
+        if (totalLabel) totalLabel.textContent = isCurrentMonth ? 'Today' : this._deliveryActivityMonth;
         if (!records || !records.length) {
             document.getElementById('dap-total').textContent = this._deliveryActivityCount || '0';
             document.getElementById('dap-delivered').textContent = this._deliveryActivityDeliveredCount || '0';
@@ -17933,11 +18016,540 @@ const LayerManager = {
         document.getElementById('dap-delivered').textContent = deliv;
         document.getElementById('dap-unsent').textContent = unsent;
         document.getElementById('dap-staff-count').textContent = staffSet.size;
+        this._lastFilteredActivityRecords = filtered;
         this._renderDeliveryActivityStaff(filtered);
         this._renderDeliveryActivityRecent(filtered);
         this._showAllActivityMarkers(filtered);
+        this._syncDapViewMode();
         var countEl = document.getElementById('dap-count');
         if (countEl) countEl.textContent = filtered.length + ' records';
+    },
+
+    _toggleDapViewMode() {
+        this._dapViewMode = this._dapViewMode === 'summary' ? 'analysis' : 'summary';
+        this._dapViewLevel = 0;
+        this._dapViewCity = null;
+        this._dapViewMc = null;
+        this._dapViewStaff = null;
+        this._dapDeliveryPage = 1;
+        this._dapMcFilter = '';
+        this._dapDateFrom = '';
+        this._dapDateTo = '';
+        this._dapActiveSid = null;
+        this._dapAutoAdvance = false;
+        this._dapShowPortal = true;
+        this._dapStopAutoTimer();
+        this._syncDapViewMode();
+    },
+
+    _syncDapViewMode() {
+        var toggle = document.getElementById('dap-mode-toggle');
+        if (toggle) toggle.textContent = this._dapViewMode === 'summary' ? 'Analysis' : 'Summary';
+        var summary = document.getElementById('dap-summary-sections');
+        var analysis = document.getElementById('dap-analysis-content');
+        if (!summary || !analysis) return;
+        if (this._dapViewMode === 'summary') {
+            summary.style.display = '';
+            analysis.style.display = 'none';
+        } else {
+            summary.style.display = 'none';
+            analysis.style.display = '';
+            this._renderDapAnalysis();
+        }
+    },
+
+    _renderDapAnalysis() {
+        var el = document.getElementById('dap-analysis-content');
+        if (!el) return;
+        var records = this._deliveryActivityData || [];
+        var filter = (document.getElementById('dap-filter') && document.getElementById('dap-filter').value) || 'all';
+        var filtered = this._applyDeliveryActivityFilter(records, filter);
+        filtered = this._applyDeliveryActivityCityFilter(filtered);
+        if (this._dapViewLevel === 0) this._renderDapCities(el, filtered);
+        else if (this._dapViewLevel === 1) this._renderDapMc(el, filtered);
+        else if (this._dapViewLevel === 2) this._renderDapStaff(el, filtered);
+        else if (this._dapViewLevel === 3) this._renderDapDeliveries(el, filtered);
+    },
+
+    _dapBack() {
+        if (this._dapViewLevel > 0) {
+            this._dapViewLevel--;
+            this._dapDeliveryPage = 1;
+            this._renderDapAnalysis();
+        }
+    },
+
+    _renderDapCities(el, records) {
+        var cityMap = new Map();
+        records.forEach(function(r) {
+            var loc = window.SID_MAP ? window.SID_MAP.get(String(r.survey_id)) : null;
+            var city = loc ? (loc[11] || '—') : '—';
+            if (!cityMap.has(city)) cityMap.set(city, { city: city, delv: 0, unsent: 0, total: 0, staff: new Set() });
+            var c = cityMap.get(city);
+            c.total++;
+            if (r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50)) c.delv++;
+            else if (this._isEffectiveUnsent(r)) c.unsent++;
+            if (r.staff_email) c.staff.add(r.staff_email);
+        }, this);
+        var list = [...cityMap.values()].sort(function(a, b) { return a.city.localeCompare(b.city); });
+        var self = this;
+        var html = '<div style="font-weight:700; color:#475569; font-size:11px; margin-bottom:6px;">Cities (' + list.length + '):</div>' +
+            '<table style="width:100%; border-collapse:collapse; font-size:11px;">' +
+            '<thead><tr style="background:#e2e8f0;">' +
+            '<th style="padding:4px 6px; text-align:left; font-size:9px; font-weight:800; color:#475569;">City</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#16a34a;">Delv</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#dc2626;">Unst</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#1e293b;">Total</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#475569;">Rate</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#475569;">Staff</th>' +
+            '</tr></thead><tbody>';
+        list.forEach(function(c) {
+            var rate = c.total > 0 ? Math.round(c.delv / c.total * 100) : 0;
+            var rateColor = rate >= 80 ? '#16a34a' : rate >= 50 ? '#d97706' : '#dc2626';
+            html += '<tr onclick="LayerManager._dapDrillCity(\'' + c.city.replace(/'/g, "\\'") + '\')" style="cursor:pointer; border-bottom:1px solid #f1f5f9;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">' +
+                '<td style="padding:4px 6px; font-weight:700; color:#1e293b;">' + c.city + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; font-weight:600; color:#16a34a;">' + c.delv + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; font-weight:600; color:#dc2626;">' + c.unsent + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; font-weight:700; color:#1e293b;">' + c.total + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; font-weight:700; color:' + rateColor + ';">' + rate + '%</td>' +
+                '<td style="padding:4px 6px; text-align:center; color:#64748b;">' + c.staff.size + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+        el.innerHTML = html;
+    },
+
+    _dapDrillCity(city) {
+        this._dapViewCity = city;
+        this._dapViewLevel = 1;
+        this._renderDapAnalysis();
+    },
+
+    _renderDapMc(el, records) {
+        var self = this;
+        var mcMap = new Map();
+        records.forEach(function(r) {
+            var loc = window.SID_MAP ? window.SID_MAP.get(String(r.survey_id)) : null;
+            var city = loc ? (loc[11] || '—') : '—';
+            if (city !== self._dapViewCity) return;
+            var mc = loc ? (loc[12] || '—') : '—';
+            if (!mcMap.has(mc)) mcMap.set(mc, { mc: mc, delv: 0, unsent: 0, total: 0, staff: new Set(), lastTime: null });
+            var m = mcMap.get(mc);
+            m.total++;
+            if (r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50)) m.delv++;
+            else if (self._isEffectiveUnsent(r)) m.unsent++;
+            if (r.staff_email) m.staff.add(r.staff_email);
+            if (!m.lastTime || r.delivered_at > m.lastTime) m.lastTime = r.delivered_at;
+        });
+        var list = [...mcMap.values()].sort(function(a, b) { return a.mc.localeCompare(b.mc); });
+        var html = '<div style="margin-bottom:8px;">' +
+            '<span onclick="LayerManager._dapBack()" style="cursor:pointer; font-size:11px; font-weight:700; color:#8b5cf6; display:flex; align-items:center; gap:4px;">' +
+            '<span class="material-icons-round" style="font-size:14px;">arrow_back</span> ' + this._dapViewCity + '</span>' +
+            '</div>' +
+            '<div style="font-weight:700; color:#475569; font-size:11px; margin-bottom:6px;">MC/UC (' + list.length + '):</div>' +
+            '<table style="width:100%; border-collapse:collapse; font-size:11px;">' +
+            '<thead><tr style="background:#e2e8f0;">' +
+            '<th style="padding:4px 6px; text-align:left; font-size:9px; font-weight:800; color:#475569;">MC/UC</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#16a34a;">Delv</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#dc2626;">Unst</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#1e293b;">Total</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#475569;">Rate</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#475569;">Staff</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#475569;">Last</th>' +
+            '</tr></thead><tbody>';
+        list.forEach(function(m) {
+            var rate = m.total > 0 ? Math.round(m.delv / m.total * 100) : 0;
+            var rateColor = rate >= 80 ? '#16a34a' : rate >= 50 ? '#d97706' : '#dc2626';
+            var last = m.lastTime ? new Date(m.lastTime).toLocaleDateString('en-GB', {day:'2-digit', month:'short'}) : '—';
+            html += '<tr onclick="LayerManager._dapDrillMc(\'' + m.mc.replace(/'/g, "\\'") + '\')" style="cursor:pointer; border-bottom:1px solid #f1f5f9;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">' +
+                '<td style="padding:4px 6px; font-weight:700; color:#1e293b;">' + m.mc + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; font-weight:600; color:#16a34a;">' + m.delv + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; font-weight:600; color:#dc2626;">' + m.unsent + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; font-weight:700; color:#1e293b;">' + m.total + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; font-weight:700; color:' + rateColor + ';">' + rate + '%</td>' +
+                '<td style="padding:4px 6px; text-align:center; color:#64748b;">' + m.staff.size + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; color:#94a3b8; font-size:9px;">' + last + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+        el.innerHTML = html;
+    },
+
+    _dapDrillMc(mc) {
+        this._dapViewMc = mc;
+        this._dapViewLevel = 2;
+        this._renderDapAnalysis();
+    },
+
+    _renderDapStaff(el, records) {
+        var self = this;
+        var staffMap = new Map();
+        records.forEach(function(r) {
+            var loc = window.SID_MAP ? window.SID_MAP.get(String(r.survey_id)) : null;
+            var mc = loc ? (loc[12] || '—') : '—';
+            if (mc !== self._dapViewMc) return;
+            var email = (r.staff_email || '').toLowerCase();
+            if (!email) return;
+            if (!staffMap.has(email)) staffMap.set(email, { email: r.staff_email, name: r.staff_name || email.split('@')[0], delv: 0, unsent: 0, total: 0, firstTime: null, lastTime: null });
+            var s = staffMap.get(email);
+            s.total++;
+            if (r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50)) s.delv++;
+            else if (self._isEffectiveUnsent(r)) s.unsent++;
+            if (!s.firstTime || r.delivered_at < s.firstTime) s.firstTime = r.delivered_at;
+            if (!s.lastTime || r.delivered_at > s.lastTime) s.lastTime = r.delivered_at;
+        });
+        var list = [...staffMap.values()].sort(function(a, b) { return b.total - a.total; });
+        var html = '<div style="margin-bottom:8px;">' +
+            '<span onclick="LayerManager._dapBack()" style="cursor:pointer; font-size:11px; font-weight:700; color:#8b5cf6; display:flex; align-items:center; gap:4px;">' +
+            '<span class="material-icons-round" style="font-size:14px;">arrow_back</span> ' + this._dapViewMc + '</span>' +
+            '</div>' +
+            '<div style="font-weight:700; color:#475569; font-size:11px; margin-bottom:6px;">Staff (' + list.length + '):</div>' +
+            '<table style="width:100%; border-collapse:collapse; font-size:11px;">' +
+            '<thead><tr style="background:#e2e8f0;">' +
+            '<th style="padding:4px 6px; text-align:left; font-size:9px; font-weight:800; color:#475569;">Name</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#16a34a;">Delv</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#dc2626;">Unst</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#1e293b;">Total</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#475569;">First</th>' +
+            '<th style="padding:4px 6px; text-align:center; font-size:9px; font-weight:800; color:#475569;">Last</th>' +
+            '</tr></thead><tbody>';
+        list.forEach(function(s) {
+            function _fmt(iso) { if (!iso) return '—'; var d = new Date(iso); return d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }); }
+            var first = s.firstTime ? _fmt(s.firstTime) : '—';
+            var last = s.lastTime ? _fmt(s.lastTime) : '—';
+            html += '<tr onclick="LayerManager._dapDrillStaff(\'' + s.email.replace(/'/g, "\\'") + '\')" style="cursor:pointer; border-bottom:1px solid #f1f5f9;" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">' +
+                '<td style="padding:4px 6px; font-weight:700; color:#1e293b;">' + s.name + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; font-weight:600; color:#16a34a;">' + s.delv + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; font-weight:600; color:#dc2626;">' + s.unsent + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; font-weight:700; color:#1e293b;">' + s.total + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; color:#94a3b8; font-size:9px;">' + first + '</td>' +
+                '<td style="padding:4px 6px; text-align:center; color:#94a3b8; font-size:9px;">' + last + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+        el.innerHTML = html;
+    },
+
+    _dapDrillStaff(email) {
+        this._dapViewStaff = email;
+        this._dapViewLevel = 3;
+        this._dapDeliveryPage = 1;
+        this._renderDapAnalysis();
+    },
+
+    _renderDapDeliveries(el, records) {
+        var self = this;
+        var pageSize = 30;
+        var filtered = records.filter(function(r) {
+            var email = (r.staff_email || '').toLowerCase();
+            return email === self._dapViewStaff;
+        });
+        // Collect MC/UC values for this staff
+        var mcSet = new Set();
+        filtered.forEach(function(r) {
+            var loc = window.SID_MAP ? window.SID_MAP.get(String(r.survey_id)) : null;
+            if (loc && loc[12]) mcSet.add(loc[12]);
+        });
+        var mcList = Array.from(mcSet).sort();
+        // Apply MC/UC filter
+        var mcFilter = self._dapMcFilter;
+        if (mcFilter) {
+            filtered = filtered.filter(function(r) {
+                var loc = window.SID_MAP ? window.SID_MAP.get(String(r.survey_id)) : null;
+                return loc && loc[12] === mcFilter;
+            });
+        }
+        // Apply date range filter
+        var dateFrom = self._dapDateFrom;
+        var dateTo = self._dapDateTo;
+        if (dateFrom || dateTo) {
+            filtered = filtered.filter(function(r) {
+                if (dateFrom && r.delivered_at) {
+                    if (r.delivered_at < dateFrom) return false;
+                }
+                if (dateTo && r.delivered_at) {
+                    if (r.delivered_at > dateTo + 'T23:59:59') return false;
+                }
+                return true;
+            });
+        }
+        // Apply time sort
+        var sortDir = self._dapDeliverySort || 'asc';
+        filtered = filtered.slice().sort(function(a, b) {
+            var ta = a.delivered_at || '';
+            var tb = b.delivered_at || '';
+            if (!ta && !tb) return 0;
+            if (!ta) return 1;
+            if (!tb) return -1;
+            if (sortDir === 'asc') return ta < tb ? -1 : ta > tb ? 1 : 0;
+            return ta > tb ? -1 : ta < tb ? 1 : 0;
+        });
+        // Cache for auto-advance
+        this._dapDeliveryFilteredCache = filtered;
+        var totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+        var page = Math.min(this._dapDeliveryPage, totalPages);
+        var start = (page - 1) * pageSize;
+        var pageRecords = filtered.slice(start, start + pageSize);
+        var staffRec = filtered.length > 0 ? filtered[0] : null;
+        var staffName = staffRec ? (self._staffNamesCache && self._staffNamesCache[staffRec.staff_email]) || staffRec.staff_name || staffRec.staff_email.split('@')[0] : this._dapViewStaff;
+        var delvCount = filtered.filter(function(r) { return r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50); }).length;
+        var unsentCount = filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
+        var html = '<div style="margin-bottom:8px;">' +
+            '<span onclick="LayerManager._dapBack()" style="cursor:pointer; font-size:11px; font-weight:700; color:#8b5cf6; display:flex; align-items:center; gap:4px;">' +
+            '<span class="material-icons-round" style="font-size:14px;">arrow_back</span> ' + staffName + '</span>' +
+            '</div>' +
+            '<div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;">' +
+            '<div style="flex:1; min-width:50px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:6px; text-align:center;"><div style="font-size:8px; font-weight:800; color:#16a34a;">Delv</div><div style="font-size:14px; font-weight:900; color:#15803d;">' + delvCount + '</div></div>' +
+            '<div style="flex:1; min-width:50px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:6px; text-align:center;"><div style="font-size:8px; font-weight:800; color:#dc2626;">Unst</div><div style="font-size:14px; font-weight:900; color:#991b1b;">' + unsentCount + '</div></div>' +
+            '<div style="flex:1; min-width:50px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:6px; text-align:center;"><div style="font-size:8px; font-weight:800; color:#64748b;">Total</div><div style="font-size:14px; font-weight:900; color:#1e293b;">' + filtered.length + '</div></div>' +
+            '</div>' +
+            '<button onclick="LayerManager._navigateDapDeliveries()" style="width:100%; padding:8px; border:none; border-radius:8px; background:#8b5cf6; color:white; font-size:11px; font-weight:800; cursor:pointer; margin-bottom:8px; display:flex; align-items:center; justify-content:center; gap:6px;">' +
+            '<span class="material-icons-round" style="font-size:16px;">near_me</span> Navigate All (' + filtered.length + ' deliveries)</button>' +
+            // MC/UC + Date range filters
+            '<div style="display:flex; gap:4px; margin-bottom:8px; flex-wrap:wrap; align-items:center;">' +
+            '<select id="dap-v3-mc" onchange="LayerManager._dapMcFilter=this.value;LayerManager._dapDeliveryPage=1;LayerManager._dapActiveSid=null;LayerManager._dapStopAutoTimer();LayerManager._renderDapAnalysis()" style="flex:1; min-width:80px; padding:4px 6px; border-radius:6px; border:1px solid #e2e8f0; font-size:10px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
+            '<option value="">All MC/UC</option>' +
+            mcList.map(function(m) { return '<option value="' + m + '"' + (m === self._dapMcFilter ? ' selected' : '') + '>' + m + '</option>'; }).join('') +
+            '</select>' +
+            '<input id="dap-v3-date-from" type="date" value="' + self._dapDateFrom + '" onchange="LayerManager._dapDateFrom=this.value;LayerManager._dapDeliveryPage=1;LayerManager._dapActiveSid=null;LayerManager._dapStopAutoTimer();LayerManager._renderDapAnalysis()" style="flex:0 0 auto; width:110px; padding:4px 6px; border-radius:6px; border:1px solid #e2e8f0; font-size:10px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
+            '<input id="dap-v3-date-to" type="date" value="' + self._dapDateTo + '" onchange="LayerManager._dapDateTo=this.value;LayerManager._dapDeliveryPage=1;LayerManager._dapActiveSid=null;LayerManager._dapStopAutoTimer();LayerManager._renderDapAnalysis()" style="flex:0 0 auto; width:110px; padding:4px 6px; border-radius:6px; border:1px solid #e2e8f0; font-size:10px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
+            '</div>' +
+            // Auto-advance controls
+            '<div style="display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap;">' +
+            '<button onclick="LayerManager._dapShowPortal=!LayerManager._dapShowPortal;if(LayerManager._dapActiveSid){var r=LayerManager._deliveryActivityData.find(function(x){return String(x.survey_id).trim()===String(LayerManager._dapActiveSid).trim()});if(r)LayerManager.showDeliveryOnMap(LayerManager._dapActiveSid,{showPortal:LayerManager._dapShowPortal,useSimpleTooltip:true})}if(LayerManager._lastFilteredActivityRecords)LayerManager._showAllActivityMarkers(LayerManager._lastFilteredActivityRecords);LayerManager._renderDapAnalysis()" style="padding:4px 10px; border-radius:6px; border:1px solid ' + (self._dapShowPortal ? '#8b5cf6' : '#e2e8f0') + '; background:' + (self._dapShowPortal ? '#f5f3ff' : 'white') + '; color:' + (self._dapShowPortal ? '#7c3aed' : '#64748b') + '; font-size:10px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:4px; font-family:inherit;">' +
+            '<span class="material-icons-round" style="font-size:12px;">' + (self._dapShowPortal ? 'visibility' : 'visibility_off') + '</span> Portal: ' + (self._dapShowPortal ? 'ON' : 'OFF') + '</button>' +
+            '<button onclick="LayerManager._dapToggleAutoAdvance()" style="padding:4px 10px; border-radius:6px; border:1px solid ' + (self._dapAutoAdvance ? '#8b5cf6' : '#e2e8f0') + '; background:' + (self._dapAutoAdvance ? '#f5f3ff' : 'white') + '; color:' + (self._dapAutoAdvance ? '#7c3aed' : '#64748b') + '; font-size:10px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:4px; font-family:inherit;">' +
+            '<span class="material-icons-round" style="font-size:12px;">' + (self._dapAutoAdvance ? 'pause' : 'play_arrow') + '</span> ' + (self._dapAutoAdvance ? 'Auto: ON' : 'Auto: OFF') + '</button>' +
+            '<select onchange="LayerManager._dapSetAutoInterval(Number(this.value))" style="padding:4px 6px; border-radius:6px; border:1px solid #e2e8f0; font-size:10px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
+            '<option value="0.05"' + (self._dapAutoInterval === 0.05 ? ' selected' : '') + '>50ms</option>' +
+            '<option value="0.1"' + (self._dapAutoInterval === 0.1 ? ' selected' : '') + '>100ms</option>' +
+            '<option value="0.2"' + (self._dapAutoInterval === 0.2 ? ' selected' : '') + '>200ms</option>' +
+            '<option value="0.3"' + (self._dapAutoInterval === 0.3 ? ' selected' : '') + '>300ms</option>' +
+            '<option value="0.5"' + (self._dapAutoInterval === 0.5 ? ' selected' : '') + '>500ms</option>' +
+            '<option value="1"' + (self._dapAutoInterval === 1 ? ' selected' : '') + '>1s</option>' +
+            '<option value="3"' + (self._dapAutoInterval === 3 ? ' selected' : '') + '>3s</option>' +
+            '<option value="5"' + (self._dapAutoInterval === 5 ? ' selected' : '') + '>5s</option>' +
+            '<option value="10"' + (self._dapAutoInterval === 10 ? ' selected' : '') + '>10s</option>' +
+            '<option value="15"' + (self._dapAutoInterval === 15 ? ' selected' : '') + '>15s</option>' +
+            '</select>' +
+            '<button onclick="LayerManager._dapDeliverySort=LayerManager._dapDeliverySort===\'asc\'?\'desc\':\'asc\';LayerManager._dapDeliveryPage=1;LayerManager._dapActiveSid=null;LayerManager._dapStopAutoTimer();LayerManager._renderDapAnalysis()" style="padding:4px 8px; border-radius:6px; border:1px solid #e2e8f0; background:white; font-size:9px; font-weight:700; cursor:pointer; color:#64748b; display:flex; align-items:center; gap:2px; font-family:inherit;">' + (self._dapDeliverySort === 'asc' ? '↑ Oldest' : '↓ Newest') + '</button>' +
+            (self._dapAutoAdvance && self._dapActiveSid ? '<span style="font-size:9px; font-weight:600; color:#8b5cf6;">Advancing...</span>' : '') +
+            '</div>';
+        if (!pageRecords.length) {
+            html += '<div style="padding:20px; text-align:center; color:#94a3b8; font-size:11px;">No deliveries found.</div>';
+        } else {
+            html += '<div style="border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">' +
+                '<div style="display:flex; align-items:center; gap:4px; padding:4px 6px; border-bottom:1px solid #e2e8f0; font-size:8px; font-weight:800; color:#64748b; background:#f8fafc;">' +
+                '<span style="flex:0 0 20px; text-align:center;">#</span>' +
+                '<span style="flex:0 0 36px;">SID</span>' +
+                '<span style="flex:1; min-width:0;">Consumer</span>' +
+                '<span style="flex:0 0 44px; text-align:center;">Status</span>' +
+                '<span style="flex:0 0 40px; text-align:right;">Dist</span>' +
+                '<span onclick="LayerManager._dapDeliverySort=LayerManager._dapDeliverySort===\'asc\'?\'desc\':\'asc\';LayerManager._dapDeliveryPage=1;LayerManager._dapActiveSid=null;LayerManager._dapStopAutoTimer();LayerManager._renderDapAnalysis()" style="flex:0 0 36px; text-align:right; cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:flex-end; gap:2px;">Time ' + (self._dapDeliverySort === 'asc' ? '↑' : '↓') + '</span>' +
+                '<span style="flex:0 0 115px; text-align:right; font-size:7px;">Capture GPS</span>' +
+                '</div>';
+            pageRecords.forEach(function(r, idx) {
+                var isDel = r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50);
+                var isUnsent = self._isEffectiveUnsent(r);
+                var dateStr = r.delivered_at ? new Date(r.delivered_at).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) : '-';
+                var name = r.consumer_name ? r.consumer_name.substring(0, 10) : '-';
+                var isActive = String(r.survey_id) === String(self._dapActiveSid);
+                var captureGpsStr = r.capture_gps_lat && r.capture_gps_lng ? parseFloat(r.capture_gps_lat).toFixed(5) + ', ' + parseFloat(r.capture_gps_lng).toFixed(5) : '—';
+                html += '<div onclick="LayerManager._dapSetActiveSid(\'' + r.survey_id + '\')" style="display:flex; align-items:center; gap:4px; padding:4px 6px; border-bottom:1px solid #f8fafc; cursor:pointer; font-size:10px; transition:background 0.15s;' + (isActive ? ' background:#ede9fe; border-left:3px solid #8b5cf6;' : '') + '" onmouseover="this.style.background=\'' + (isActive ? '#ddd6fe' : '#f8fafc') + '\'" onmouseout="this.style.background=\'' + (isActive ? '#ede9fe' : '') + '\'">' +
+                    '<span style="flex:0 0 20px; text-align:center; color:#94a3b8; font-size:9px; font-weight:600;">' + (start + idx + 1) + '</span>' +
+                    '<span style="font-weight:800; color:#8b5cf6; flex:0 0 36px;">#' + r.survey_id + '</span>' +
+                    '<span style="flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; color:#1e293b;">' + name + '</span>' +
+                    '<span style="display:inline-flex; align-items:center; gap:2px; padding:1px 4px; border-radius:3px; font-size:8px; font-weight:800; background:' + (isDel ? '#dcfce7' : isUnsent ? '#fee2e2' : '#fef3c7') + '; color:' + (isDel ? '#15803d' : isUnsent ? '#b91c1c' : '#d97706') + ';">' + (isDel ? '✓' : isUnsent ? '✗' : '') + '</span>' +
+                    '<span style="flex:0 0 40px; text-align:right; color:#94a3b8; font-size:9px;">' + (r.distance_to_target ? r.distance_to_target + 'm' : '-') + '</span>' +
+                    '<span style="flex:0 0 36px; text-align:right; color:#94a3b8; font-size:9px;">' + dateStr + '</span>' +
+                    '<span style="flex:0 0 115px; text-align:right; color:#94a3b8; font-size:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + captureGpsStr + '</span>' +
+                    '</div>';
+            });
+            html += '</div>';
+            if (totalPages > 1) {
+                html += '<div style="display:flex; align-items:center; justify-content:center; gap:4px; margin-top:8px;">' +
+                    '<button onclick="LayerManager._dapDeliveryPage=' + (page - 1) + ';LayerManager._renderDapAnalysis()" ' + (page <= 1 ? 'disabled' : '') + ' style="padding:4px 8px; border-radius:6px; border:1px solid #e2e8f0; background:white; cursor:' + (page <= 1 ? 'default' : 'pointer') + '; font-size:11px; font-weight:700; opacity:' + (page <= 1 ? '0.3' : '1') + ';">< Prev</button>' +
+                    '<span style="font-size:10px; font-weight:700; color:#64748b;">' + page + ' / ' + totalPages + '</span>' +
+                    '<button onclick="LayerManager._dapDeliveryPage=' + (page + 1) + ';LayerManager._renderDapAnalysis()" ' + (page >= totalPages ? 'disabled' : '') + ' style="padding:4px 8px; border-radius:6px; border:1px solid #e2e8f0; background:white; cursor:' + (page >= totalPages ? 'default' : 'pointer') + '; font-size:11px; font-weight:700; opacity:' + (page >= totalPages ? '0.3' : '1') + ';">Next ></button>' +
+                    '</div>';
+            }
+        }
+        el.innerHTML = html;
+    },
+
+    _navigateDapDeliveries() {
+        if (!this._deliveryActivityData || !this._dapViewStaff) return;
+        this._clearDeliveryMarkers();
+        this._dapNavigatorActive = true;
+        this._dapActiveSid = null;
+        this._dapAutoAdvance = false;
+        this._dapShowPortal = true;
+        this._dapStopAutoTimer();
+        var self = this;
+        var records = (this._dapDeliveryFilteredCache || this._deliveryActivityData.filter(function(r) {
+            return (r.staff_email || '').toLowerCase() === self._dapViewStaff;
+        })).map(function(r) {
+            return [r.survey_id, parseFloat(r.target_lat) || 0, parseFloat(r.target_lng) || 0];
+        }).filter(function(r) { return r[1] && r[2]; });
+        if (!records.length) return;
+        State.filtered = records;
+        State.currentIdx = 0;
+        State.originView = 'map';
+        if (window.MapNavigator) {
+            MapNavigator.show();
+            MapNavigator.updateUI();
+        }
+        if (State.map && records[0][1] && records[0][2]) {
+            State.map.flyTo([records[0][1], records[0][2]], 18, { duration: 0.5 });
+        }
+        if (window.SpatialRouter && typeof SpatialRouter.showMarkerCard === 'function') {
+            SpatialRouter.showMarkerCard(records[0][0]);
+        }
+    },
+
+    _dapSetActiveSid(sid) {
+        this._dapActiveSid = sid;
+        var self = this;
+        var r = null;
+        if (this._deliveryActivityData) {
+            r = this._deliveryActivityData.find(function(x) { return String(x.survey_id).trim() === String(sid).trim(); });
+        }
+        if (r) {
+            this.showDeliveryOnMap(sid, { showPortal: this._dapShowPortal, useSimpleTooltip: true });
+        }
+        // Scroll to page containing active record
+        if (this._dapDeliveryFilteredCache) {
+            for (var i = 0; i < this._dapDeliveryFilteredCache.length; i++) {
+                if (String(this._dapDeliveryFilteredCache[i].survey_id).trim() === String(sid).trim()) {
+                    this._dapDeliveryPage = Math.floor(i / 30) + 1;
+                    break;
+                }
+            }
+        }
+        this._renderDapAnalysis();
+        if (this._dapAutoAdvance) {
+            this._dapStartAutoTimer();
+        }
+    },
+
+    _dapToggleAutoAdvance() {
+        this._dapAutoAdvance = !this._dapAutoAdvance;
+        if (this._dapAutoAdvance) {
+            if (window.SpatialRouter && typeof SpatialRouter.closeMarkerCard === 'function') SpatialRouter.closeMarkerCard();
+            // If active SID is at last position or missing from cache, restart from first
+            if (this._dapActiveSid && this._dapDeliveryFilteredCache && this._dapDeliveryFilteredCache.length) {
+                var lastIdx = this._dapDeliveryFilteredCache.length - 1;
+                var sidAtEnd = true;
+                for (var si = 0; si <= lastIdx; si++) {
+                    if (String(this._dapDeliveryFilteredCache[si].survey_id).trim() === String(this._dapActiveSid).trim()) {
+                        if (si < lastIdx) sidAtEnd = false;
+                        break;
+                    }
+                }
+                if (sidAtEnd) this._dapActiveSid = null;
+            }
+            if (!this._dapActiveSid) {
+                // Advance from first record if no active SID
+                var self = this;
+                var staffList = this._deliveryActivityData ? this._deliveryActivityData.filter(function(r) {
+                    return (r.staff_email || '').toLowerCase() === self._dapViewStaff;
+                }) : [];
+                var mcFilter = (document.getElementById('dap-v3-mc') && document.getElementById('dap-v3-mc').value) || '';
+                var dateFrom = (document.getElementById('dap-v3-date-from') && document.getElementById('dap-v3-date-from').value) || '';
+                var dateTo = (document.getElementById('dap-v3-date-to') && document.getElementById('dap-v3-date-to').value) || '';
+                if (mcFilter || dateFrom || dateTo) {
+                    staffList = staffList.filter(function(r) {
+                        if (mcFilter) {
+                            var loc = window.SID_MAP ? window.SID_MAP.get(String(r.survey_id)) : null;
+                            var mc = loc ? (loc[12] || '') : '';
+                            if (mc !== mcFilter) return false;
+                        }
+                        if (dateFrom && r.delivered_at) {
+                            if (r.delivered_at < dateFrom) return false;
+                        }
+                        if (dateTo && r.delivered_at) {
+                            if (r.delivered_at > dateTo + 'T23:59:59') return false;
+                        }
+                        return true;
+                    });
+                }
+                if (staffList.length) {
+                    var firstRecord = (this._dapDeliveryFilteredCache && this._dapDeliveryFilteredCache.length) ? this._dapDeliveryFilteredCache[0] : staffList[0];
+                    this._dapSetActiveSid(firstRecord.survey_id);
+                    return;
+                }
+            }
+            this._dapStartAutoTimer();
+        } else {
+            this._dapStopAutoTimer();
+        }
+        this._renderDapAnalysis();
+    },
+
+    _dapStartAutoTimer() {
+        if (this._dapAutoTimer) clearTimeout(this._dapAutoTimer);
+        if (!this._dapAutoAdvance) return;
+        var self = this;
+        this._dapAutoTimer = setTimeout(function() {
+            self._dapAdvanceOne();
+        }, this._dapAutoInterval * 1000);
+    },
+
+    _dapStopAutoTimer() {
+        if (this._dapAutoTimer) {
+            clearTimeout(this._dapAutoTimer);
+            this._dapAutoTimer = null;
+        }
+    },
+
+    _dapAdvanceOne() {
+        if (window.SpatialRouter && typeof SpatialRouter.closeMarkerCard === 'function') SpatialRouter.closeMarkerCard();
+        if (!this._dapDeliveryFilteredCache || !this._dapDeliveryFilteredCache.length) {
+            this._dapAutoAdvance = false;
+            this._renderDapAnalysis();
+            return;
+        }
+        var list = this._dapDeliveryFilteredCache;
+        var currentIdx = -1;
+        var activeStr = String(this._dapActiveSid || '').trim();
+        for (var i = 0; i < list.length; i++) {
+            if (String(list[i].survey_id).trim() === activeStr) {
+                currentIdx = i;
+                break;
+            }
+        }
+        if (currentIdx < 0) {
+            this._dapActiveSid = list[0].survey_id;
+            currentIdx = 0;
+        }
+        var nextIdx = currentIdx + 1;
+        if (nextIdx >= list.length) {
+            this._dapAutoAdvance = false;
+            this._renderDapAnalysis();
+            return;
+        }
+        var next = list[nextIdx];
+        this._dapActiveSid = next.survey_id;
+        this.showDeliveryOnMap(next.survey_id, { showPortal: this._dapShowPortal, useSimpleTooltip: true, noViewSwitch: true, noMarkerCard: true });
+        // Scroll to page containing active record
+        for (var i = 0; i < list.length; i++) {
+            if (String(list[i].survey_id).trim() === String(next.survey_id).trim()) {
+                this._dapDeliveryPage = Math.floor(i / 30) + 1;
+                break;
+            }
+        }
+        this._renderDapAnalysis();
+        if (this._dapAutoAdvance) {
+            this._dapStartAutoTimer();
+        }
+    },
+
+    _dapSetAutoInterval(secs) {
+        this._dapAutoInterval = secs;
+        if (this._dapAutoAdvance) {
+            this._dapStopAutoTimer();
+            this._dapStartAutoTimer();
+        }
     },
 
     _buildDeliveryActivityFilters(records) {
@@ -18095,9 +18707,10 @@ const LayerManager = {
         if (!State.map) return;
         this._clearAllActivityMarkers();
         if (!this._deliveryActivityOpen) return;
-        var withCoords = records.filter(function(r) { return r.target_lat && r.target_lng; });
-        if (!withCoords.length) return;
         var self = this;
+        // Delivery markers at capture_gps (fallback to target_lat)
+        var withCoords = records.filter(function(r) { return (r.capture_gps_lat && r.capture_gps_lng) || (r.target_lat && r.target_lng); });
+        if (!withCoords.length) return;
         this._activityMarkerGroup = L.markerClusterGroup({
             chunkedLoading: true,
             maxClusterRadius: 50,
@@ -18115,22 +18728,58 @@ const LayerManager = {
             }
         });
         withCoords.forEach(function(r) {
-            var lat = parseFloat(r.target_lat), lng = parseFloat(r.target_lng);
+            var lat = parseFloat(r.capture_gps_lat) || parseFloat(r.target_lat);
+            var lng = parseFloat(r.capture_gps_lng) || parseFloat(r.target_lng);
             if (isNaN(lat) || isNaN(lng)) return;
             var effectiveUnsent = self._isEffectiveUnsent(r);
             var color = effectiveUnsent ? '#dc2626' : '#16a34a';
             var marker = L.circleMarker([lat, lng], { radius: 6, color: color, fillColor: color, fillOpacity: 0.35, weight: 2, opacity: 0.5 });
             var displayStatus = effectiveUnsent ? 'unsent' : 'delivered';
-            marker.bindTooltip('#' + r.survey_id + ' \u00b7 ' + displayStatus + (r.distance_to_target ? ' \u00b7 ' + r.distance_to_target + 'm' : ''), { permanent: false, direction: 'top' });
+            var distText = r.distance_to_target ? ' \u00b7 ' + r.distance_to_target + 'm' : '';
+            marker.bindTooltip('#' + r.survey_id + ' \u00b7 ' + displayStatus + distText, { permanent: false, direction: 'top' });
             self._activityMarkerGroup.addLayer(marker);
         });
         this._activityMarkerGroup.addTo(State.map);
+        // Portal overlay markers (only when portal toggle is ON)
+        if (this._dapShowPortal) {
+            var withPortal = records.filter(function(r) { return r.target_lat && r.target_lng; });
+            if (withPortal.length) {
+                this._portalMarkerGroup = L.markerClusterGroup({
+                    chunkedLoading: true,
+                    maxClusterRadius: 50,
+                    spiderfyOnMaxZoom: true,
+                    showCoverageOnHover: false,
+                    zoomToBoundsOnClick: false,
+                    disableClusteringAtZoom: 18,
+                    iconCreateFunction: function(cluster) {
+                        var count = cluster.getChildCount();
+                        return L.divIcon({
+                            html: '<div style="background:#3b82f6; color:white; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:10px; border:2px solid white; box-shadow:0 2px 6px rgba(0,0,0,0.15);">' + count + '</div>',
+                            className: 'marker-cluster',
+                            iconSize: L.point(28, 28)
+                        });
+                    }
+                });
+                withPortal.forEach(function(r) {
+                    var lat = parseFloat(r.target_lat), lng = parseFloat(r.target_lng);
+                    if (isNaN(lat) || isNaN(lng)) return;
+                    var marker = L.circleMarker([lat, lng], { radius: 4, color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.2, weight: 2, opacity: 0.4, dashArray: '3,3' });
+                    marker.bindTooltip('📍 Portal #' + r.survey_id, { permanent: false, direction: 'top' });
+                    self._portalMarkerGroup.addLayer(marker);
+                });
+                this._portalMarkerGroup.addTo(State.map);
+            }
+        }
     },
 
     _clearAllActivityMarkers() {
         if (this._activityMarkerGroup) {
             if (State.map) State.map.removeLayer(this._activityMarkerGroup);
             this._activityMarkerGroup = null;
+        }
+        if (this._portalMarkerGroup) {
+            if (State.map) State.map.removeLayer(this._portalMarkerGroup);
+            this._portalMarkerGroup = null;
         }
     },
 
@@ -18149,13 +18798,28 @@ const LayerManager = {
         document.getElementById('dap-staff-count').textContent = staffSet.size;
         this._renderDeliveryActivityStaff(filtered);
         this._renderDeliveryActivityRecent(filtered);
+        this._lastFilteredActivityRecords = filtered;
         this._showAllActivityMarkers(filtered);
+        this._dapViewLevel = 0;
+        this._dapViewCity = null;
+        this._dapViewMc = null;
+        this._dapViewStaff = null;
+        this._dapDeliveryPage = 1;
+        this._dapMcFilter = '';
+        this._dapDateFrom = '';
+        this._dapDateTo = '';
+        this._dapActiveSid = null;
+        this._dapAutoAdvance = false;
+        this._dapShowPortal = true;
+        this._dapStopAutoTimer();
+        this._syncDapViewMode();
         var countEl = document.getElementById('dap-count');
         if (countEl) countEl.textContent = filtered.length + ' records';
     },
 
     _startDeliveryActivityTimer() {
         this._stopDeliveryActivityTimer();
+        if (this._deliveryActivityMonth !== window.ACTIVE_BILLING_MONTH) return;
         var self = this;
         this._deliveryActivityTimer = setInterval(function() { if (self._deliveryActivityOpen) self._fetchDeliveryActivityData(true); }, 60000);
         this._deliveryActivityTickTimer = setInterval(function() { self._updateLastUpdated(); }, 1000);
@@ -18218,6 +18882,24 @@ const LayerManager = {
         this._fetchAndRenderDeliveryLog(this._deliveryLogPage);
     },
 
+    async _populateDlMonthDropdown() {
+        const sel = document.getElementById('dl-month');
+        if (!sel) return;
+        const months = await window._fetchAvailableMonths();
+        const currentVal = this._deliveryLogMonth || window.ACTIVE_BILLING_MONTH || '';
+        sel.innerHTML = months.map(m =>
+            `<option value="${m}" ${m === currentVal ? 'selected' : ''}>${m}</option>`
+        ).join('');
+    },
+
+    async _deliveryLogMonthChange() {
+        const sel = document.getElementById('dl-month');
+        if (!sel) return;
+        this._deliveryLogMonth = sel.value;
+        this._deliveryLogSelected.clear();
+        this._fetchAndRenderDeliveryLog();
+    },
+
     _buildDeliveryLogActionBar() {
         var c = this._deliveryLogSelected.size;
         if (c === 0) return '';
@@ -18243,7 +18925,7 @@ const LayerManager = {
                 var { error } = await window._supabase.from('delivery_log')
                     .delete()
                     .in('survey_id', ids)
-                    .eq('bill_month', window.ACTIVE_BILLING_MONTH);
+                    .eq('bill_month', self._deliveryLogMonth);
                 if (error) throw error;
 
                 // Clear from delivery cache
@@ -18293,6 +18975,33 @@ const LayerManager = {
             if (typeof onConfirm === 'function') onConfirm();
         };
     }
+};
+
+window._availableMonthsCache = null;
+window._fetchAvailableMonths = async function() {
+    if (window._availableMonthsCache) return window._availableMonthsCache;
+    if (!window._supabase) return [window.ACTIVE_BILLING_MONTH || ''];
+    const months = new Set();
+    let from = 0, step = 1000;
+    while (true) {
+        const { data } = await window._supabase.from('delivery_log').select('bill_month').range(from, from + step - 1);
+        if (!data || data.length === 0) break;
+        data.forEach(d => { if (d.bill_month) months.add(d.bill_month); });
+        from += step;
+    }
+    from = 0;
+    while (true) {
+        const { data } = await window._supabase.from('verified_houses').select('billing_month').range(from, from + step - 1);
+        if (!data || data.length === 0) break;
+        data.forEach(d => { if (d.billing_month) months.add(d.billing_month); });
+        from += step;
+    }
+    const sorted = [...months].sort().reverse();
+    if (window.ACTIVE_BILLING_MONTH && !sorted.includes(window.ACTIVE_BILLING_MONTH)) {
+        sorted.unshift(window.ACTIVE_BILLING_MONTH);
+    }
+    window._availableMonthsCache = sorted;
+    return sorted;
 };
 
     // Attach Gallery Events
@@ -23251,7 +23960,11 @@ const MapNavigator = {
                 }
                 // Also fly to the marker on map
                 if (record[1] && record[2] && window.State && State.map) {
-                    State.map.flyTo([record[1], record[2]], 19, { padding: [50, 50], duration: 0.4 });
+                    State.map.flyTo([record[1], record[2]], 18, { padding: [50, 50], duration: 0.4 });
+                }
+                // Show delivery markers + permanent tooltip if DAP is active
+                if (window.LayerManager && LayerManager._dapNavigatorActive && typeof LayerManager.showDeliveryOnMap === 'function') {
+                    LayerManager.showDeliveryOnMap(sid, { showPortal: LayerManager._dapShowPortal !== false, useSimpleTooltip: true, noFly: true });
                 }
             }
         }
@@ -23800,8 +24513,10 @@ window.StaffPerformanceModal = {
     _cachedRecords: null,
     _cachedMonth: null,
     _isLoading: false,
+    _selectedMonth: '',
     _selectedCity: 'all',
     _cityOpts: [],
+    _monthOpts: [],
     _expandedCity: null,
 
     _fmt(d) { return d.toISOString().split('T')[0]; },
@@ -23873,6 +24588,26 @@ window.StaffPerformanceModal = {
         this._cityOpts = [...cities].sort();
     },
 
+    async _loadMonthOptions() {
+        this._monthOpts = (await window._fetchAvailableMonths()) || [window.ACTIVE_BILLING_MONTH || ''];
+        this._syncMonthDropdown();
+    },
+
+    _syncMonthDropdown() {
+        const sel = document.getElementById('spm-month-select');
+        if (!sel) return;
+        const currentVal = sel.value || this._selectedMonth;
+        sel.innerHTML = this._monthOpts.map(m =>
+            `<option value="${m}" ${m === currentVal ? 'selected' : ''}>${m}</option>`
+        ).join('');
+    },
+
+    _applyMonthFilter() {
+        const sel = document.getElementById('spm-month-select');
+        if (sel) this._selectedMonth = sel.value;
+        this._refreshData(true);
+    },
+
     _staffName(email, staff_name) {
         if (staff_name) return staff_name;
         if (!email) return 'Unknown';
@@ -23882,9 +24617,9 @@ window.StaffPerformanceModal = {
 
     // ─── Fetch full month cache once, then filter in-memory ───
     async _ensureCache(force) {
-        if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
-        if (!force && this._cachedMonth === window.ACTIVE_BILLING_MONTH && this._cachedRecords) return;
-        const billMonth = window.ACTIVE_BILLING_MONTH;
+        if (!window._supabase || !this._selectedMonth) return;
+        if (!force && this._cachedMonth === this._selectedMonth && this._cachedRecords) return;
+        const billMonth = this._selectedMonth;
         const allData = [];
         let from = 0, step = 1000;
         while (true) {
@@ -23976,11 +24711,13 @@ window.StaffPerformanceModal = {
         this._startDate = this._fmt(today);
         this._endDate = this._fmt(today);
         this._selectedStaff = 'all';
+        this._selectedMonth = window.ACTIVE_BILLING_MONTH || '';
         this._selectedCity = 'all';
         this._activeTab = 'delivery';
         this._buildSidToLoc();
         this._loadStaff();
         this._renderOverlay();
+        await this._loadMonthOptions();
         await this._refreshData();
     },
 
@@ -24119,6 +24856,9 @@ window.StaffPerformanceModal = {
                     <input type="date" id="spm-start-date" value="${this._startDate}" onchange="StaffPerformanceModal._applyDateFilter()" style="padding:4px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; outline:none;">
                     <span style="color:#94a3b8; font-size:12px;">→</span>
                     <input type="date" id="spm-end-date" value="${this._endDate}" onchange="StaffPerformanceModal._applyDateFilter()" style="padding:4px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; outline:none;">
+                    <select id="spm-month-select" onchange="StaffPerformanceModal._applyMonthFilter()" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; outline:none; max-width:130px;">
+                        <option value="${this._selectedMonth}">${this._selectedMonth}</option>
+                    </select>
                     ${isMc ? '' : `
                     <select id="spm-staff-select" onchange="StaffPerformanceModal._applyStaffFilter()" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; outline:none; max-width:200px;">
                         <option value="all">All Staff</option>
@@ -24147,6 +24887,7 @@ window.StaffPerformanceModal = {
                 ${this._isLoading ? this._renderLoading() : (isMc ? this._renderMcContent() : (!data ? this._renderEmpty(isDelivery) : (isDelivery ? this._renderDeliveryContent(data) : this._renderSurveyContent(data))))}
             </div>`;
         body.innerHTML = html;
+        this._syncMonthDropdown();
     },
 
     _renderLoading() {
@@ -24894,7 +25635,7 @@ window.StaffPerformanceModal = {
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.setAttribute('href', URL.createObjectURL(blob));
-            link.setAttribute('download', `StaffPerformance_MCUC_Overall.csv`);
+            link.setAttribute('download', `StaffPerformance_MCUC_${this._selectedMonth}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
