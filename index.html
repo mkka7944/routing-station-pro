@@ -9553,7 +9553,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.18.1202</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.18.1346</span>
             </div>
         </div>
         
@@ -11086,7 +11086,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.18.1202";
+window.DATA_VERSION = "v2026.07.18.1346";
 window.DATA_CHUNKS_COUNT = 12;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -17706,6 +17706,8 @@ const LayerManager = {
     _dapMcFilter: '',
     _dapDateFrom: '',
     _dapDateTo: '',
+    _dapSummaryDateFrom: '',
+    _dapSummaryDateTo: '',
     _dapActiveSid: null,
     _dapAutoAdvance: false,
     _dapAutoInterval: 3,
@@ -17818,6 +17820,15 @@ const LayerManager = {
                     '</select>' +
                     '<button onclick="LayerManager._fetchDeliveryActivityData(false)" style="padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Refresh data">' +
                         '<span class="material-icons-round" id="dap-refresh-icon" style="font-size:16px;">refresh</span>' +
+                    '</button>' +
+                '</div>' +
+                '<div style="display:flex; gap:6px; margin-bottom:10px; align-items:center;">' +
+                    '<span style="font-size:10px; font-weight:700; color:#64748b; white-space:nowrap;">Date:</span>' +
+                    '<input id="dap-date-from" type="date" value="' + this._dapSummaryDateFrom + '" onchange="LayerManager._dapSummaryDateFrom=this.value;LayerManager._updateDeliveryActivityPanel(LayerManager._deliveryActivityData)" style="flex:1; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
+                    '<span style="font-size:10px; font-weight:700; color:#94a3b8;">—</span>' +
+                    '<input id="dap-date-to" type="date" value="' + this._dapSummaryDateTo + '" onchange="LayerManager._dapSummaryDateTo=this.value;LayerManager._updateDeliveryActivityPanel(LayerManager._deliveryActivityData)" style="flex:1; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
+                    '<button onclick="LayerManager._dapSummaryDateFrom=\'\';LayerManager._dapSummaryDateTo=\'\';document.getElementById(\'dap-date-from\').value=\'\';document.getElementById(\'dap-date-to\').value=\'\';LayerManager._updateDeliveryActivityPanel(LayerManager._deliveryActivityData)" style="padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Clear date filter">' +
+                        '<span class="material-icons-round" style="font-size:16px;">clear</span>' +
                     '</button>' +
                 '</div>' +
                 '<div id="dap-summary-sections">' +
@@ -17979,11 +17990,11 @@ const LayerManager = {
                 var mainStep = 1000;
                 var mainHasMore = true;
                 while (mainHasMore) {
-                    var mainPage = await dayFilter(window._supabase.from('delivery_log')
+                    var mainPage = await window._supabase.from('delivery_log')
                         .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
                         .eq('bill_month', this._deliveryActivityMonth)
                         .order('delivered_at', { ascending: false })
-                        .range(mainFrom, mainFrom + mainStep - 1));
+                        .range(mainFrom, mainFrom + mainStep - 1);
                     var mainPageData = mainPage.data || [];
                     if (!this._deliveryActivityData) {
                         this._deliveryActivityData = mainPageData;
@@ -18046,6 +18057,16 @@ const LayerManager = {
         var filter = (document.getElementById('dap-filter') && document.getElementById('dap-filter').value) || 'all';
         var filtered = this._applyDeliveryActivityFilter(records, filter);
         filtered = this._applyDeliveryActivityCityFilter(filtered);
+        // Apply summary date range filter
+        var df = this._dapSummaryDateFrom;
+        var dt = this._dapSummaryDateTo;
+        if (df || dt) {
+            filtered = filtered.filter(function(r) {
+                if (df && r.delivered_at && r.delivered_at < df) return false;
+                if (dt && r.delivered_at && r.delivered_at > dt + 'T23:59:59') return false;
+                return true;
+            });
+        }
         var self = this;
         var deliv = filtered.filter(function(r) { return r.status === 'delivered'; }).length;
         var unsent = filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
@@ -18073,6 +18094,8 @@ const LayerManager = {
         this._dapMcFilter = '';
         this._dapDateFrom = '';
         this._dapDateTo = '';
+        this._dapSummaryDateFrom = '';
+        this._dapSummaryDateTo = '';
         this._dapActiveSid = null;
         this._dapAutoAdvance = false;
         this._dapShowPortal = true;
