@@ -9553,7 +9553,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.18.1346</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.21.1013</span>
             </div>
         </div>
         
@@ -10940,7 +10940,7 @@ async function loadData() {
             fetchJSON(`paid_data.json${vStr}`, 'Payment Data'),
             fetchJSON(`hierarchy.json${vStr}`, 'Locations'),
             fetchJSON(`geo_layers.json${vStr}`, 'Map Layers'),
-            fetchJSON(`zubair_sids.json${vStr}`, 'Zubair SIDs')
+            (async () => { const r = await fetch(`zubair_sids.json${vStr}`); return r.json(); })()
         ]);
 
         const rawData = [].concat(...dataChunks);
@@ -11086,8 +11086,8 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.18.1346";
-window.DATA_CHUNKS_COUNT = 12;
+window.DATA_VERSION = "v2026.07.21.1013";
+window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
 
@@ -17706,8 +17706,6 @@ const LayerManager = {
     _dapMcFilter: '',
     _dapDateFrom: '',
     _dapDateTo: '',
-    _dapSummaryDateFrom: '',
-    _dapSummaryDateTo: '',
     _dapActiveSid: null,
     _dapAutoAdvance: false,
     _dapAutoInterval: 3,
@@ -17731,8 +17729,18 @@ const LayerManager = {
     },
 
     _openDeliveryActivityPanel() {
+        var todayStr = new Date().toISOString().slice(0, 10);
+        this._dapDateFrom = todayStr;
+        this._dapDateTo = todayStr;
         let el = document.getElementById('delivery-activity-panel');
-        if (!el) this._setupDeliveryActivityPanel();
+        if (!el) {
+            this._setupDeliveryActivityPanel();
+        } else {
+            var fe = document.getElementById('dap-date-from');
+            var te = document.getElementById('dap-date-to');
+            if (fe) fe.value = todayStr;
+            if (te) te.value = todayStr;
+        }
         const panel = document.getElementById('delivery-activity-panel');
         panel.style.display = 'flex';
         this._deliveryActivityOpen = true;
@@ -17824,10 +17832,10 @@ const LayerManager = {
                 '</div>' +
                 '<div style="display:flex; gap:6px; margin-bottom:10px; align-items:center;">' +
                     '<span style="font-size:10px; font-weight:700; color:#64748b; white-space:nowrap;">Date:</span>' +
-                    '<input id="dap-date-from" type="date" value="' + this._dapSummaryDateFrom + '" onchange="LayerManager._dapSummaryDateFrom=this.value;LayerManager._updateDeliveryActivityPanel(LayerManager._deliveryActivityData)" style="flex:1; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
+                    '<input id="dap-date-from" type="date" value="' + this._dapDateFrom + '" onchange="LayerManager._dapDateFrom=this.value;LayerManager._updateDeliveryActivityPanel(LayerManager._deliveryActivityData)" style="flex:1; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
                     '<span style="font-size:10px; font-weight:700; color:#94a3b8;">—</span>' +
-                    '<input id="dap-date-to" type="date" value="' + this._dapSummaryDateTo + '" onchange="LayerManager._dapSummaryDateTo=this.value;LayerManager._updateDeliveryActivityPanel(LayerManager._deliveryActivityData)" style="flex:1; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
-                    '<button onclick="LayerManager._dapSummaryDateFrom=\'\';LayerManager._dapSummaryDateTo=\'\';document.getElementById(\'dap-date-from\').value=\'\';document.getElementById(\'dap-date-to\').value=\'\';LayerManager._updateDeliveryActivityPanel(LayerManager._deliveryActivityData)" style="padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Clear date filter">' +
+                    '<input id="dap-date-to" type="date" value="' + this._dapDateTo + '" onchange="LayerManager._dapDateTo=this.value;LayerManager._updateDeliveryActivityPanel(LayerManager._deliveryActivityData)" style="flex:1; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
+                    '<button onclick="LayerManager._dapDateFrom=\'\';LayerManager._dapDateTo=\'\';document.getElementById(\'dap-date-from\').value=\'\';document.getElementById(\'dap-date-to\').value=\'\';LayerManager._updateDeliveryActivityPanel(LayerManager._deliveryActivityData)" style="padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Clear date filter">' +
                         '<span class="material-icons-round" style="font-size:16px;">clear</span>' +
                     '</button>' +
                 '</div>' +
@@ -18058,8 +18066,8 @@ const LayerManager = {
         var filtered = this._applyDeliveryActivityFilter(records, filter);
         filtered = this._applyDeliveryActivityCityFilter(filtered);
         // Apply summary date range filter
-        var df = this._dapSummaryDateFrom;
-        var dt = this._dapSummaryDateTo;
+        var df = this._dapDateFrom;
+        var dt = this._dapDateTo;
         if (df || dt) {
             filtered = filtered.filter(function(r) {
                 if (df && r.delivered_at && r.delivered_at < df) return false;
@@ -18092,10 +18100,6 @@ const LayerManager = {
         this._dapViewStaff = null;
         this._dapDeliveryPage = 1;
         this._dapMcFilter = '';
-        this._dapDateFrom = '';
-        this._dapDateTo = '';
-        this._dapSummaryDateFrom = '';
-        this._dapSummaryDateTo = '';
         this._dapActiveSid = null;
         this._dapAutoAdvance = false;
         this._dapShowPortal = true;
@@ -18850,6 +18854,16 @@ const LayerManager = {
         var filter = (document.getElementById('dap-filter') && document.getElementById('dap-filter').value) || 'all';
         var filtered = this._applyDeliveryActivityFilter(this._deliveryActivityData, filter);
         filtered = this._applyDeliveryActivityCityFilter(filtered);
+        // Apply date range filter
+        var df = this._dapDateFrom;
+        var dt = this._dapDateTo;
+        if (df || dt) {
+            filtered = filtered.filter(function(r) {
+                if (df && r.delivered_at && r.delivered_at < df) return false;
+                if (dt && r.delivered_at && r.delivered_at > dt + 'T23:59:59') return false;
+                return true;
+            });
+        }
         var deliv = filtered.filter(function(r) { return r.status === 'delivered'; }).length;
         var unsent = filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
         var staffSet = new Set(filtered.map(function(r) { return r.staff_email; }).filter(Boolean));
