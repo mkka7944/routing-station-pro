@@ -9553,7 +9553,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.21.1013</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.23.1542</span>
             </div>
         </div>
         
@@ -9953,6 +9953,9 @@ input[type=number] {
             <button id="btn-cloud-sync-floating" class="routing-tool-btn" onclick="DriveSync.openSyncModal()" title="Sync Offline Images" style="position:fixed; bottom:110px; left:calc(var(--sidebar-w, 320px) + 60px); z-index:10000; width:32px; height:32px; border-radius:50%; min-width:32px; background:#fef3c7; border:1px solid #fcd34d; display:flex; align-items:center; justify-content:center;">
                 <span class="material-icons-round" style="color:#d97706; font-size:18px;">cloud_off</span>
                 <span id="cloud-sync-dot-floating" style="display:none; position:absolute; top:2px; right:2px; width:6px; height:6px; background:#dc2626; border-radius:50%;"></span>
+            </button>
+            <button id="btn-show-corrected" class="routing-tool-btn" onclick="App.toggleCorrectedCoords()" title="Toggle Corrected Coordinates" style="position:fixed; bottom:110px; left:calc(var(--sidebar-w, 320px) + 20px); z-index:10000; width:32px; height:32px; border-radius:50%; min-width:32px; display:flex; align-items:center; justify-content:center;">
+                <span class="material-icons-round" style="font-size:18px;">my_location</span>
             </button>
             <button id="btn-cluster-toggle" class="routing-tool-btn" onclick="App.toggleClustering()" title="Toggle Marker Clustering" style="position:fixed; bottom:70px; left:calc(var(--sidebar-w, 320px) + 20px); z-index:10000; width:32px; height:32px; border-radius:50%; min-width:32px; display:flex; align-items:center; justify-content:center;">
                 <span class="material-icons-round" style="font-size:18px;">hub</span>
@@ -10935,12 +10938,13 @@ async function loadData() {
             dataPromises.push(fetchJSON(`data_part${i}.json${vStr}`, `Survey Records (Part ${i}/${chunkCount})`));
         }
 
-        const [dataChunks, paidData, hierarchyData, geoLayers, zubairData] = await Promise.all([
+        const [dataChunks, paidData, hierarchyData, geoLayers, zubairData, correctedCoords] = await Promise.all([
             Promise.all(dataPromises),
             fetchJSON(`paid_data.json${vStr}`, 'Payment Data'),
             fetchJSON(`hierarchy.json${vStr}`, 'Locations'),
             fetchJSON(`geo_layers.json${vStr}`, 'Map Layers'),
-            (async () => { const r = await fetch(`zubair_sids.json${vStr}`); return r.json(); })()
+            (async () => { const r = await fetch(`zubair_sids.json${vStr}`); return r.json(); })(),
+            (async () => { try { const r = await fetch(`corrected_coords.json${vStr}`); return await r.json(); } catch (e) { return {}; } })()
         ]);
 
         const rawData = [].concat(...dataChunks);
@@ -10985,6 +10989,7 @@ async function loadData() {
         window.HIERARCHY = hierarchyData;
         window.GEO_LAYERS = geoLayers;
         window.ZUBAIR_SIDS = new Set(zubairData.map(String));
+        window.CORRECTED_COORDS = correctedCoords || {};
 
         status.innerText = 'Starting Application...';
         setTimeout(() => {
@@ -11086,7 +11091,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.21.1013";
+window.DATA_VERSION = "v2026.07.23.1542";
 window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -11637,6 +11642,44 @@ const App = {
         }
     },
 
+    _originalCoords: null,
+
+    toggleCorrectedCoords() {
+        const btn = document.getElementById('btn-show-corrected');
+        State.showCorrectedCoords = !State.showCorrectedCoords;
+        if (btn) btn.classList.toggle('active', State.showCorrectedCoords);
+
+        if (!window.CORRECTED_COORDS || Object.keys(window.CORRECTED_COORDS).length === 0) {
+            if (App.showToast) App.showToast('No corrected coordinates available');
+            State.showCorrectedCoords = false;
+            if (btn) btn.classList.remove('active');
+            return;
+        }
+
+        if (!this._originalCoords) {
+            this._originalCoords = {};
+            window.RAW_DATA.forEach(function(r) {
+                if (r && r[0]) App._originalCoords[r[0]] = [r[1], r[2]];
+            });
+        }
+
+        if (State.showCorrectedCoords) {
+            window.RAW_DATA.forEach(function(r) {
+                var c = window.CORRECTED_COORDS[r[0]];
+                if (c) { r[1] = c[0]; r[2] = c[1]; }
+            });
+            if (App.showToast) App.showToast('Showing corrected coordinates');
+        } else {
+            window.RAW_DATA.forEach(function(r) {
+                var o = App._originalCoords[r[0]];
+                if (o) { r[1] = o[0]; r[2] = o[1]; }
+            });
+            if (App.showToast) App.showToast('Showing portal coordinates');
+        }
+
+        App.render();
+    },
+
     setLayer(name) {
         if (!State.layers[name]) return;
         
@@ -11797,15 +11840,18 @@ closeNearbyMarkersPopup() {
         const cs = document.getElementById('btn-cloud-sync-floating');
         const ct = document.getElementById('btn-cluster-toggle');
         const sa = document.getElementById('btn-show-all-markers');
+        const cc = document.getElementById('btn-show-corrected');
 
         if (isMobile) {
-            [cs, ct, sa].forEach(b => { if (b) { b.style.left = '12px'; b.style.width = '44px'; b.style.height = '44px'; b.style.borderRadius = '50%'; } });
+            [cs, ct, sa, cc].forEach(b => { if (b) { b.style.left = '12px'; b.style.width = '44px'; b.style.height = '44px'; b.style.borderRadius = '50%'; } });
+            if (cc) cc.style.bottom = '230px';
             if (cs) cs.style.bottom = '175px';
-            if (ct) ct.style.bottom = '65px';
             if (sa) sa.style.bottom = '120px';
+            if (ct) ct.style.bottom = '65px';
         } else {
             // Desktop - restore original position with sidebar offset
-            [cs, ct, sa].forEach(b => { if (b) { b.style.width = '32px'; b.style.height = '32px'; b.style.borderRadius = '50%'; } });
+            [cs, ct, sa, cc].forEach(b => { if (b) { b.style.width = '32px'; b.style.height = '32px'; b.style.borderRadius = '50%'; } });
+            if (cc) { cc.style.left = 'calc(var(--sidebar-w, 320px) + 20px)'; cc.style.bottom = '110px'; }
             if (ct) { ct.style.left = 'calc(var(--sidebar-w, 320px) + 20px)'; ct.style.bottom = '70px'; }
             if (sa) { sa.style.left = 'calc(var(--sidebar-w, 320px) + 60px)'; sa.style.bottom = '70px'; }
             if (cs) { cs.style.left = 'calc(var(--sidebar-w, 320px) + 60px)'; cs.style.bottom = '110px'; }
