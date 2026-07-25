@@ -3812,6 +3812,12 @@ body {
         flex-shrink: 0;
 }
 
+@media (max-width: 480px) {
+        .list-pagination {
+                padding: 8px 8px;
+        }
+}
+
 .map-nav {
         position: absolute;
         bottom: 32px;
@@ -9553,7 +9559,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.23.1542</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.25.1357</span>
             </div>
         </div>
         
@@ -10184,12 +10190,10 @@ input[type=number] {
         </div>
         <div class="list-pagination">
             <div style="display:flex; gap:4px; align-items:center;">
-                <button onclick="ListView.goFirst()" class="gal-btn" style="background:#f1f5f9; color:var(--text); padding:4px 6px;" title="First"><span class="material-icons-round" style="font-size:16px;">first_page</span></button>
-                <button onclick="ListView.prev()" class="gal-btn" style="background:#f1f5f9; color:var(--text);"><span class="material-icons-round">chevron_left</span></button>
-                <div style="font-weight:700; font-size:11px; white-space:nowrap;">Record <span id="lv-idx">1</span> of <span id="lv-total">0</span></div>
-                <button onclick="ListView.next()" class="gal-btn" style="background:#f1f5f9; color:var(--text);"><span class="material-icons-round">chevron_right</span></button>
-                <button onclick="ListView.goLast()" class="gal-btn" style="background:#f1f5f9; color:var(--text); padding:4px 6px;" title="Last"><span class="material-icons-round" style="font-size:16px;">last_page</span></button>
-                <button onclick="ViewSwitcher.toMap()" class="gal-btn" style="background:var(--primary); color:white; margin-left:8px;" title="Go to Map"><span class="material-icons-round">map</span></button>
+                <button onclick="ListView.prev()" style="width:34px; height:34px; border-radius:8px; background:#f1f5f9; color:var(--text); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="Previous"><span class="material-icons-round" style="font-size:18px;">chevron_left</span></button>
+                <div style="font-weight:700; font-size:11px; white-space:nowrap; padding:0 4px;"><span id="lv-idx">1</span> / <span id="lv-total">0</span></div>
+                <button onclick="ListView.next()" style="width:34px; height:34px; border-radius:8px; background:#f1f5f9; color:var(--text); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="Next"><span class="material-icons-round" style="font-size:18px;">chevron_right</span></button>
+                <button onclick="ViewSwitcher.toMap()" style="width:34px; height:34px; border-radius:8px; background:var(--primary); color:white; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; margin-left:8px;" title="Go to Map"><span class="material-icons-round" style="font-size:18px;">map</span></button>
             </div>
         </div>
     </div>
@@ -11091,7 +11095,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.23.1542";
+window.DATA_VERSION = "v2026.07.25.1357";
 window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -12952,9 +12956,9 @@ const ListView = {
                         </div>
                         <button type="button" id="btn-intel-${r[0]}" 
                                  onclick="event.stopPropagation(); ListView.toggleActionPanel('${r[0]}')" 
-                                 style="flex:1; min-width:0; background:#f59e0b; color:white; border:none; border-radius:10px; height:34px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:pointer; font-weight:800; font-size:10px; box-shadow:0 2px 5px rgba(245, 158, 11, 0.3); transition: all 0.2s; pointer-events:auto !important; position:relative; z-index:1000;">
-                            <span class="material-icons-round" style="font-size:16px;">edit_note</span>
-                            <span>House Intel</span>
+                                 style="background:#e2e8f0; color:#475569; border:none; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:800; font-size:10px; pointer-events:auto !important; position:relative; z-index:1000;"
+                                 title="House Intel">
+                            <span class="material-icons-round" style="font-size:18px;">edit_note</span>
                         </button>
                         <button type="button" id="btn-manual-pin-${r[0]}" 
                                  onclick="event.stopPropagation(); if(window.SpatialRouter) SpatialRouter.startManualPin('${r[0]}', false)" 
@@ -12962,9 +12966,13 @@ const ListView = {
                                 title="View Pin">
                             <span class="material-icons-round" style="font-size:18px;">${(staging && staging.isManualPinned) ? 'location_on' : 'add_location_alt'}</span>
                         </button>
-                        ${window.USER && window.USER.role === 'admin' ? `<button type="button" id="btn-delivery-${r[0]}" title="Quick Mark" disabled style="background:#fef3c7; color:#d97706; border:none; border-radius:10px; width:34px; height:34px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:default; opacity:0.6;">
-                            <span class="material-icons-round" style="font-size:18px;">local_shipping</span>
-                        </button>` : ''}
+                        <button type="button" id="btn-mark-delivered-${r[0]}"
+                                onclick="event.stopPropagation(); DeliveryModule.handleMarkDeliveredClick('${r[0]}')" 
+                                style="flex:1; min-width:0; background:#f1f5f9 linear-gradient(105deg, transparent 20%, rgba(96,165,250,0.3) 30%, transparent 40%); background-size:200% 100%; color:#94a3b8; border:2px dashed rgba(148,163,184,0.4); border-radius:10px; height:34px; display:flex; align-items:center; justify-content:center; gap:4px; cursor:default; font-weight:800; font-size:10px; opacity:0.6; position:relative; z-index:1000; animation:shimmer-sweep 1.8s linear infinite;"
+                                title="Waiting for GPS" disabled>
+                            <span class="material-icons-round" style="font-size:18px;">gps_off</span>
+                            <span>Waiting for GPS</span>
+                        </button>
                     </div>
                     <div id="verifier-info-${r[0]}" style="display:none; align-items:center; gap:4px; font-weight:800; font-size:10px; color:#64748b; margin-top:6px; padding:0 4px; white-space:normal; overflow-wrap:break-word;"></div>
                 </div>
@@ -13103,10 +13111,14 @@ const ListView = {
                             grid-template-columns: repeat(2, 1fr);
                         }
                     }
+                    @keyframes shimmer-sweep {
+                        0%   { background-position: 100% 0; }
+                        100% { background-position: -100% 0; }
+                    }
                 </style>
-                <div class="card-gallery responsive-gallery" id="gal-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}">
+                <div class="card-gallery responsive-gallery" id="gal-${sidStr}">
                     ${r[9].map(url => `<img src="${url}" class="gallery-item" onclick="Gallery.open('${url}', '${r[0]}')">`).join('')}
-                    <div id="synced-gallery-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}" style="display:contents;"></div>
+                    <div id="synced-gallery-${sidStr}" style="display:contents;"></div>
                 </div>
 
                 <div class="sync-station" style="margin-top:8px;">
@@ -13115,25 +13127,25 @@ const ListView = {
                             <span class="material-icons-round" style="font-size:16px; color:#4285f4; flex-shrink:0;">account_circle</span>
                             <select id="drive-email" style="border:none; background:transparent; font-weight:850; font-size:11px; color:#1e293b; padding:0; cursor:pointer; outline:none; width:100%;"></select>
                         </div>
-                        <div class="sync-status-badge" id="drive-status-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}" style="margin:0; font-size:9px; font-weight:800; padding:2px 6px;">
+                        <div class="sync-status-badge" id="drive-status-${sidStr}" style="margin:0; font-size:9px; font-weight:800; padding:2px 6px;">
                             ${State.syncedData[String(r[0]).replace(/\.0$/, '').trim()] ? `<span class="material-icons-round" style="font-size:12px; vertical-align:middle;">sync</span> ${State.syncedData[String(r[0]).replace(/\.0$/, '').trim()]} Synced` : 'No Images Synced'}
                         </div>
                     </div>
 
                     <div id="drive-preview" class="sync-preview-strip" style="margin-bottom:4px;"></div>
 
-                    <input type="file" id="drive-input-camera" accept="image/*" capture="environment" multiple style="display:none" onchange="DriveSync.handleFiles(this.files)">
-                    <input type="file" id="drive-input-gallery" accept="image/*" multiple style="display:none" onchange="DriveSync.handleFiles(this.files)">
-                    <input type="file" id="local-cam-input" accept="image/*" capture="environment" style="display:none" onchange="LocalCam.handleCapture(this, '${r[0]}')">
+                    <input type="file" id="drive-input-camera-${r[0]}" accept="image/*" capture="environment" multiple style="display:none" onchange="DriveSync.handleFiles(this.files, '${r[0]}')">
+                    <input type="file" id="drive-input-gallery-${r[0]}" accept="image/*" multiple style="display:none" onchange="DriveSync.handleFiles(this.files, '${r[0]}')">
+                    <input type="file" id="local-cam-input-${r[0]}" accept="image/*" capture="environment" style="display:none" onchange="LocalCam.handleCapture(this, '${r[0]}')">
                     
-                    <div id="offline-warning-${r[0].toString().replace(/[^a-z0-9]/gi, '_')}" style="margin-bottom:8px;"></div>
+                    <div id="offline-warning-${sidStr}" style="margin-bottom:8px;"></div>
                     
                     <div class="sync-action-grid" style="grid-template-columns: repeat(2, 1fr);">
-                        <button id="btn-cam-cloud-${r[0]}" onclick="DeliveryModule.handleCloudClick('${r[0]}', 'drive-input-camera')" class="sync-action-btn camera" style="background:linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color:white; border:3px solid #b45309; box-shadow:0 4px 12px rgba(180,83,9,0.3); font-weight:900; font-size:13px;">
-                            <span class="material-icons-round" style="font-size:20px;">photo_camera</span> Direct Cloud
+                        <button id="btn-cam-cloud-${r[0]}" onclick="DriveSync.handleCloudClick('${r[0]}')" class="sync-action-btn camera" style="background:linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color:white; border:3px solid #b45309; box-shadow:0 4px 12px rgba(180,83,9,0.3); font-weight:900; font-size:11px;">
+                            <span class="material-icons-round" style="font-size:18px;">photo_camera</span> Cloud
                         </button>
-                        <button id="btn-save-phone-${r[0]}" onclick="DeliveryModule.handleCloudClick('${r[0]}', 'local-cam-input')" class="sync-action-btn" style="background:#e0e7ff; color:#4338ca; border:1px solid #c7d2fe; font-weight:700;">
-                            <span class="material-icons-round" style="font-size:16px;">camera_enhance</span> Save to Phone
+                        <button id="btn-save-phone-${r[0]}" onclick="LocalCam.handlePhoneClick('${r[0]}')" class="sync-action-btn" style="background:#e0e7ff; color:#4338ca; border:1px solid #c7d2fe; font-weight:700; font-size:11px;">
+                            <span class="material-icons-round" style="font-size:16px;">camera_enhance</span> Phone
                         </button>
                     </div>
                 </div>
@@ -13321,49 +13333,74 @@ const ListView = {
         var nameSuffix = staffName ? ' by ' + staffName : '';
         this._updateBadgeOnly(badge, status, nameSuffix);
 
-        const btn = document.getElementById(`btn-delivery-${sid}`);
-        if (!btn) {
-            this._setDeliveryActionButtons(sid, status === 'delivered' || status === 'unsent');
-            return;
-        }
-
-        if (status === 'delivered') {
-            btn.style.background = '#dcfce7';
-            btn.style.color = '#15803d';
-            btn.style.border = 'none';
-            btn.title = "Delivered";
-            btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">check_circle</span>`;
-            btn.disabled = true;
-            btn.style.opacity = '1';
-            this._setDeliveryActionButtons(sid, true);
-        } else if (status === 'unsent') {
-            btn.style.background = '#fee2e2';
-            btn.style.color = '#b91c1c';
-            btn.style.border = 'none';
-            btn.title = "Flagged Unsent";
-            btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">location_off</span>`;
-            btn.disabled = true;
-            btn.style.opacity = '1';
-            this._setDeliveryActionButtons(sid, true);
-        } else {
-            btn.style.background = '#fef3c7';
-            btn.style.color = '#d97706';
-            btn.style.border = 'none';
-            btn.title = "Quick Mark";
-            btn.innerHTML = `<span class="material-icons-round" style="font-size:18px;">local_shipping</span>`;
-            btn.disabled = false;
-            btn.style.opacity = '1';
-            btn.style.cursor = 'pointer';
-            btn.onclick = function(e) { e.stopPropagation(); ListView.quickMarkDelivery(sid); };
-            this._setDeliveryActionButtons(sid, false);
+        // Update Mark Delivered toolbar button
+        var markBtn = document.getElementById('btn-mark-delivered-' + sid);
+        if (markBtn) {
+            if (status === 'delivered') {
+                markBtn.disabled = true;
+                markBtn.style.opacity = '1';
+                markBtn.style.pointerEvents = 'none';
+                markBtn.style.color = 'white';
+                markBtn.style.cursor = 'default';
+                markBtn.style.border = '2px solid #16a34a';
+                markBtn.style.background = '#16a34a linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.3) 30%, transparent 40%)';
+                markBtn.style.backgroundSize = '200% 100%';
+                markBtn.style.animation = 'shimmer-sweep 1.8s linear infinite';
+                markBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">local_shipping</span> <span>Delivered</span>';
+                markBtn.title = 'Delivered';
+                markBtn.dataset.deliveryDone = 'true';
+            } else if (status === 'unsent') {
+                markBtn.disabled = true;
+                markBtn.style.opacity = '1';
+                markBtn.style.pointerEvents = 'none';
+                markBtn.style.color = 'white';
+                markBtn.style.cursor = 'default';
+                markBtn.style.border = '2px solid #f97316';
+                markBtn.style.background = '#f97316 linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.3) 30%, transparent 40%)';
+                markBtn.style.backgroundSize = '200% 100%';
+                markBtn.style.animation = 'shimmer-sweep 1.8s linear infinite';
+                markBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">location_off</span> <span>Unsent</span>';
+                markBtn.title = 'Unsent';
+                markBtn.dataset.deliveryDone = 'true';
+            } else {
+                delete markBtn.dataset.deliveryDone;
+                var gpsOk = window.DeliveryModule && DeliveryModule.currentGPS && !window._gpsTimeout;
+                markBtn.disabled = !gpsOk;
+                if (gpsOk) {
+                    markBtn.style.opacity = '1';
+                    markBtn.style.pointerEvents = 'auto';
+                    markBtn.style.cursor = 'pointer';
+                    markBtn.style.color = '#3b82f6';
+                    markBtn.style.border = '2px solid #3b82f6';
+                    markBtn.style.background = '#eff6ff linear-gradient(105deg, transparent 20%, rgba(59,130,246,0.2) 30%, transparent 40%)';
+                    markBtn.style.backgroundSize = '200% 100%';
+                    markBtn.style.animation = 'shimmer-sweep 1.8s linear infinite';
+                    markBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">gps_fixed</span> <span>Mark Delivered</span>';
+                    markBtn.title = 'Mark Delivered';
+                } else {
+                    markBtn.style.opacity = '0.6';
+                    markBtn.style.pointerEvents = 'none';
+                    markBtn.style.cursor = 'default';
+                    markBtn.style.color = '#94a3b8';
+                    markBtn.style.border = '2px dashed rgba(148,163,184,0.4)';
+                    markBtn.style.background = '#f1f5f9 linear-gradient(105deg, transparent 20%, rgba(96,165,250,0.3) 30%, transparent 40%)';
+                    markBtn.style.backgroundSize = '200% 100%';
+                    markBtn.style.animation = 'shimmer-sweep 1.8s linear infinite';
+                    markBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">gps_off</span> <span>Waiting for GPS</span>';
+                    markBtn.title = 'Waiting for GPS';
+                }
+            }
         }
     },
 
     _setDeliveryActionButtons(sid, disabled) {
         var cam = document.getElementById('btn-cam-cloud-' + sid);
         var phone = document.getElementById('btn-save-phone-' + sid);
-        if (cam) { cam.disabled = disabled; cam.style.opacity = disabled ? '0.5' : '1'; cam.style.pointerEvents = disabled ? 'none' : 'auto'; }
-        if (phone) { phone.disabled = disabled; phone.style.opacity = disabled ? '0.5' : '1'; phone.style.pointerEvents = disabled ? 'none' : 'auto'; }
+        var apply = function(el, d) {
+            if (el) { el.disabled = d; el.style.opacity = d ? '0.5' : '1'; el.style.pointerEvents = d ? 'none' : 'auto'; }
+        };
+        apply(cam, disabled);
+        apply(phone, disabled);
     },
 
     quickMarkDelivery(sid) {
@@ -13794,6 +13831,78 @@ const ListView = {
     },
 
     // ─────────────── GPS Strip UI ────────────────────
+    _updateDeliveryButtonState(sid) {
+        if (window._gpsTimeout) {
+            this._setDeliveryActionButtons(sid, true);
+            return;
+        }
+        var markBtn = document.getElementById('btn-mark-delivered-' + sid);
+        if (!markBtn) return;
+        if (markBtn.dataset.deliveryDone) return;
+        var gpsOk = window.DeliveryModule && DeliveryModule.currentGPS;
+        if (gpsOk) {
+            markBtn.disabled = false;
+            markBtn.style.opacity = '1';
+            markBtn.style.pointerEvents = 'auto';
+            markBtn.style.cursor = 'pointer';
+            markBtn.style.color = '#3b82f6';
+            markBtn.style.border = '2px solid #3b82f6';
+            markBtn.style.background = '#eff6ff linear-gradient(105deg, transparent 20%, rgba(59,130,246,0.2) 30%, transparent 40%)';
+            markBtn.style.backgroundSize = '200% 100%';
+            markBtn.style.animation = 'shimmer-sweep 1.8s linear infinite';
+            markBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">gps_fixed</span> <span>Mark Delivered</span>';
+            markBtn.title = 'Mark Delivered';
+        } else {
+            markBtn.disabled = true;
+            markBtn.style.opacity = '0.6';
+            markBtn.style.pointerEvents = 'none';
+            markBtn.style.cursor = 'default';
+            markBtn.style.color = '#94a3b8';
+            markBtn.style.border = '2px dashed rgba(148,163,184,0.4)';
+            markBtn.style.background = '#f1f5f9 linear-gradient(105deg, transparent 20%, rgba(96,165,250,0.3) 30%, transparent 40%)';
+            markBtn.style.backgroundSize = '200% 100%';
+            markBtn.style.animation = 'shimmer-sweep 1.8s linear infinite';
+            markBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">gps_off</span> <span>Waiting for GPS</span>';
+            markBtn.title = 'Waiting for GPS';
+        }
+    },
+
+    _showGpsTimeout() {
+        window._gpsTimeout = true;
+        const r = State.filtered[State.currentIdx];
+        if (!r) return;
+        const sidStr = String(r[0]);
+        const strip = document.getElementById('delivery-gps-strip-' + sidStr);
+        if (!strip) return;
+        strip.style.justifyContent = 'center';
+        strip.innerHTML = `
+            <div style="text-align:center; padding:12px;">
+                <div style="font-weight:700; color:#dc2626; margin-bottom:8px;">GPS not available</div>
+                <div style="font-size:13px; color:#64748b; margin-bottom:12px;">Turn on location services and reload the app</div>
+                <button onclick="window.location.reload()" style="padding:10px 20px; background:#3b82f6; color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px;">
+                    <span class="material-icons-round" style="font-size:16px; vertical-align:middle;">refresh</span> Reload App
+                </button>
+            </div>
+        `;
+        // Disable all action buttons for this card
+        this._setDeliveryActionButtons(r[0], true);
+        // Update toolbar Mark Delivered button to GPS timeout state
+        var markBtn = document.getElementById('btn-mark-delivered-' + r[0]);
+        if (markBtn && !markBtn.dataset.deliveryDone) {
+            markBtn.disabled = true;
+            markBtn.style.opacity = '0.6';
+            markBtn.style.pointerEvents = 'none';
+            markBtn.style.cursor = 'default';
+            markBtn.style.color = '#94a3b8';
+            markBtn.style.border = '2px dashed rgba(148,163,184,0.4)';
+            markBtn.style.background = '#f1f5f9 linear-gradient(105deg, transparent 20%, rgba(96,165,250,0.3) 30%, transparent 40%)';
+            markBtn.style.backgroundSize = '200% 100%';
+            markBtn.style.animation = 'shimmer-sweep 1.8s linear infinite';
+            markBtn.innerHTML = '<span class="material-icons-round" style="font-size:16px;">gps_off</span> <span>Waiting for GPS</span>';
+            markBtn.title = 'Waiting for GPS';
+        }
+    },
+
     _updateGPSStripUI(state) {
         const r = State.filtered[State.currentIdx];
         if (!r) return;
@@ -13804,6 +13913,7 @@ const ListView = {
         if (state === 'no-gps' || state === 'error') {
             strip.style.justifyContent = 'center';
             strip.innerHTML = `<span style="color:#94a3b8;">📍 GPS unavailable</span>`;
+            this._updateDeliveryButtonState(r[0]);
             return;
         }
 
@@ -13858,6 +13968,9 @@ const ListView = {
             : '';
 
         strip.innerHTML = accuracyBadge + staleBadge + distanceBadge;
+
+        // Enable Mark Delivered when GPS is ready (if not already delivered)
+        this._updateDeliveryButtonState(r[0]);
     }
 };
 
@@ -14361,59 +14474,52 @@ const Gallery = {
 // LocalCam
 
 const LocalCam = {
-        async handleCapture(input, surveyId) {
-            if (input.files && input.files[0]) {
-                const file = input.files[0];
-                
-                try {
-                    // Use DriveSync's compressor for consistency (WebP < 300KB)
-                    const compressedFile = await DriveSync.compressImage(file);
-                    
-                    // Create Filename with readable timestamp (Pakistan time)
-                    var now = new Date();
-                    var pkt = new Date(now.getTime() + 5 * 60 * 60 * 1000);
-                    var y = pkt.getUTCFullYear();
-                    var mo = String(pkt.getUTCMonth() + 1).padStart(2, '0');
-                    var d = String(pkt.getUTCDate()).padStart(2, '0');
-                    var h = String(pkt.getUTCHours()).padStart(2, '0');
-                    var mi = String(pkt.getUTCMinutes()).padStart(2, '0');
-                    var s = String(pkt.getUTCSeconds()).padStart(2, '0');
-                    var dateStr = y + '-' + mo + '-' + d + '_' + h + '-' + mi + '-' + s;
-                    const filename = surveyId + '_img_' + dateStr + '.webp';
-                    
-                    // Create Blob URL from compressed file
-                    const blobUrl = URL.createObjectURL(compressedFile);
-                    
-                    // Trigger Download
-                    const link = document.createElement('a');
-                    link.href = blobUrl;
-                    link.download = filename;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    
-                    // Cleanup - Increased timeout to 5s for mobile reliability
-                    setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
-                    
-                    if(window.App && App.showToast) App.showToast("Image Saved: " + filename);
-                    else alert("Image Saved: " + filename);
+    handlePhoneClick(sid) {
+        var input = document.getElementById('local-cam-input-' + sid);
+        if (input) input.click();
+    },
 
-                    // Record delivery in Supabase (no GDrive file ID for local saves)
-                    if (window.DeliveryModule) {
-                        var _s = window._pendingDeliveryStatus || 'delivered';
-                        DeliveryModule.logDelivery(surveyId, null, _s);
-                    }
-                    
-                } catch (e) {
-                    console.error("Compression failed", e);
-                    alert("Error saving image: " + e.message);
-                }
+    async handleCapture(input, surveyId) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            
+            try {
+                const compressedFile = await DriveSync.compressImage(file);
                 
-                // Reset input
-                input.value = '';
+                var now = new Date();
+                var pkt = new Date(now.getTime() + 5 * 60 * 60 * 1000);
+                var y = pkt.getUTCFullYear();
+                var mo = String(pkt.getUTCMonth() + 1).padStart(2, '0');
+                var d = String(pkt.getUTCDate()).padStart(2, '0');
+                var h = String(pkt.getUTCHours()).padStart(2, '0');
+                var mi = String(pkt.getUTCMinutes()).padStart(2, '0');
+                var s = String(pkt.getUTCSeconds()).padStart(2, '0');
+                var dateStr = y + '-' + mo + '-' + d + '_' + h + '-' + mi + '-' + s;
+                const filename = surveyId + '_img_' + dateStr + '.webp';
+                
+                const blobUrl = URL.createObjectURL(compressedFile);
+                
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+                
+                if(window.App && App.showToast) App.showToast("Image Saved: " + filename);
+                else alert("Image Saved: " + filename);
+
+            } catch (e) {
+                console.error("Compression failed", e);
+                alert("Error saving image: " + e.message);
             }
+            
+            input.value = '';
         }
-    };
+    }
+};
 
 
 
@@ -15601,9 +15707,13 @@ const DriveSync = {
     // Legacy compatibility: ensure background calls don't crash
     updateHub() { this.updateStatus(State.filtered[State.currentIdx][0]); },
 
-    async handleFiles(fileList) {
-        // Replaced by batch-safe version above
-        const currentSid = State.filtered && State.filtered[State.currentIdx] ? State.filtered[State.currentIdx][0] : null;
+    handleCloudClick(sid) {
+        var input = document.getElementById('drive-input-camera-' + sid);
+        if (input) input.click();
+    },
+
+    async handleFiles(fileList, sid) {
+        var currentSid = sid || (State.filtered && State.filtered[State.currentIdx] ? State.filtered[State.currentIdx][0] : null);
         if (currentSid) this.handleFilesBatch(fileList, currentSid);
     },
 
@@ -15616,14 +15726,6 @@ const DriveSync = {
                 this.setLoadingState(true, `Saving ${i + 1}/${newFiles.length}`);
                 await this.saveOfflineImage(currentSid, newFiles[i], email);
             }
-            
-            if (window.DeliveryModule) {
-                DeliveryModule.logDelivery(currentSid, null, window._pendingDeliveryStatus || 'delivered');
-                if (window.ListView && typeof ListView._updateGPSStripUI === 'function') {
-                    ListView._updateGPSStripUI('ready');
-                }
-            }
-
         } finally {
             this.setLoadingState(false);
             this.loadOfflineQueue();
@@ -24273,20 +24375,39 @@ window.DeliveryModule = {
     // ─── GPS State ────────────────────────────
     _gpsWatchId: null,
     currentGPS: null,
-    _lastGpsUpdateTime: null, // timestamp of last GPS fix from watchPosition
-    _gpsSnapshot: {},         // keyed by survey_id — GPS at click time for logDelivery
-    _gpsStaleOverride: {},    // keyed by survey_id — skip GPS logging when frozen
-    _deliveryCache: null, // Map<sid, status> — batch-loaded via loadDeliveryCache()
+    _lastGpsUpdateTime: null,
+    _gpsSnapshot: {},
+    _deliveryCache: null,
+    _gpsTimeoutId: null,
 
     // ─── GPS ──────────────────────────────────
     startGPS() {
         this.stopGPS();
+        this.currentGPS = null;
+        window._gpsTimeout = false;
+
+        if (this._gpsTimeoutId) {
+            clearTimeout(this._gpsTimeoutId);
+            this._gpsTimeoutId = null;
+        }
+
+        this._gpsTimeoutId = setTimeout(() => {
+            if (!this.currentGPS && window.ListView) {
+                window._gpsTimeout = true;
+                ListView._showGpsTimeout();
+            }
+        }, 45000);
+
         if (!navigator.geolocation) {
             if (window.ListView) ListView._updateGPSStripUI('no-gps');
             return;
         }
         this._gpsWatchId = navigator.geolocation.watchPosition(
             (pos) => {
+                if (this._gpsTimeoutId) {
+                    clearTimeout(this._gpsTimeoutId);
+                    this._gpsTimeoutId = null;
+                }
                 this.currentGPS = {
                     lat: pos.coords.latitude,
                     lng: pos.coords.longitude,
@@ -24306,6 +24427,10 @@ window.DeliveryModule = {
         if (this._gpsWatchId !== null) {
             navigator.geolocation.clearWatch(this._gpsWatchId);
             this._gpsWatchId = null;
+        }
+        if (this._gpsTimeoutId) {
+            clearTimeout(this._gpsTimeoutId);
+            this._gpsTimeoutId = null;
         }
     },
 
@@ -24353,59 +24478,43 @@ window.DeliveryModule = {
     },
 
     // ─── Enforcement ──────────────────────────
-    handleCloudClick(sid, inputId) {
-        console.log(`[DeliveryModule] handleCloudClick triggered for sid: ${sid}, inputId: ${inputId}`);
+    handleMarkDeliveredClick(sid) {
+        console.log(`[DeliveryModule] handleMarkDeliveredClick: ${sid}`);
         const r = State.filtered.find(x => x[0] == sid);
         if (!r) {
-            console.error(`[DeliveryModule] Record not found for sid: ${sid}`);
+            console.error(`[DeliveryModule] Record not found: ${sid}`);
             return;
         }
 
-        // Snapshot GPS at click time for consistent check + logDelivery
-        const sidStr = String(sid);
-        if (this.currentGPS) {
-            this._gpsSnapshot[sidStr] = {
-                lat: this.currentGPS.lat,
-                lng: this.currentGPS.lng,
-                accuracy: this.currentGPS.accuracy
-            };
+        // Strict GPS requirement — no GPS, no delivery
+        if (!this.currentGPS) {
+            var btn = document.getElementById('btn-mark-delivered-' + sid);
+            if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; }
+            return;
         }
+
+        const sidStr = String(sid);
+        this._gpsSnapshot[sidStr] = {
+            lat: this.currentGPS.lat,
+            lng: this.currentGPS.lng,
+            accuracy: this.currentGPS.accuracy
+        };
 
         const targetLat = r[1], targetLng = r[2];
-        const gps = this._gpsSnapshot[sidStr];
         let dist = 0;
-        let hasGps = false;
-
-        if (gps && targetLat && targetLng) {
-            dist = this.haversine(gps.lat, gps.lng, targetLat, targetLng);
-            hasGps = true;
-            console.log(`[DeliveryModule] GPS Active. Target: ${targetLat},${targetLng} | Dist: ${dist}m`);
-        } else {
-            console.log(`[DeliveryModule] No active GPS or target coords. hasGps=false`);
+        if (targetLat && targetLng) {
+            dist = this.haversine(this.currentGPS.lat, this.currentGPS.lng, targetLat, targetLng);
+            console.log(`[DeliveryModule] Distance: ${dist}m`);
         }
 
-        // Stale GPS check — overrides the standard Out-of-Range modal when GPS is frozen
-        if (hasGps && dist > 50 && gps) {
-            const gpsAge = this._lastGpsUpdateTime ? Math.round((Date.now() - this._lastGpsUpdateTime) / 1000) : 0;
-            if (gpsAge > 30 && gps.accuracy > 50) {
-                console.log(`[DeliveryModule] Stale GPS (${gpsAge}s old). Showing stale-GPS modal...`);
-                this.showStaleGpsModal(sid, inputId, Math.round(dist), gpsAge);
-                return;
-            }
-        }
-
-        // Standard 50m check
-        const threshold = 50;
-        if (hasGps && dist > threshold) {
-            console.log(`[DeliveryModule] Out of range! Showing modal...`);
-            this.showUnsentModal(sid, inputId, Math.round(dist));
+        if (dist > 50) {
+            this.showUnsentModal(sid, Math.round(dist));
         } else {
-            console.log(`[DeliveryModule] Within range or fail-open. Logging delivery directly (no photo).`);
             this.logDelivery(sid, null, 'delivered');
         }
     },
 
-    showUnsentModal(sid, inputId, dist) {
+    showUnsentModal(sid, dist) {
         const existing = document.getElementById('unsent-modal');
         if (existing) existing.remove();
 
@@ -24413,7 +24522,7 @@ window.DeliveryModule = {
             <div id="unsent-modal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:99999; display:flex; align-items:center; justify-content:center; padding:20px; font-family:'Inter', sans-serif;">
                 <div style="background:#fff; border-radius:16px; padding:24px; max-width:400px; width:100%; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
                     <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-                        <span class="material-icons-round" style="color:#ef4444; font-size:32px;">location_off</span>
+                        <span class="material-icons-round" style="color:#f97316; font-size:32px;">location_off</span>
                         <h3 style="margin:0; font-size:18px; color:#1e293b;">Out of Range</h3>
                     </div>
                     
@@ -24423,12 +24532,12 @@ window.DeliveryModule = {
                     </p>
                     
                     <p style="margin:0 0 20px 0; font-size:14px; color:#475569; line-height:1.5;">
-                        Do you want to proceed and save this photo anyway? It will be flagged as <strong>Unsent</strong>.
+                        Mark this delivery as <strong>Unsent</strong>?
                     </p>
                     
                     <div style="display:flex; gap:12px; justify-content:flex-end;">
                         <button onclick="document.getElementById('unsent-modal').remove()" style="padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; color:#475569; font-weight:600; cursor:pointer;">Cancel</button>
-                        <button onclick="DeliveryModule.proceedUnsent('${sid}', '${inputId}')" style="padding:10px 16px; border-radius:8px; border:none; background:#ef4444; color:#fff; font-weight:600; cursor:pointer;">Save as Unsent</button>
+                        <button onclick="DeliveryModule.proceedUnsent('${sid}')" style="padding:10px 16px; border-radius:8px; border:none; background:#f97316; color:#fff; font-weight:600; cursor:pointer;">Save as Unsent</button>
                     </div>
                 </div>
             </div>
@@ -24437,54 +24546,10 @@ window.DeliveryModule = {
         document.body.insertAdjacentHTML('beforeend', html);
     },
 
-    proceedUnsent(sid, inputId) {
-        console.log(`[DeliveryModule] proceedUnsent triggered for sid: ${sid}`);
+    proceedUnsent(sid) {
+        console.log(`[DeliveryModule] proceedUnsent: ${sid}`);
         const modal = document.getElementById('unsent-modal');
         if (modal) modal.remove();
-        this.logDelivery(sid, null, 'unsent');
-    },
-
-    showStaleGpsModal(sid, inputId, dist, gpsAge) {
-        const existing = document.getElementById('unsent-modal');
-        if (existing) existing.remove();
-
-        const html = `
-            <div id="unsent-modal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:99999; display:flex; align-items:center; justify-content:center; padding:20px; font-family:'Inter', sans-serif;">
-                <div style="background:#fff; border-radius:16px; padding:24px; max-width:400px; width:100%; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
-                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-                        <span class="material-icons-round" style="color:#f59e0b; font-size:32px;">gps_fixed</span>
-                        <h3 style="margin:0; font-size:18px; color:#1e293b;">GPS Not Updating</h3>
-                    </div>
-                    
-                    <p style="margin:0 0 12px 0; font-size:14px; color:#475569; line-height:1.5;">
-                        Your phone GPS hasn't updated in <strong>${gpsAge} seconds</strong>.
-                        You appear to be <strong>${dist}m</strong> from the target, but your GPS position may not be accurate.
-                    </p>
-                    
-                    <p style="margin:0 0 20px 0; font-size:14px; color:#475569; line-height:1.5;">
-                        Wait for GPS to update, or save this delivery as <strong>Unsent</strong> without GPS data.
-                    </p>
-                    
-                    <div style="display:flex; gap:12px; justify-content:flex-end;">
-                        <button onclick="document.getElementById('unsent-modal').remove()" style="padding:10px 16px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; color:#475569; font-weight:600; cursor:pointer;">Wait for GPS</button>
-                        <button onclick="DeliveryModule.proceedStaleGps('${sid}', '${inputId}')" style="padding:10px 16px; border-radius:8px; border:none; background:#f59e0b; color:#fff; font-weight:600; cursor:pointer;">Save as Unsent</button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.insertAdjacentHTML('beforeend', html);
-    },
-
-    proceedStaleGps(sid, inputId) {
-        console.log(`[DeliveryModule] proceedStaleGps triggered for sid: ${sid}`);
-        const modal = document.getElementById('unsent-modal');
-        if (modal) modal.remove();
-
-        // Skip GPS logging entirely — the phone position can't be trusted
-        this._gpsStaleOverride[String(sid)] = true;
-        delete this._gpsSnapshot[String(sid)];
-
         this.logDelivery(sid, null, 'unsent');
     },
 
@@ -24494,31 +24559,25 @@ window.DeliveryModule = {
         const r = State.filtered.find(x => x[0] == sid);
         if (!r) return;
 
-        const status = explicitStatus || window._pendingDeliveryStatus || 'delivered';
+        const status = explicitStatus || 'delivered';
         const billMonth = window.ACTIVE_BILLING_MONTH || 'Unknown';
 
         let lat = null, lng = null, acc = null, dist = null;
         const sidStr = String(sid);
 
-        // Stale-GPS override — don't log any GPS data
-        if (this._gpsStaleOverride[sidStr]) {
-            delete this._gpsStaleOverride[sidStr];
-        } else {
-            // Use snapshot from handleCloudClick if available, else live GPS
-            let gpsForLog = this._gpsSnapshot[sidStr];
-            if (gpsForLog) {
-                delete this._gpsSnapshot[sidStr];
-            } else if (this.currentGPS) {
-                gpsForLog = this.currentGPS;
-            }
+        let gpsForLog = this._gpsSnapshot[sidStr];
+        if (gpsForLog) {
+            delete this._gpsSnapshot[sidStr];
+        } else if (this.currentGPS) {
+            gpsForLog = this.currentGPS;
+        }
 
-            if (gpsForLog) {
-                lat = gpsForLog.lat;
-                lng = gpsForLog.lng;
-                acc = gpsForLog.accuracy;
-                if (r[1] && r[2]) {
-                    dist = Math.round(this.haversine(lat, lng, r[1], r[2]));
-                }
+        if (gpsForLog) {
+            lat = gpsForLog.lat;
+            lng = gpsForLog.lng;
+            acc = gpsForLog.accuracy;
+            if (r[1] && r[2]) {
+                dist = Math.round(this.haversine(lat, lng, r[1], r[2]));
             }
         }
 
@@ -24556,8 +24615,6 @@ window.DeliveryModule = {
             }
             if (!staffNameForUI) staffNameForUI = email.split('@')[0] || email;
 
-            // Update cache BEFORE UI so updateDeliveryUI can read the staff name
-            const sidStr = String(sid);
             if (this._deliveryCache) {
                 this._deliveryCache.set(sidStr, { status: effectiveForUI, staffName: staffNameForUI });
             }
@@ -24567,14 +24624,12 @@ window.DeliveryModule = {
                 ListView._updateGPSStripUI('ready');
             }
 
-            // Persist to verified_houses so delta sync picks it up after refresh
             try {
                 await window._supabase.from('verified_houses')
                     .upsert({ survey_id: sid, billing_month: billMonth, is_delivered: true, verified_at: new Date().toISOString() },
                         { onConflict: 'survey_id' });
             } catch (_) {}
 
-            // Update in-memory ALL_VERIFIED_DATA
             if (window.ALL_VERIFIED_DATA) {
                 const rec = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
                 if (rec) rec.is_delivered = true;
