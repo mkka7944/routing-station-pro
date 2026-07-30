@@ -8669,9 +8669,10 @@ input[type=number] {
         position: fixed !important;
         top: 20px !important;
         right: 20px !important;
-        width: 380px !important;
-        height: calc(100vh - 40px) !important;
+        width: 380px;
+        height: calc(100vh - 40px);
         max-height: 850px !important;
+        min-width: 320px;
         background: white !important;
         border-radius: 12px !important;
         box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25) !important;
@@ -9516,6 +9517,15 @@ input[type=number] {
         flex-direction: column;
         gap: 8px;
 }
+
+#tab-delivery.active {
+        background: #f97316 !important;
+        color: white !important;
+}
+
+@keyframes delivery-spin {
+        to { transform: rotate(360deg); }
+}
     </style>
 </head>
 <body>
@@ -9559,7 +9569,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.25.1357</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.30.1020</span>
             </div>
         </div>
         
@@ -9595,6 +9605,9 @@ input[type=number] {
                 <div class="filter-content" style="padding: 4px 12px 12px 12px;">
                     <div id="side-route-list" style="display:flex; flex-direction:column; gap:8px;">
                         <div style="text-align:center; padding:12px; color:#94a3b8; font-size:11px;">No saved routes found</div>
+                    </div>
+                    <div id="side-delivery-route-list" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+                        <div style="text-align:center; padding:12px; color:#94a3b8; font-size:11px;">No delivery routes found</div>
                     </div>
                 </div>
             </div>
@@ -9960,6 +9973,9 @@ input[type=number] {
                 <span class="material-icons-round" style="color:#d97706; font-size:18px;">cloud_off</span>
                 <span id="cloud-sync-dot-floating" style="display:none; position:absolute; top:2px; right:2px; width:6px; height:6px; background:#dc2626; border-radius:50%;"></span>
             </button>
+            <button id="btn-undelivered-toggle" class="routing-tool-btn" onclick="App.toggleUndeliveredFilter()" title="Show Undelivered Only" style="position:fixed; bottom:110px; left:calc(var(--sidebar-w, 320px) + 100px); z-index:10000; width:32px; height:32px; border-radius:50%; min-width:32px; display:flex; align-items:center; justify-content:center;">
+                <span class="material-icons-round" style="font-size:18px;">playlist_remove</span>
+            </button>
             <button id="btn-show-corrected" class="routing-tool-btn" onclick="App.toggleCorrectedCoords()" title="Toggle Corrected Coordinates" style="position:fixed; bottom:110px; left:calc(var(--sidebar-w, 320px) + 20px); z-index:10000; width:32px; height:32px; border-radius:50%; min-width:32px; display:flex; align-items:center; justify-content:center;">
                 <span class="material-icons-round" style="font-size:18px;">my_location</span>
             </button>
@@ -10026,6 +10042,7 @@ input[type=number] {
                     <div class="v6-tabs" id="routing-tabs-container" style="border-bottom:3px solid #22c55e; background:#fefce8; flex: 0 0 50px; display:flex; min-height:50px; width:100%;">
                         <button onclick="SpatialRouter.switchTab('editor')" id="tab-editor" class="v6-tab active" style="display:flex; padding:12px 20px; flex:1; background:#22c55e; font-weight:800; color:#fff; border-radius:8px 8px 0 0;">EDITOR</button>
                         <button onclick="SpatialRouter.switchTab('manager')" id="tab-manager" class="v6-tab" style="display:flex; padding:12px 20px; flex:1; background:#e2e8f0; font-weight:700; color:#475569; border-radius:8px 8px 0 0;">ROUTES</button>
+                        <button onclick="SpatialRouter.switchTab('delivery')" id="tab-delivery" class="v6-tab" style="display:flex; padding:12px 20px; flex:1; background:#e2e8f0; font-weight:700; color:#475569; border-radius:8px 8px 0 0;">DELIVERY ROUTE</button>
                     </div>
 
                     <!-- Unified Action Toolbar (Persistent) -->
@@ -10173,6 +10190,52 @@ input[type=number] {
                             </div>
                         </div>
                         <div id="route-manager-list" class="custom-scrollbar" style="flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:8px;"></div>
+                    </div>
+
+                    <!-- DELIVERY ROUTE TAB PANEL -->
+                    <div id="routing-delivery-panel" style="display:none; flex-direction:column; background:#f8fafc; height:100%; width:100%; overflow:hidden;">
+                        <div style="flex:0 0 auto; padding:8px; background:white; border-bottom:1px solid #e2e8f0;">
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-bottom:4px;">
+                                <select id="delivery-month-select" onchange="SpatialRouter.onDeliveryFilterChange()" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; outline:none;">
+                                    <option value="">Select Month...</option>
+                                </select>
+                                <select id="delivery-city-select" onchange="SpatialRouter.onDeliveryCityChange()" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; outline:none;">
+                                    <option value="">Select City...</option>
+                                </select>
+                            </div>
+                            <div style="display:grid; grid-template-columns:1fr; gap:4px; margin-bottom:6px;">
+                                <select id="delivery-mc-select" onchange="SpatialRouter.onDeliveryFilterChange()" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; outline:none;">
+                                    <option value="">Select MC/UC...</option>
+                                </select>
+                            </div>
+                            <div id="delivery-stats" style="display:none; font-size:11px; color:#64748b; padding:4px 0;">
+                                <span id="delivery-marker-count">0 markers</span>
+                                <span style="margin:0 6px;">·</span>
+                                <span id="delivery-composition"></span>
+                            </div>
+                            <div style="display:flex; gap:4px; margin-top:6px;">
+                                <button onclick="SpatialRouter.startDeliveryDraw()" class="routing-tool-btn gated-tool" id="btn-delivery-draw" title="Draw polygon to connect markers" style="color:#f97316;">
+                                    <span class="material-icons-round">crop_square</span>
+                                </button>
+                                <button onclick="SpatialRouter.finishDeliveryDraw()" class="routing-tool-btn" id="btn-delivery-finish" style="display:none; color:#10b981;">
+                                    <span class="material-icons-round">done</span>
+                                </button>
+                                <button onclick="SpatialRouter.cancelDeliveryDraw()" class="routing-tool-btn" id="btn-delivery-cancel" style="display:none; color:#ef4444;">
+                                    <span class="material-icons-round">close</span>
+                                </button>
+                                <button onclick="SpatialRouter.saveDeliveryRoute()" class="routing-tool-btn gated-tool" id="btn-delivery-save" title="Save delivery route to cloud" style="color:#16a34a;">
+                                    <span class="material-icons-round">save</span>
+                                </button>
+                                <button onclick="SpatialRouter.clearDeliverySelection()" class="routing-tool-btn gated-tool" id="btn-delivery-clear" title="Clear delivery selection" style="color:#ef4444;">
+                                    <span class="material-icons-round">layers_clear</span>
+                                </button>
+                                <div style="flex:1;"></div>
+                                <button onclick="SpatialRouter.refreshDeliveryData()" class="routing-tool-btn" id="btn-delivery-refresh" title="Refresh delivery data from server">
+                                    <span class="material-icons-round" style="color:#64748b;">refresh</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="delivery-route-list" class="custom-scrollbar" style="flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:4px;"></div>
                     </div>
                 </div>
             
@@ -11036,6 +11099,10 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 const State = {
     savedRoutes: {"MC-19_Route_1": {"name": "MC-19_Route_1", "sequence": [{"surveyId": "3345938", "lat": 32.0706314, "lng": 72.6524629, "name": "Arshad"}, {"surveyId": "3345941", "lat": 32.0706588, "lng": 72.6524359, "name": "M Abubakar"}, {"surveyId": "3345943", "lat": 32.0706871, "lng": 72.6526133, "name": "Sheikh M Akbar"}, {"surveyId": "3345946", "lat": 32.0707709, "lng": 72.6527936, "name": "M yameen"}, {"surveyId": "3346145", "lat": 32.0707591, "lng": 72.652665, "name": "Qasim"}, {"surveyId": "3346146", "lat": 32.0707407, "lng": 72.6526073, "name": "M Rasheed"}, {"surveyId": "3346147", "lat": 32.0706885, "lng": 72.6527502, "name": "Ahsan"}, {"surveyId": "3347927", "lat": 32.0708823, "lng": 72.652295, "name": "Mistry Sattar"}, {"surveyId": "3347390", "lat": 32.070902, "lng": 72.6522857, "name": "Sah"}, {"surveyId": "3347926", "lat": 32.070931, "lng": 72.6523771, "name": "Baga"}, {"surveyId": "3347925", "lat": 32.0709523, "lng": 72.6523858, "name": "M Imtiaz"}, {"surveyId": "3347929", "lat": 32.070852, "lng": 72.6522248, "name": "Asghar Ali"}, {"surveyId": "3347928", "lat": 32.0708908, "lng": 72.6521914, "name": "Shan Ali"}, {"surveyId": "3347930", "lat": 32.0707314, "lng": 72.6521734, "name": "Tasawar"}, {"surveyId": "3347388", "lat": 32.0712426, "lng": 72.6521187, "name": "Waheed"}, {"surveyId": "3347391", "lat": 32.0714374, "lng": 72.6518701, "name": "Nasreen akhtar"}], "polygon": null, "timestamp": "21/02/2026, 11:22:16 am"}, "MC-19_Route_2": {"name": "MC-19_Route_2", "sequence": [{"surveyId": "3345948", "lat": 32.0708217, "lng": 72.6529338, "name": "Zulfiqar Ali"}, {"surveyId": "3345950", "lat": 32.0708326, "lng": 72.6529122, "name": "Abdul Shakoor"}, {"surveyId": "3345952", "lat": 32.0707276, "lng": 72.6529898, "name": "Shaffique"}, {"surveyId": "3345955", "lat": 32.0706651, "lng": 72.6532228, "name": "M Wahid"}, {"surveyId": "3346136", "lat": 32.0711363, "lng": 72.6531919, "name": "Aftab"}, {"surveyId": "3346137", "lat": 32.0710434, "lng": 72.6530042, "name": "Abid"}, {"surveyId": "3346140", "lat": 32.071018, "lng": 72.6529961, "name": "Asghar"}, {"surveyId": "3346143", "lat": 32.0710614, "lng": 72.653048, "name": "Rana munwar Hussain"}, {"surveyId": "3346144", "lat": 32.0710706, "lng": 72.6530304, "name": "Haji mushraf"}, {"surveyId": "3346148", "lat": 32.0707924, "lng": 72.6530061, "name": "M istkhar"}, {"surveyId": "3346149", "lat": 32.0707217, "lng": 72.6531081, "name": "Waqas"}, {"surveyId": "3346150", "lat": 32.0706768, "lng": 72.6531669, "name": "Zulfqar Ahmed"}, {"surveyId": "3346954", "lat": 32.0712937, "lng": 72.6528286, "name": "Yameen"}, {"surveyId": "3346955", "lat": 32.0710842, "lng": 72.6531524, "name": "Naveed"}, {"surveyId": "3346965", "lat": 32.0712747, "lng": 72.6527331, "name": "Shokat"}, {"surveyId": "3346966", "lat": 32.0710949, "lng": 72.6531694, "name": "Shabeer Ahmed"}, {"surveyId": "3346967", "lat": 32.0710839, "lng": 72.6531812, "name": "M Rafi"}, {"surveyId": "3346968", "lat": 32.0710315, "lng": 72.6532019, "name": "Shoaib"}, {"surveyId": "3346969", "lat": 32.0710008, "lng": 72.6532462, "name": "Tanveer"}, {"surveyId": "3346970", "lat": 32.0710233, "lng": 72.6532339, "name": "Amir"}, {"surveyId": "3347385", "lat": 32.0714542, "lng": 72.6529067, "name": "Irfan Ali"}, {"surveyId": "3347386", "lat": 32.071338, "lng": 72.6528576, "name": "Liaqat"}, {"surveyId": "3347387", "lat": 32.0709329, "lng": 72.6528621, "name": "Zeeshan"}, {"surveyId": "3347923", "lat": 32.0711197, "lng": 72.6526234, "name": "Afzal"}, {"surveyId": "3347924", "lat": 32.0715094, "lng": 72.6526736, "name": "Ghulam Rasool"}], "polygon": [[32.07134594757229, 72.6523232850038], [32.07052771050099, 72.65312794770827], [32.0706595380795, 72.65348736371627], [32.071491411174, 72.65297774400344], [32.0715959629948, 72.65242520894637]], "timestamp": "20/02/2026, 3:02:05 pm"}, "MC-19_Route_3": {"name": "MC-19_Route_3", "sequence": [{"surveyId": "3346128", "lat": 32.0713441, "lng": 72.6532456, "name": "Zahid"}, {"surveyId": "3346131", "lat": 32.0712453, "lng": 72.653227, "name": "M Wakeel"}, {"surveyId": "3346133", "lat": 32.0712055, "lng": 72.6532254, "name": "Kashif Maqbool"}, {"surveyId": "3346138", "lat": 32.0712401, "lng": 72.6532235, "name": "Abdul jabar Khan"}, {"surveyId": "3346141", "lat": 32.0712231, "lng": 72.6532037, "name": "M Ali Tahir"}, {"surveyId": "3346956", "lat": 32.0709764, "lng": 72.6533562, "name": "Rafique"}, {"surveyId": "3346957", "lat": 32.0709529, "lng": 72.6533823, "name": "Saleem"}, {"surveyId": "3346958", "lat": 32.0709407, "lng": 72.653399, "name": "Shahid"}, {"surveyId": "3346959", "lat": 32.0709262, "lng": 72.6534361, "name": "Zahid"}, {"surveyId": "3346960", "lat": 32.0709293, "lng": 72.6534176, "name": "M Boota"}, {"surveyId": "3346961", "lat": 32.0708789, "lng": 72.6535245, "name": "Ramzan"}, {"surveyId": "3346962", "lat": 32.070829, "lng": 72.6534968, "name": "M Akbar"}, {"surveyId": "3346963", "lat": 32.0707511, "lng": 72.6536805, "name": "Mazhar Hayat"}, {"surveyId": "3346964", "lat": 32.0707467, "lng": 72.6537327, "name": "Adeel"}, {"surveyId": "3346971", "lat": 32.0709046, "lng": 72.6534403, "name": "Ameer"}, {"surveyId": "3346972", "lat": 32.070807, "lng": 72.6534535, "name": "Arslan"}, {"surveyId": "3346973", "lat": 32.0708941, "lng": 72.6534105, "name": "Billa"}, {"surveyId": "3346974", "lat": 32.0708138, "lng": 72.6536204, "name": "Ali"}, {"surveyId": "3347381", "lat": 32.0716864, "lng": 72.6530125, "name": "M Iqbal"}, {"surveyId": "3347382", "lat": 32.0716999, "lng": 72.6530217, "name": "Haji Nawaz"}, {"surveyId": "3347383", "lat": 32.0716924, "lng": 72.6530124, "name": "Tayyab"}, {"surveyId": "3347384", "lat": 32.0716974, "lng": 72.653017, "name": "Rana Sajjad"}, {"surveyId": "3347916", "lat": 32.0716446, "lng": 72.6532294, "name": "Mukhtar"}, {"surveyId": "3347917", "lat": 32.0716235, "lng": 72.6532072, "name": "Kashif Nazeer"}, {"surveyId": "3347918", "lat": 32.0716037, "lng": 72.6531947, "name": "Mumtaz Tiwana"}, {"surveyId": "3347919", "lat": 32.0716443, "lng": 72.6529991, "name": "M Anwar"}, {"surveyId": "3347920", "lat": 32.071636, "lng": 72.6530552, "name": "Amjad Hussain"}, {"surveyId": "3347921", "lat": 32.0715979, "lng": 72.6530526, "name": "Shafqat Ali"}, {"surveyId": "3347922", "lat": 32.0715818, "lng": 72.6529173, "name": "Ata Muhammad"}], "polygon": [[32.07159141726595, 72.65274170961013], [32.07130958163572, 72.65314940538039], [32.07068681272717, 72.65349809255233], [32.07067317540434, 72.65388433065047], [32.07126866993976, 72.65334252442946], [32.07147777397117, 72.6532406004869], [32.071741426198756, 72.65328351583113], [32.07182324914928, 72.6529348286592]], "timestamp": "20/02/2026, 3:02:24 pm"}, "MC-19_Route_4": {"name": "MC-19_Route_4", "sequence": [{"surveyId": "3347915", "lat": 32.0719222, "lng": 72.6534634, "name": "Manzoor"}, {"surveyId": "3347380", "lat": 32.0720408, "lng": 72.6533898, "name": "M akhtar"}, {"surveyId": "3347979", "lat": 32.0719171, "lng": 72.6538394, "name": "Ali raza"}, {"surveyId": "3347909", "lat": 32.0718281, "lng": 72.653867, "name": "Amanat Ali"}, {"surveyId": "3347912", "lat": 32.0718661, "lng": 72.6538575, "name": "M Saeed"}, {"surveyId": "3347976", "lat": 32.0718572, "lng": 72.6538541, "name": "M Ali"}, {"surveyId": "3347914", "lat": 32.0718705, "lng": 72.6538535, "name": "Yaseen"}, {"surveyId": "3347977", "lat": 32.07186, "lng": 72.6538543, "name": "Umair Ali"}], "polygon": [[32.07195184998718, 72.65323698520662], [32.0721700438571, 72.65339791774751], [32.07187457286672, 72.65410065650941], [32.07170638126115, 72.65360176563264]], "timestamp": "20/02/2026, 3:28:00 pm"}, "MC-19_Route_5": {"name": "MC-19_Route_5", "sequence": [{"surveyId": "3347906", "lat": 32.0714196, "lng": 72.6540522, "name": "Mueez"}, {"surveyId": "3347907", "lat": 32.0713706, "lng": 72.6540763, "name": "Malik Naveed ul Hassan"}, {"surveyId": "3347970", "lat": 32.0714228, "lng": 72.6542199, "name": "Sheikh tswar"}, {"surveyId": "3347908", "lat": 32.0715047, "lng": 72.6541814, "name": "M aflaq"}, {"surveyId": "3367697", "lat": 32.0715593, "lng": 72.6541869, "name": "Naeem baloch"}, {"surveyId": "3347971", "lat": 32.0715472, "lng": 72.6542099, "name": "Malik gohar Abbas"}, {"surveyId": "3347969", "lat": 32.0715248, "lng": 72.6543518, "name": "Zahid"}, {"surveyId": "3347960", "lat": 32.0715115, "lng": 72.6543546, "name": "Naveed"}, {"surveyId": "3347965", "lat": 32.0714969, "lng": 72.6543902, "name": "Usman"}, {"surveyId": "3347964", "lat": 32.0714664, "lng": 72.6543783, "name": "Usman bhatti"}, {"surveyId": "3366162", "lat": 32.0714954, "lng": 72.6544112, "name": "M faisla Akash"}, {"surveyId": "3366138", "lat": 32.0714459, "lng": 72.6544504, "name": "Manzoor Hussain Shah"}], "polygon": null, "timestamp": "21/02/2026, 12:08:57 pm"}, "MC-1_Route_6": {"name": "MC-1_Route_6", "sequence": [{"surveyId": "3350418", "lat": 32.0978141, "lng": 72.6804316, "name": "Usman"}, {"surveyId": "3350419", "lat": 32.0970542, "lng": 72.6795674, "name": "Shiekh"}, {"surveyId": "3350420", "lat": 32.0978691, "lng": 72.6784948, "name": "Shamshad"}, {"surveyId": "3350421", "lat": 32.0978457, "lng": 72.6785667, "name": "Tayyab"}, {"surveyId": "3350422", "lat": 32.0978691, "lng": 72.6784948, "name": "Muhammad khursheed"}, {"surveyId": "3350423", "lat": 32.0969923, "lng": 72.6796033, "name": "M.ameer"}, {"surveyId": "3350424", "lat": 32.0978691, "lng": 72.6784948, "name": "M.bilal"}, {"surveyId": "3350425", "lat": 32.0978691, "lng": 72.6784948, "name": "Ishtiaq"}, {"surveyId": "3350426", "lat": 32.0969923, "lng": 72.6796033, "name": "Ashraf"}, {"surveyId": "3350427", "lat": 32.0977857, "lng": 72.6786002, "name": "Ali"}, {"surveyId": "3350683", "lat": 32.0971255, "lng": 72.681465, "name": "Waqas"}, {"surveyId": "3350684", "lat": 32.0971795, "lng": 72.6814133, "name": "Sheikh ijaz"}, {"surveyId": "3350685", "lat": 32.0972325, "lng": 72.6813154, "name": "Mirza Anwar"}, {"surveyId": "3350686", "lat": 32.0972164, "lng": 72.6812974, "name": "Arshad iqbal"}, {"surveyId": "3350687", "lat": 32.0972112, "lng": 72.681296, "name": "Asgher"}, {"surveyId": "3350688", "lat": 32.0972277, "lng": 72.6812845, "name": "Sajid"}, {"surveyId": "3350689", "lat": 32.0972118, "lng": 72.6812841, "name": "Muhammad afazl"}, {"surveyId": "3350690", "lat": 32.09726, "lng": 72.6812344, "name": "Abdul wahid"}, {"surveyId": "3350691", "lat": 32.0973171, "lng": 72.6811748, "name": "Muhammad ramzan"}, {"surveyId": "3350692", "lat": 32.0974286, "lng": 72.6810516, "name": "Aman ullah"}, {"surveyId": "3350693", "lat": 32.0969923, "lng": 72.6796033, "name": "M.mahad"}, {"surveyId": "3351508", "lat": 32.0979596, "lng": 72.6808504, "name": "Basheer Ahmed"}, {"surveyId": "3351509", "lat": 32.0979627, "lng": 72.6808695, "name": "Muhammad waqas"}, {"surveyId": "3351510", "lat": 32.0979596, "lng": 72.6808458, "name": "Muhammad nouman"}, {"surveyId": "3351511", "lat": 32.0978325, "lng": 72.6809272, "name": "Shani"}, {"surveyId": "3351512", "lat": 32.0976694, "lng": 72.6810322, "name": "Akbar"}, {"surveyId": "3351513", "lat": 32.0977107, "lng": 72.6810483, "name": "Zahid"}, {"surveyId": "3351514", "lat": 32.0976083, "lng": 72.6809524, "name": "Abdur rehman"}, {"surveyId": "3351787", "lat": 32.0973596, "lng": 72.681539, "name": "Usama zia"}, {"surveyId": "3351788", "lat": 32.0973765, "lng": 72.6814836, "name": "Ali"}, {"surveyId": "3351789", "lat": 32.097447, "lng": 72.6814804, "name": "Ibrar Ahmed"}, {"surveyId": "3351790", "lat": 32.0975159, "lng": 72.6814418, "name": "Muhammad Afzal"}, {"surveyId": "3351896", "lat": 32.0979031, "lng": 72.6812651, "name": "Muhammad ishaaq"}, {"surveyId": "3352155", "lat": 32.0981946, "lng": 72.680905, "name": "Muhammad afzal"}, {"surveyId": "3352156", "lat": 32.098195, "lng": 72.6809259, "name": "Saeed Anwar"}, {"surveyId": "3352157", "lat": 32.0980194, "lng": 72.68108, "name": "Umer hayat"}, {"surveyId": "3352158", "lat": 32.0980272, "lng": 72.6810869, "name": "Malik house"}, {"surveyId": "3352159", "lat": 32.0980264, "lng": 72.681088, "name": "Muhammad Tanveer"}, {"surveyId": "3352160", "lat": 32.0980289, "lng": 72.6810932, "name": "Tanveer"}, {"surveyId": "3352161", "lat": 32.0980248, "lng": 72.6811015, "name": "Mirza"}, {"surveyId": "3352173", "lat": 32.0981901, "lng": 72.6809456, "name": "Abdur rehman"}, {"surveyId": "3352982", "lat": 32.0972964, "lng": 72.6817147, "name": "Toheed"}, {"surveyId": "3352984", "lat": 32.0973103, "lng": 72.6816992, "name": "Liaqat ali"}, {"surveyId": "3352986", "lat": 32.0975225, "lng": 72.6818087, "name": "Bhutta"}, {"surveyId": "3352988", "lat": 32.0975651, "lng": 72.6818972, "name": "Wens house"}, {"surveyId": "3352991", "lat": 32.097811, "lng": 72.682122, "name": "Dream cutting"}, {"surveyId": "3352994", "lat": 32.0980997, "lng": 72.6815285, "name": "Khuram"}, {"surveyId": "3352996", "lat": 32.0976584, "lng": 72.6817647, "name": "Muhammad afzal"}, {"surveyId": "3352998", "lat": 32.097706, "lng": 72.6816971, "name": "Alrehman model school"}, {"surveyId": "3352999", "lat": 32.0977502, "lng": 72.6816243, "name": "Abdullah mujahid"}, {"surveyId": "3353001", "lat": 32.0977367, "lng": 72.6816481, "name": "Naveed javed"}, {"surveyId": "3353004", "lat": 32.0977832, "lng": 72.6815673, "name": "Zeeshan"}, {"surveyId": "3353006", "lat": 32.0977722, "lng": 72.6815898, "name": "Syed Asad raza"}, {"surveyId": "3353009", "lat": 32.0977933, "lng": 72.6815293, "name": "Zafar ali"}, {"surveyId": "3353011", "lat": 32.0977895, "lng": 72.6815756, "name": "Malik atif"}, {"surveyId": "3353931", "lat": 32.0965361, "lng": 72.6813754, "name": "Malik hayat"}, {"surveyId": "3353932", "lat": 32.0965754, "lng": 72.6811845, "name": "Ali dogger"}, {"surveyId": "3353933", "lat": 32.0965644, "lng": 72.6811865, "name": "Maan dogger"}, {"surveyId": "3353935", "lat": 32.0965624, "lng": 72.6811786, "name": "Usman"}, {"surveyId": "3353936", "lat": 32.096603, "lng": 72.6811515, "name": "Shazad asgher"}, {"surveyId": "3353937", "lat": 32.0968565, "lng": 72.6812279, "name": "Abdul Rehman"}, {"surveyId": "3353938", "lat": 32.0968209, "lng": 72.6812576, "name": "Malik hayat"}, {"surveyId": "3353939", "lat": 32.0967266, "lng": 72.6815482, "name": "Zeeshan ali"}, {"surveyId": "3353940", "lat": 32.0967577, "lng": 72.6814454, "name": "Muhammad adnan"}, {"surveyId": "3353941", "lat": 32.0968386, "lng": 72.6813638, "name": "Chaudhary house"}, {"surveyId": "3353942", "lat": 32.0969359, "lng": 72.6813363, "name": "Abdul hameed"}, {"surveyId": "3353943", "lat": 32.0970835, "lng": 72.6814909, "name": "Muhammad awais"}, {"surveyId": "3353944", "lat": 32.0970656, "lng": 72.6814834, "name": "Imtiaz"}, {"surveyId": "3353945", "lat": 32.0971167, "lng": 72.6815561, "name": "Nadeem"}, {"surveyId": "3353946", "lat": 32.0970157, "lng": 72.6816525, "name": "Ali"}], "polygon": [[32.09900846295572, 72.6738739013672], [32.10206222548107, 72.68142700195314], [32.094645767953665, 72.68606185913087], [32.09246434232067, 72.6790237426758]], "timestamp": "21/02/2026, 12:21:32 pm"}},
+    deliveryRoutes: [],
+    deliveryRouteCollapsedGroups: new Set(),
+    deliveryRouteDisplayIndices: new Set(),
+    deliveryRouteLayer: null,
     hideStandardTooltips: false,
     hideZubairSids: true,
     filtered: [],
@@ -11095,7 +11162,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.25.1357";
+window.DATA_VERSION = "v2026.07.30.1020";
 window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -11559,6 +11626,54 @@ const App = {
     toggleLayer() {
         const isRoads = State.activeLayer === 'roads';
         this.setLayer(isRoads ? 'sat' : 'roads');
+    },
+
+    // Undelivered Toggle - Show only records with no delivery_log entry
+    _undeliveredActive: false,
+    _undeliveredSIDs: null,
+
+    async toggleUndeliveredFilter() {
+        const btn = document.getElementById('btn-undelivered-toggle');
+        this._undeliveredActive = !this._undeliveredActive;
+        if (btn) {
+            btn.classList.toggle('active', this._undeliveredActive);
+        }
+        if (!this._undeliveredActive) {
+            State.filtered = [...State.masterFiltered];
+            ListView.render();
+            if (App.showToast) App.showToast('Undelivered filter removed');
+            App.render(null);
+            return;
+        }
+        if (!this._undeliveredSIDs) {
+            if (!window._supabase || !window.ACTIVE_BILLING_MONTH) {
+                if (App.showToast) App.showToast('Delivery data not available');
+                this._undeliveredActive = false;
+                if (btn) btn.classList.remove('active');
+                return;
+            }
+            const allData = [];
+            let from = 0, step = 1000;
+            while (true) {
+                const { data } = await window._supabase
+                    .from('delivery_log')
+                    .select('survey_id')
+                    .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                    .range(from, from + step - 1);
+                if (!data || data.length === 0) break;
+                allData.push(...data);
+                from += step;
+            }
+            this._undeliveredSIDs = new Set(allData.map(d => String(d.survey_id)));
+        }
+        State.filtered = (State.masterFiltered || window.RAW_DATA || []).filter(r => {
+            return !this._undeliveredSIDs.has(String(r[0]));
+        });
+        State.masterFiltered = [...State.filtered];
+        State.currentIdx = 0;
+        ListView.render();
+        App.render(null);
+        if (App.showToast) App.showToast(`Showing ${State.filtered.length} undelivered records`);
     },
 
     // Cluster Toggle - Enable/disable marker clustering
@@ -12952,6 +13067,7 @@ const ListView = {
                                 <div onclick="ListView.sort('id-asc'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Oldest first (ID)</div>
                                 <div onclick="ListView.sort('drive-desc'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Synced Recently</div>
                                 <div onclick="ListView.sort('status-paid'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Paid First</div>
+                                <div onclick="ListView.filterUndelivered(); ListView.toggleSortDropdown(false)" class="lv-sort-item">Undelivered Only</div>
                             </div>
                         </div>
                         <button type="button" id="btn-intel-${r[0]}" 
@@ -13549,6 +13665,13 @@ const ListView = {
         State.currentIdx = 0;
         this.render();
         document.getElementById('lv-sort-dropdown').style.display = 'none';
+    },
+
+    filterUndelivered() {
+        if (window.App && App.toggleUndeliveredFilter) {
+            App._undeliveredActive = false;
+            App.toggleUndeliveredFilter();
+        }
     },
 
     jumpToID(id) {
@@ -19029,8 +19152,6 @@ const LayerManager = {
         this._dapViewStaff = null;
         this._dapDeliveryPage = 1;
         this._dapMcFilter = '';
-        this._dapDateFrom = '';
-        this._dapDateTo = '';
         this._dapActiveSid = null;
         this._dapAutoAdvance = false;
         this._dapShowPortal = true;
@@ -21098,6 +21219,19 @@ const SpatialRouter = {
     collapsedGroups: new Set(),
     verifiedSIDs: new Map(),
 
+    // Delivery Route Tool
+    deliveryEditing: false,
+    deliveryDrawLayer: null,
+    deliveryCaptureIDs: [],
+    deliverySequence: [],
+    deliveryPolygonState: null,
+    deliveryDrawnPolygon: null,
+    deliveryMonth: '',
+    deliveryCity: '',
+    deliveryMc: '',
+    deliveryMarkerLayer: null,
+    _deliveryDrawPoints: [],
+
     init() {
         window.SpatialRouter = this;
         this.initialized = true;
@@ -22205,21 +22339,35 @@ switchTab(tab) {
         this.activeTab = tab;
         const pEditor = document.getElementById('routing-editor-panel');
         const pManager = document.getElementById('routing-manager-panel');
+        const pDelivery = document.getElementById('routing-delivery-panel');
         const tEditor = document.getElementById('tab-editor');
         const tManager = document.getElementById('tab-manager');
+        const tDelivery = document.getElementById('tab-delivery');
         const toolbar = document.getElementById('routing-toolbar-row');
+        const info = document.getElementById('active-routes-info');
 
         if (pEditor) pEditor.style.display = tab === 'editor' ? 'flex' : 'none';
         if (pManager) pManager.style.display = tab === 'manager' ? 'flex' : 'none';
+        if (pDelivery) pDelivery.style.display = tab === 'delivery' ? 'flex' : 'none';
         if (tEditor) tEditor.classList.toggle('active', tab === 'editor');
         if (tManager) tManager.classList.toggle('active', tab === 'manager');
+        if (tDelivery) tDelivery.classList.toggle('active', tab === 'delivery');
         if (toolbar) toolbar.style.display = tab === 'editor' ? 'flex' : 'none';
-
-        const info = document.getElementById('active-routes-info');
         if (info) info.style.display = (tab === 'editor' && this.activeDisplayRoutes.length > 0) ? 'flex' : 'none';
 
         if (tab === 'editor') this.renderRoute();
+        else if (tab === 'delivery') this.populateDeliveryDropdowns();
         else this.renderRouteManager();
+
+        // Cleanup delivery marker layer when switching away
+        if (tab !== 'delivery' && this.deliveryMarkerLayer) {
+            State.map.removeLayer(this.deliveryMarkerLayer);
+            this.deliveryMarkerLayer = null;
+        }
+        // Cancel any active delivery drawing
+        if (tab !== 'delivery' && this.deliveryEditing) {
+            this.cancelDeliveryDraw();
+        }
     },
 
     renderRouteManager() {
@@ -22227,12 +22375,18 @@ switchTab(tab) {
         if (!list) return;
 
         list.innerHTML = '';
-        if (!State.savedRoutes || !State.savedRoutes.length) {
+        const hasSurveyRoutes = State.savedRoutes && State.savedRoutes.length > 0;
+        const hasDeliveryRoutes = State.deliveryRoutes && State.deliveryRoutes.length > 0;
+
+        if (!hasSurveyRoutes && !hasDeliveryRoutes) {
             list.innerHTML = '<div style="padding:20px; text-align:center; color:#94a3b8;">No saved routes found.</div>';
             return;
         }
 
-        // Pre-process and sort routes by Area
+        if (!hasSurveyRoutes) {
+            // Skip survey section, render delivery only below
+        } else {
+            // Pre-process and sort routes by Area
         const routesWithMeta = State.savedRoutes.map((route, originalIdx) => {
             const area = this.getRouteArea(route);
             return { originalIdx, route, area };
@@ -22317,6 +22471,73 @@ switchTab(tab) {
         `;
             list.appendChild(item);
         });
+        } // end else (survey routes)
+
+        // ─── Delivery Routes Subsection ───
+        const dRoutes = State.deliveryRoutes;
+        if (dRoutes && dRoutes.length) {
+            const dSep = document.createElement('div');
+            dSep.style.cssText = 'padding:8px 4px 4px 4px; font-size:9px; font-weight:800; color:#f97316; text-transform:uppercase; letter-spacing:1px; border-top:1px solid #fed7aa; margin-top:12px;';
+            dSep.textContent = '─── Delivery Routes ───';
+            list.appendChild(dSep);
+
+            const dGrouped = {};
+            dRoutes.forEach(r => {
+                const area = this.cleanMCName(r.mc_uc || '');
+                if (!dGrouped[area]) dGrouped[area] = { routes: [], pts: 0 };
+                dGrouped[area].routes.push(r);
+                dGrouped[area].pts += (r.route_data && r.route_data.sequence) ? r.route_data.sequence.length : 0;
+            });
+
+            const dSortedAreas = Object.keys(dGrouped).sort((a, b) => this.naturalCompare(a, b));
+            dSortedAreas.forEach(area => {
+                const grp = dGrouped[area];
+                const month = (grp.routes[0] && grp.routes[0].delivery_month) || '';
+                const isCollapsed = State.deliveryRouteCollapsedGroups.has(area);
+
+                const hdr = document.createElement('div');
+                hdr.style.cssText = 'padding:6px 8px; font-weight:800; font-size:11px; text-transform:uppercase; color:#f97316; background:#fff7ed; border-radius:6px; margin:8px 0 4px 0; letter-spacing:0.5px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;';
+                hdr.onclick = (e) => { e.stopPropagation(); this.toggleDeliveryMCGroup(area); };
+                hdr.innerHTML = `<span>${area} <span style="color:#f97316; font-weight:bold; margin-left:6px; font-size:10px;">(${grp.routes.length} routes, ${grp.pts} pts)</span><span style="font-size:9px; color:#94a3b8; margin-left:6px;">${month}</span></span> <span class="material-icons-round" style="font-size:14px;">${isCollapsed ? 'expand_more' : 'expand_less'}</span>`;
+                list.appendChild(hdr);
+                if (isCollapsed) return;
+
+                grp.routes.forEach((route, idx) => {
+                    const ptCount = (route.route_data && route.route_data.sequence) ? route.route_data.sequence.length : 0;
+                    const comp = route.composition || {};
+                    const displayName = route.route_name || `Delivery Route ${idx + 1}`;
+
+                    const item = document.createElement('div');
+                    item.className = 'v6-card';
+                    item.style.cssText = 'padding:8px;';
+                    item.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:6px; width:100%;" onclick="event.stopPropagation()">
+                        <div class="v6-badge" style="flex:0 0 24px; background:#fff7ed; color:#f97316;">${idx + 1}</div>
+                        <div class="v6-card-body" style="flex:1; min-width:0; padding:0 4px;" onclick="event.stopPropagation()">
+                            <div class="v6-card-title" style="font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#9a3412;" title="${displayName}">${displayName}</div>
+                            <div class="v6-card-sub" style="font-size:9px;">
+                                <span style="color:#f97316; font-weight:bold;">${ptCount} pts</span>
+                                <span style="margin:0 4px;">·</span>
+                                <span style="color:#22c55e;">🟢${comp.delivered || 0}</span>
+                                <span style="margin:0 2px;">·</span>
+                                <span style="color:#94a3b8;">🔴${comp.unsent || 0}</span>
+                                <span style="margin:0 2px;">·</span>
+                                <span style="color:#3b82f6;">🔵${comp.undelivered || 0}</span>
+                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px; margin-left:auto; flex-shrink:0;">
+                            <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryRouteDisplay('${route.id}')" class="v6-action-btn" style="color:#10b981;" title="Show on Map">
+                                <span class="material-icons-round" style="font-size:18px;">visibility</span>
+                            </button>
+                            <button onclick="event.stopPropagation(); SpatialRouter.deleteDeliveryRoute('${route.id}')" class="v6-action-btn" style="color:#ef4444;" title="Delete">
+                                <span class="material-icons-round" style="font-size:18px;">delete</span>
+                            </button>
+                        </div>
+                    </div>`;
+                    list.appendChild(item);
+                });
+            });
+        }
     },
 
     toggleSelectAllRoutes(checked, type = 'export') {
@@ -22868,12 +23089,10 @@ switchTab(tab) {
         const side = document.getElementById('side-route-list');
         if (!side) return;
         side.innerHTML = '';
-        if (!State.savedRoutes || !State.savedRoutes.length) {
-            side.innerHTML = '<div style="text-align:center; padding:12px; color:#94a3b8; font-size:11px;">No saved routes found</div>';
-            return;
-        }
+        const hasSurveyRoutes = State.savedRoutes && State.savedRoutes.length > 0;
 
-        // Pre-process and sort routes by Area
+        if (hasSurveyRoutes) {
+            // Pre-process and sort routes by Area
         const isMapReady = window.SID_MAP instanceof Map;
         const routesWithMeta = State.savedRoutes.map((route, originalIdx) => {
             const area = this.getRouteArea(route);
@@ -22954,6 +23173,11 @@ switchTab(tab) {
             div.onclick = () => { this.toggleSidebarRouteDisplay(originalIdx); };
             side.appendChild(div);
         });
+
+        } // end if hasSurveyRoutes
+
+        // Render delivery routes below
+        this.renderDeliverySidebar();
     },
 
     async ensureRouteData(idx) {
@@ -23981,6 +24205,7 @@ switchTab(tab) {
 
         // Fix: Catch potential errors in loadRoutes to prevent init crash
         this.loadRoutes(null, true).catch(err => console.warn("Initial loadRoutes failed:", err));
+        this.loadDeliveryRoutes().catch(err => console.warn("loadDeliveryRoutes failed:", err));
 
         setInterval(() => this.checkServerHealth(), 120000);
 
@@ -24068,6 +24293,407 @@ switchTab(tab) {
             });
         }
         console.log('SpatialRouter.init complete.');
+    },
+
+    // ─── Delivery Route Tool ──────────────────────────────────────────────
+
+    async loadDeliveryRoutes() {
+        try {
+            const { data, error } = await window._supabase
+                .from('delivery_routes')
+                .select('*')
+                .order('mc_uc', { ascending: true })
+                .order('route_name', { ascending: true });
+            if (error) throw error;
+            State.deliveryRoutes = data || [];
+            this.renderDeliverySidebar();
+            this.renderRouteManager();
+        } catch (e) {
+            console.warn("loadDeliveryRoutes error:", e);
+            State.deliveryRoutes = [];
+        }
+    },
+
+    async populateDeliveryDropdowns() {
+        const citySel = document.getElementById('delivery-city-select');
+        const moSel = document.getElementById('delivery-month-select');
+        if (!citySel || !moSel) return;
+
+        const selectedCity = citySel.value;
+        const cities = [...new Set((window.RAW_DATA || []).map(r => r[11]).filter(Boolean))].sort();
+        citySel.innerHTML = '<option value="">Select City...</option>' + cities.map(c => `<option value="${c}" ${c === selectedCity ? 'selected' : ''}>${c}</option>`).join('');
+
+        const currMonth = moSel.value;
+        const months = await window._fetchAvailableMonths();
+        moSel.innerHTML = '<option value="">Select Month...</option>' + months.map(m => `<option value="${m}" ${m === currMonth ? 'selected' : ''}>${m}</option>`).join('');
+
+        // Populate MC/UC if city already selected (tab switch-back)
+        const mcSel = document.getElementById('delivery-mc-select');
+        if (this.deliveryCity && mcSel) {
+            const selectedMc = mcSel.value || this.deliveryMc;
+            const mcs = [...new Set((window.RAW_DATA || []).filter(r => r[11] === this.deliveryCity).map(r => r[12]).filter(Boolean))].sort();
+            mcSel.innerHTML = '<option value="">Select MC/UC...</option>' + mcs.map(m => `<option value="${m}" ${m === selectedMc ? 'selected' : ''}>${m}</option>`).join('');
+        } else if (mcSel) {
+            mcSel.innerHTML = '<option value="">Select MC/UC...</option>';
+        }
+    },
+
+    onDeliveryCityChange() {
+        const city = this.deliveryCity = document.getElementById('delivery-city-select').value;
+        const mcSel = document.getElementById('delivery-mc-select');
+        if (!mcSel) return;
+
+        // Clear previous markers
+        if (this.deliveryMarkerLayer) State.map.removeLayer(this.deliveryMarkerLayer);
+        this.deliveryMarkerLayer = null;
+        this.deliverySequence = [];
+        this.deliveryMc = '';
+        document.getElementById('delivery-stats').style.display = 'none';
+
+        // Populate MC/UC dropdown for this city
+        if (!city) {
+            mcSel.innerHTML = '<option value="">Select MC/UC...</option>';
+            return;
+        }
+        const mcs = [...new Set((window.RAW_DATA || []).filter(r => r[11] === city).map(r => r[12]).filter(Boolean))].sort();
+        mcSel.innerHTML = '<option value="">Select MC/UC...</option>' + mcs.map(m => `<option value="${m}">${m}</option>`).join('');
+    },
+
+    async onDeliveryFilterChange() {
+        const mc = this.deliveryMc = document.getElementById('delivery-mc-select').value;
+        const month = this.deliveryMonth = document.getElementById('delivery-month-select').value;
+        const city = this.deliveryCity;
+        if (!city || !mc || !month) return;
+
+        // Show spinner
+        const spinner = document.getElementById('delivery-loading');
+        if (spinner) spinner.style.display = 'flex';
+
+        if (this.deliveryMarkerLayer) State.map.removeLayer(this.deliveryMarkerLayer);
+        this.deliveryMarkerLayer = L.layerGroup().addTo(State.map);
+        this.deliverySequence = [];
+
+        const sids = (window.RAW_DATA || []).filter(r => r[11] === city && r[12] === mc).map(r => String(r[0]));
+        if (!sids.length) {
+            if (spinner) spinner.style.display = 'none';
+            return;
+        }
+
+        let delivered = 0, unsent = 0;
+        const markerData = [];
+        const sidChunks = this._chunkArray(sids, 100);
+        for (const chunk of sidChunks) {
+            const { data } = await window._supabase
+                .from('delivery_log')
+                .select('survey_id, status, capture_gps_lat, capture_gps_lng, distance_to_target')
+                .eq('bill_month', month)
+                .in('survey_id', chunk);
+            (data || []).forEach(d => {
+                const status = (d.status === 'unsent' || Number(d.distance_to_target || 0) > 50) ? 'unsent' : 'delivered';
+                const lat = d.capture_gps_lat, lng = d.capture_gps_lng;
+                if (lat && lng) markerData.push({ sid: String(d.survey_id), lat, lng, status });
+                if (status === 'delivered') delivered++;
+                else unsent++;
+            });
+        }
+
+        const deliveredSids = new Set();
+        markerData.forEach(m => {
+            deliveredSids.add(m.sid);
+            const color = m.status === 'delivered' ? '#22c55e' : '#94a3b8';
+            L.circleMarker([m.lat, m.lng], { radius: 5, color, fillOpacity: 0.8, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
+            this.deliverySequence.push({ id: m.sid, lat: m.lat, lng: m.lng, status: m.status });
+        });
+
+        let undeliveredCount = 0;
+        sids.forEach(sid => {
+            if (deliveredSids.has(sid)) return;
+            const row = window.SID_MAP.get(sid);
+            if (row && row[1] && row[2]) {
+                L.circleMarker([parseFloat(row[1]), parseFloat(row[2])], { radius: 5, color: '#3b82f6', fillOpacity: 0.6, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
+                this.deliverySequence.push({ id: sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), status: 'undelivered' });
+                undeliveredCount++;
+            }
+        });
+
+        // Hide spinner
+        if (spinner) spinner.style.display = 'none';
+
+        const stats = document.getElementById('delivery-stats');
+        if (stats) stats.style.display = 'block';
+        document.getElementById('delivery-marker-count').textContent = `${sids.length} houses`;
+        document.getElementById('delivery-composition').textContent = `🟢${delivered} delivered · 🔴${unsent} unsent · 🔵${undeliveredCount} undelivered`;
+    },
+
+    startDeliveryDraw() {
+        if (window.USER && window.USER.role !== 'admin') {
+            if (App.showToast) App.showToast("Unauthorized: Admins only.");
+            return;
+        }
+        if (!this.deliverySequence.length) {
+            if (App.showToast) App.showToast("Select MC/UC and month first.");
+            return;
+        }
+        this.deliveryEditing = true;
+        this.deliveryCaptureIDs = this.deliverySequence.map(s => s.id);
+        this.deliveryDrawnPolygon = null;
+        this._deliveryDrawPoints = [];
+
+        document.getElementById('btn-delivery-finish').style.display = '';
+        document.getElementById('btn-delivery-cancel').style.display = '';
+
+        this._deliveryClick = (e) => this._onDeliveryDrawClick(e);
+        State.map.on('click', this._deliveryClick);
+        this.deliveryDrawLayer = L.layerGroup().addTo(State.map);
+        State.map.getContainer().style.cursor = 'crosshair';
+    },
+
+    _onDeliveryDrawClick(e) {
+        if (!this.deliveryEditing) return;
+        this._deliveryDrawPoints.push([e.latlng.lat, e.latlng.lng]);
+        this.deliveryDrawLayer.clearLayers();
+        if (this._deliveryDrawPoints.length > 1) {
+            L.polygon(this._deliveryDrawPoints, { color: '#f97316', weight: 2, fillOpacity: 0.15, pane: 'routingPane' }).addTo(this.deliveryDrawLayer);
+        }
+        L.circleMarker([e.latlng.lat, e.latlng.lng], { radius: 4, color: '#f97316', fillOpacity: 1, pane: 'routingPane' }).addTo(this.deliveryDrawLayer);
+    },
+
+    finishDeliveryDraw() {
+        if (!this.deliveryEditing || this._deliveryDrawPoints.length < 3) {
+            if (App.showToast) App.showToast("Need at least 3 points for a polygon.");
+            return;
+        }
+        this.deliveryDrawnPolygon = [...this._deliveryDrawPoints];
+        this.deliveryEditing = false;
+        State.map.off('click', this._deliveryClick);
+        State.map.getContainer().style.cursor = '';
+        document.getElementById('btn-delivery-finish').style.display = 'none';
+        document.getElementById('btn-delivery-cancel').style.display = 'none';
+
+        // Count markers inside polygon
+        const inside = this.deliverySequence.filter(s => this._pointInPolygon([s.lat, s.lng], this.deliveryDrawnPolygon));
+        if (App.showToast) App.showToast(`Polygon contains ${inside.length} markers. Click Save to store.`);
+    },
+
+    cancelDeliveryDraw() {
+        if (this.deliveryDrawLayer) State.map.removeLayer(this.deliveryDrawLayer);
+        this.deliveryDrawLayer = null;
+        this.deliveryEditing = false;
+        this._deliveryDrawPoints = [];
+        this.deliveryDrawnPolygon = null;
+        State.map.off('click', this._deliveryClick);
+        State.map.getContainer().style.cursor = '';
+        document.getElementById('btn-delivery-finish').style.display = 'none';
+        document.getElementById('btn-delivery-cancel').style.display = 'none';
+    },
+
+    async saveDeliveryRoute() {
+        if (window.USER && window.USER.role !== 'admin') {
+            if (App.showToast) App.showToast("Unauthorized: Admins only.");
+            return;
+        }
+        if (!this.deliveryDrawnPolygon) {
+            if (App.showToast) App.showToast("Draw a polygon first.");
+            return;
+        }
+        const city = this.deliveryCity;
+        const month = this.deliveryMonth;
+        if (!city || !month) {
+            if (App.showToast) App.showToast("Select city and month.");
+            return;
+        }
+
+        const polygon = this.deliveryDrawnPolygon;
+        const captured = this.deliverySequence.filter(s => this._pointInPolygon([s.lat, s.lng], polygon));
+        if (!captured.length) {
+            if (App.showToast) App.showToast("No markers inside polygon.");
+            return;
+        }
+
+        const mc = this.deliveryMc;
+        const d = captured.filter(s => s.status === 'delivered').length;
+        const u = captured.filter(s => s.status === 'unsent').length;
+        const ud = captured.filter(s => s.status === 'undelivered').length;
+        const nextNum = (State.deliveryRoutes.filter(r => this.cleanMCName(r.mc_uc || '') === mc).length || 0) + 1;
+        const name = `DEL-${mc}_R${String(nextNum).padStart(2, '0')}_${month}`;
+
+        const { error } = await window._supabase.from('delivery_routes').insert({
+            route_name: name,
+            mc_uc: mc,
+            delivery_month: month,
+            route_data: { sequence: captured, polygon, points: captured.map(s => ({ id: s.id, lat: s.lat, lng: s.lng })) },
+            composition: { total: captured.length, delivered: d, unsent: u, undelivered: ud }
+        });
+        if (error) {
+            console.error(error);
+            if (App.showToast) App.showToast("Failed to save delivery route.");
+            return;
+        }
+
+        await this.loadDeliveryRoutes();
+        if (App.showToast) App.showToast(`Delivery route saved: ${name}`);
+        this.cancelDeliveryDraw();
+    },
+
+    clearDeliverySelection() {
+        if (this.deliveryMarkerLayer) State.map.removeLayer(this.deliveryMarkerLayer);
+        this.deliveryMarkerLayer = null;
+        this.deliverySequence = [];
+        this.cancelDeliveryDraw();
+        document.getElementById('delivery-city-select').value = '';
+        document.getElementById('delivery-mc-select').value = '';
+        document.getElementById('delivery-month-select').value = '';
+        this.deliveryMc = '';
+        this.deliveryCity = '';
+        this.deliveryMonth = '';
+        const stats = document.getElementById('delivery-stats');
+        if (stats) stats.style.display = 'none';
+    },
+
+    async refreshDeliveryData() {
+        if (!this.deliveryCity || !this.deliveryMc || !this.deliveryMonth) {
+            if (App.showToast) App.showToast("Select city, MC/UC, and month first.");
+            return;
+        }
+        await this.onDeliveryFilterChange();
+        if (App.showToast) App.showToast("Delivery data refreshed.");
+    },
+
+    async deleteDeliveryRoute(routeId) {
+        if (!window.USER || window.USER.role !== 'admin') {
+            if (App.showToast) App.showToast("Unauthorized: Admins only.");
+            return;
+        }
+        const route = State.deliveryRoutes.find(r => String(r.id) === String(routeId));
+        if (!route) return;
+        if (!confirm(`Delete delivery route "${route.route_name}"?`)) return;
+
+        const { error } = await window._supabase.from('delivery_routes').delete().eq('id', routeId);
+        if (error) {
+            console.error(error);
+            if (App.showToast) App.showToast("Failed to delete.");
+            return;
+        }
+        await this.loadDeliveryRoutes();
+        if (App.showToast) App.showToast("Delivery route deleted.");
+    },
+
+    renderDeliverySidebar() {
+        const side = document.getElementById('side-delivery-route-list');
+        if (!side) return;
+        side.innerHTML = '';
+        const routes = State.deliveryRoutes;
+        if (!routes || !routes.length) {
+            side.innerHTML = '<div style="text-align:center; padding:12px; color:#94a3b8; font-size:11px;">No delivery routes found</div>';
+            return;
+        }
+
+        const sep = document.createElement('div');
+        sep.style.cssText = 'padding:4px 0; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px;';
+        sep.textContent = '─── Delivery Routes ───';
+        side.appendChild(sep);
+
+        const grouped = {};
+        routes.forEach(r => {
+            const area = this.cleanMCName(r.mc_uc || '');
+            if (!grouped[area]) grouped[area] = { routes: [], pts: 0 };
+            grouped[area].routes.push(r);
+            grouped[area].pts += (r.route_data && r.route_data.sequence) ? r.route_data.sequence.length : 0;
+        });
+
+        const sortedAreas = Object.keys(grouped).sort((a, b) => this.naturalCompare(a, b));
+        sortedAreas.forEach(area => {
+            const grp = grouped[area];
+            const month = (grp.routes[0] && grp.routes[0].delivery_month) || '';
+            const isCollapsed = State.deliveryRouteCollapsedGroups.has(area);
+
+            const hdr = document.createElement('div');
+            hdr.style.cssText = 'padding:4px 8px; font-weight:800; font-size:11px; text-transform:uppercase; color:#f97316; background:#fff7ed; border-radius:6px; margin:6px 0 4px 0; cursor:pointer; display:flex; justify-content:space-between; align-items:center;';
+            hdr.onclick = (e) => { e.stopPropagation(); this.toggleDeliveryMCGroup(area); };
+            hdr.innerHTML = `<span>${area} <span style="color:#f97316; font-weight:bold; margin-left:6px; font-size:10px;">(${grp.routes.length} routes, ${grp.pts} pts)</span><span style="font-size:9px; color:#94a3b8; margin-left:6px;">${month}</span></span> <span class="material-icons-round" style="font-size:14px;">${isCollapsed ? 'expand_more' : 'expand_less'}</span>`;
+            side.appendChild(hdr);
+            if (isCollapsed) return;
+
+            grp.routes.forEach((route, idx) => {
+                const ptCount = (route.route_data && route.route_data.sequence) ? route.route_data.sequence.length : 0;
+                const comp = route.composition || {};
+                const compText = `${comp.delivered || 0}d · ${comp.unsent || 0}u · ${comp.undelivered || 0}ud`;
+                const displayName = route.route_name || `Route ${idx + 1}`;
+
+                const div = document.createElement('div');
+                div.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:8px; cursor:pointer; background:#fff; border:1px solid #e2e8f0; transition:background 0.2s;';
+                div.title = compText;
+                div.innerHTML = `
+                    <div style="width:22px; height:22px; background:#fff7ed; color:#f97316; border-radius:4px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:10px; flex-shrink:0;">${idx + 1}</div>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:700; font-size:10px; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${displayName}">${displayName}</div>
+                        <div style="font-size:8px; color:#94a3b8;"><span style="color:#f97316; font-weight:bold;">${ptCount > 0 ? ptCount + ' pts' : '(Fetch...)'}</span></div>
+                    </div>
+                    <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryRouteDisplay('${route.id}')" title="Show/Hide on Map" style="background:none; border:none; cursor:pointer; padding:2px; color:#10b981; flex-shrink:0;">
+                        <span class="material-icons-round" style="font-size:16px;">visibility</span>
+                    </button>
+                    <button onclick="event.stopPropagation(); SpatialRouter.clearDeliveryMapDisplay()" title="Clear Map" style="background:none; border:none; cursor:pointer; padding:2px; color:#ef4444; flex-shrink:0;">
+                        <span class="material-icons-round" style="font-size:16px;">close</span>
+                    </button>
+                `;
+                div.onclick = () => { this.toggleDeliveryRouteDisplay(route.id); };
+                side.appendChild(div);
+            });
+        });
+    },
+
+    toggleDeliveryRouteDisplay(routeId) {
+        const route = State.deliveryRoutes.find(r => String(r.id) === String(routeId));
+        if (!route || !route.route_data) return;
+
+        if (this.deliveryMarkerLayer) {
+            State.map.removeLayer(this.deliveryMarkerLayer);
+            this.deliveryMarkerLayer = null;
+        }
+
+        this.deliveryMarkerLayer = L.layerGroup().addTo(State.map);
+
+        const data = route.route_data;
+        if (data.polygon && data.polygon.length >= 3) {
+            L.polygon(data.polygon, { color: '#f97316', weight: 2, fillOpacity: 0.1, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
+        }
+
+        (data.sequence || []).forEach(s => {
+            const color = s.status === 'delivered' ? '#22c55e' : s.status === 'unsent' ? '#94a3b8' : '#3b82f6';
+            L.circleMarker([s.lat, s.lng], { radius: 5, color, fillOpacity: 0.8, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
+        });
+
+        State.map.fitBounds(this.deliveryMarkerLayer.getBounds().pad(0.1));
+    },
+
+    clearDeliveryMapDisplay() {
+        if (this.deliveryMarkerLayer) State.map.removeLayer(this.deliveryMarkerLayer);
+        this.deliveryMarkerLayer = null;
+        State.deliveryRouteDisplayIndices.clear();
+    },
+
+    toggleDeliveryMCGroup(group) {
+        const wasCollapsed = State.deliveryRouteCollapsedGroups.has(group);
+        State.deliveryRouteCollapsedGroups.clear();
+        if (wasCollapsed) State.deliveryRouteCollapsedGroups.delete(group);
+        this.renderDeliverySidebar();
+        this.renderRouteManager();
+    },
+
+    _pointInPolygon(point, polygon) {
+        const [x, y] = point;
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            const [xi, yi] = polygon[i], [xj, yj] = polygon[j];
+            if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+        }
+        return inside;
+    },
+
+    _chunkArray(arr, size) {
+        const chunks = [];
+        for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+        return chunks;
     }
 };
 
@@ -24694,6 +25320,7 @@ window.StaffPerformanceModal = {
     _sidToLoc: null,
     _cachedRecords: null,
     _cachedMonth: null,
+    _deliveredSIDs: null,
     _isLoading: false,
     _selectedMonth: '',
     _selectedCity: 'all',
@@ -24739,7 +25366,10 @@ window.StaffPerformanceModal = {
     _buildSidToLoc() {
         const m = new Map();
         if (window.RAW_DATA) {
-            window.RAW_DATA.forEach(r => m.set(String(r[0]), { city: r[11] || '', mc: r[12] || '' }));
+            window.RAW_DATA.forEach(r => {
+                if (State.hideZubairSids && window.ZUBAIR_SIDS && window.ZUBAIR_SIDS.has(String(r[0]))) return;
+                m.set(String(r[0]), { city: r[11] || '', mc: r[12] || '' });
+            });
         }
         this._sidToLoc = m;
     },
@@ -24825,6 +25455,7 @@ window.StaffPerformanceModal = {
         });
         this._cachedRecords = allData;
         this._cachedMonth = billMonth;
+        this._deliveredSIDs = new Set(allData.map(d => String(d.survey_id)));
     },
 
     async _fetchDeliveryData(forceRefresh) {
@@ -25056,6 +25687,9 @@ window.StaffPerformanceModal = {
                     <button onclick="StaffPerformanceModal.exportCSV()" style="padding:5px 12px; border:none; border-radius:6px; background:#8b5cf6; color:white; font-size:11px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px; margin-left:auto;">
                         <span class="material-icons-round" style="font-size:14px;">download</span> Export CSV
                     </button>
+                    ${isMc ? `<button onclick="StaffPerformanceModal.exportUndeliveredCSV()" style="padding:5px 12px; border:none; border-radius:6px; background:#9333ea; color:white; font-size:11px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                        <span class="material-icons-round" style="font-size:14px;">playlist_remove</span> Export Undelivered
+                    </button>` : ''}
                 </div>
             </div>
 
@@ -25448,7 +26082,7 @@ window.StaffPerformanceModal = {
             const city = loc.city || '—';
             if (!cityMap.has(city)) {
                 cityMap.set(city, {
-                    city, totalHouses: 0, delivered: 0, unsent: 0,
+                    city, totalHouses: 0, delivered: 0, unsent: 0, undelivered: 0,
                     staffSet: new Set(), lastTime: null, mcMap: new Map()
                 });
             }
@@ -25472,7 +26106,7 @@ window.StaffPerformanceModal = {
             if (!cityEntry.mcMap.has(d._shortMC)) {
                 cityEntry.mcMap.set(d._shortMC, {
                     shortMC: d._shortMC, fullMC: d._mc, city: d._city,
-                    totalHouses: 0, delivered: 0, unsent: 0,
+                    totalHouses: 0, delivered: 0, unsent: 0, undelivered: 0,
                     staffSet: new Set(), lastTime: null, staffMap: new Map()
                 });
             }
@@ -25505,11 +26139,24 @@ window.StaffPerformanceModal = {
             if (!cityEntry.mcMap.has(short)) {
                 cityEntry.mcMap.set(short, {
                     shortMC: short, fullMC: loc.mc, city: loc.city,
-                    totalHouses: 0, delivered: 0, unsent: 0,
+                    totalHouses: 0, delivered: 0, unsent: 0, undelivered: 0,
                     staffSet: new Set(), lastTime: null, staffMap: new Map()
                 });
             }
             cityEntry.mcMap.get(short).totalHouses++;
+        });
+
+        // Compute undelivered per MC
+        this._sidToLoc.forEach((loc, sid) => {
+            if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
+            const cityEntry = cityMap.get(loc.city);
+            if (!cityEntry) return;
+            const short = this._shortMC(loc.mc);
+            const mc = cityEntry.mcMap.get(short);
+            if (mc && this._deliveredSIDs && !this._deliveredSIDs.has(sid)) {
+                mc.undelivered++;
+                cityEntry.undelivered = (cityEntry.undelivered || 0) + 1;
+            }
         });
 
         const cityList = [...cityMap.values()].sort((a, b) => a.city.localeCompare(b.city));
@@ -25524,6 +26171,7 @@ window.StaffPerformanceModal = {
         const totalHousesAll = cityList.reduce((s, c) => s + c.totalHouses, 0);
         const totalDelvAll = cityList.reduce((s, c) => s + c.delivered, 0);
         const totalUnstAll = cityList.reduce((s, c) => s + c.unsent, 0);
+        const totalUndelAll = cityList.reduce((s, c) => s + (c.undelivered || 0), 0);
         const grandRate = totalHousesAll > 0 ? Math.round((totalDelvAll / totalHousesAll) * 100) : 0;
 
         // Auto-expand if a specific city is selected
@@ -25554,6 +26202,7 @@ window.StaffPerformanceModal = {
                                     <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Total</th>
                                     <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Delv</th>
                                     <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Unst</th>
+                                    <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Undlv</th>
                                     <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Rate</th>
                                     <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Staff</th>
                                     <th style="padding:5px 8px; text-align:center; font-size:9px; font-weight:800; color:#475569; text-transform:uppercase; border-bottom:2px solid #cbd5e1;">Last Act.</th>
@@ -25610,12 +26259,13 @@ window.StaffPerformanceModal = {
                                             <td style="padding:5px 8px; text-align:center; font-weight:700; color:#1e293b;">${mc.delivered + mc.unsent}</td>
                                             <td style="padding:5px 8px; text-align:center; color:#16a34a; font-weight:700;">${mc.delivered}</td>
                                             <td style="padding:5px 8px; text-align:center; color:#dc2626; font-weight:700;">${mc.unsent}</td>
+                                            <td style="padding:5px 8px; text-align:center; color:#9333ea; font-weight:700;">${mc.undelivered}</td>
                                             <td style="padding:5px 8px; text-align:center; font-weight:800; color:${mcRateColor};">${mcRate}%</td>
                                             <td style="padding:5px 8px; text-align:center; font-weight:700; color:#1e293b;">${mc.staffSet.size}</td>
                                             <td style="padding:5px 8px; text-align:center; color:#64748b; font-size:10px;">${mc.lastTime ? mc.lastTime.split('T')[0] : '—'}</td>
                                         </tr>
                                         <tr id="spm-mc-detail-${mcKey}" style="display:none;">
-                                            <td colspan="8" style="padding:0; background:#fafafa; border-bottom:1px solid #e2e8f0;">
+                                            <td colspan="9" style="padding:0; background:#fafafa; border-bottom:1px solid #e2e8f0;">
                                                 ${staffHtml}
                                             </td>
                                         </tr>`;
@@ -25628,6 +26278,7 @@ window.StaffPerformanceModal = {
                                     <td style="padding:5px 8px; text-align:center; color:#1e293b;">${city.delivered + city.unsent}</td>
                                     <td style="padding:5px 8px; text-align:center; color:#16a34a;">${city.delivered}</td>
                                     <td style="padding:5px 8px; text-align:center; color:#dc2626;">${city.unsent}</td>
+                                    <td style="padding:5px 8px; text-align:center; color:#9333ea; font-weight:700;">${city.undelivered || 0}</td>
                                     <td style="padding:5px 8px; text-align:center; font-weight:800; color:${cityRateColor};">${cityRate}%</td>
                                     <td style="padding:5px 8px; text-align:center; color:#1e293b;">${city.staffSet.size}</td>
                                     <td style="padding:5px 8px; text-align:center; color:#64748b; font-size:10px;">${city.lastTime ? city.lastTime.split('T')[0] : '—'}</td>
@@ -25647,12 +26298,13 @@ window.StaffPerformanceModal = {
                     <td style="padding:8px 10px; text-align:center; font-weight:700; color:#1e293b;">${city.delivered + city.unsent}</td>
                     <td style="padding:8px 10px; text-align:center; color:#16a34a; font-weight:700;">${city.delivered}</td>
                     <td style="padding:8px 10px; text-align:center; color:#dc2626; font-weight:700;">${city.unsent}</td>
+                    <td style="padding:8px 10px; text-align:center; color:#9333ea; font-weight:700;">${city.undelivered || 0}</td>
                     <td style="padding:8px 10px; text-align:center; font-weight:800; color:${cityRateColor};">${cityRate}%</td>
                     <td style="padding:8px 10px; text-align:center; font-weight:700; color:#1e293b;">${city.staffSet.size}</td>
                     <td style="padding:8px 10px; text-align:center; color:#64748b; font-size:11px;">${city.lastTime ? city.lastTime.split('T')[0] : '—'}</td>
                 </tr>
                 <tr id="spm-city-detail-${cityKey}" style="display:${isExpanded ? 'table-row' : 'none'};">
-                    <td colspan="9" style="padding:0; background:#fafafa;">
+                    <td colspan="10" style="padding:0; background:#fafafa;">
                         ${mcTableHtml}
                     </td>
                 </tr>`;
@@ -25682,6 +26334,10 @@ window.StaffPerformanceModal = {
                     <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Unsent</div>
                     <div style="font-size:22px; font-weight:900; color:#dc2626;">${totalUnstAll}</div>
                 </div>
+                <div class="spm-card" style="flex:1; min-width:90px; background:#f3e8ff; border:1px solid #d8b4fe; border-radius:10px; padding:12px; text-align:center;">
+                    <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">Undelivered</div>
+                    <div style="font-size:22px; font-weight:900; color:#9333ea;">${totalUndelAll}</div>
+                </div>
             </div>
 
             <div style="background:white; border:1px solid #e2e8f0; border-radius:10px; overflow:auto;">
@@ -25694,6 +26350,7 @@ window.StaffPerformanceModal = {
                             <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Total</th>
                             <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Delivered</th>
                             <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Unsent</th>
+                            <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Undlv</th>
                             <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Rate</th>
                             <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Staff</th>
                             <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Last Activity</th>
@@ -25710,6 +26367,7 @@ window.StaffPerformanceModal = {
                             <td style="padding:10px 12px; text-align:center; color:#f8fafc; font-size:12px;">${totalDelvAll + totalUnstAll}</td>
                             <td style="padding:10px 12px; text-align:center; color:#86efac; font-size:12px;">${totalDelvAll}</td>
                             <td style="padding:10px 12px; text-align:center; color:#fca5a5; font-size:12px;">${totalUnstAll}</td>
+                            <td style="padding:10px 12px; text-align:center; color:#d8b4fe; font-size:12px;">${totalUndelAll}</td>
                             <td style="padding:10px 12px; text-align:center; font-weight:900; color:${grandRateColor}; font-size:12px;">${grandRate}%</td>
                             <td style="padding:10px 12px; text-align:center; color:#f8fafc; font-size:12px;">—</td>
                             <td style="padding:10px 12px; text-align:center; color:#94a3b8; font-size:12px;">—</td>
@@ -25745,79 +26403,102 @@ window.StaffPerformanceModal = {
         }
     },
 
+    exportUndeliveredCSV() {
+        const billMonth = this._selectedMonth || '—';
+        if (!this._sidToLoc || !this._deliveredSIDs) {
+            if (window.App && App.showToast) App.showToast('Data not loaded yet.');
+            return;
+        }
+        const rows = [['S.No', 'Survey ID', 'Name', 'Address', 'Surveyor', 'Survey Date', 'MC/UC', 'City', 'Billing Month']];
+        let idx = 0;
+        this._sidToLoc.forEach((loc, sid) => {
+            if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
+            if (this._deliveredSIDs.has(sid)) return;
+            idx++;
+            const rec = window.SID_MAP ? window.SID_MAP.get(sid) : null;
+            const name = rec ? (rec[4] || '—') : '—';
+            const address = rec ? (rec[5] || '—') : '—';
+            const surveyor = rec ? (rec[6] || '—') : '—';
+            const surveyDate = rec ? (rec[7] || '—') : '—';
+            rows.push([idx, sid, name, address, surveyor, surveyDate, this._shortMC(loc.mc) || '—', loc.city || '—', billMonth]);
+        });
+        if (idx === 0) {
+            if (window.App && App.showToast) App.showToast('No undelivered records to export.');
+            return;
+        }
+        rows.sort((a, b) => {
+            const mcCmp = (a[6] || '').localeCompare(b[6] || '');
+            if (mcCmp !== 0) return mcCmp;
+            return String(b[1]).localeCompare(String(a[1]));
+        });
+        // Reindex after sort
+        rows[0] = ['S.No', 'Survey ID', 'Name', 'Address', 'Surveyor', 'Survey Date', 'MC/UC', 'City', 'Billing Month'];
+        for (let i = 1; i < rows.length; i++) rows[i][0] = i;
+        const csvContent = '\uFEFF' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.setAttribute('href', URL.createObjectURL(blob));
+        link.setAttribute('download', `StaffPerformance_Undelivered_${billMonth}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        if (window.App && App.showToast) App.showToast('Undelivered CSV exported ✅');
+    },
+
     exportCSV() {
         const isMc = this._activeTab === 'mc';
 
         if (isMc) {
-            // Build city → MC map (same logic as _renderMcContent, no date filter)
-            const cityMap = new Map();
-            this._sidToLoc.forEach((loc, sid) => {
-                if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
-                const city = loc.city || '—';
-                if (!cityMap.has(city)) {
-                    cityMap.set(city, { city, totalHouses: 0, delivered: 0, unsent: 0, staffSet: new Set(), lastTime: null, mcMap: new Map() });
-                }
-                cityMap.get(city).totalHouses++;
+            const records = this._cachedRecords || [];
+            if (records.length === 0) {
+                if (window.App && App.showToast) App.showToast('No data to export.');
+                return;
+            }
+
+            let filtered = records.filter(d => {
+                if (this._selectedCity !== 'all' && d._city !== this._selectedCity) return false;
+                if (!d.delivered_at) return false;
+                return true;
             });
 
-            (this._cachedRecords || []).forEach(d => {
-                if (this._selectedCity !== 'all' && d._city !== this._selectedCity) return;
-                const cityEntry = cityMap.get(d._city);
-                if (!cityEntry) return;
-                const email = (d.staff_email || '').toLowerCase();
-                if (!email) return;
+            if (filtered.length === 0) {
+                if (window.App && App.showToast) App.showToast('No data to export.');
+                return;
+            }
 
-                cityEntry.delivered += d._effectiveStatus === 'delivered' ? 1 : 0;
-                cityEntry.unsent += d._effectiveStatus === 'unsent' ? 1 : 0;
-                cityEntry.staffSet.add(email);
-                if (!cityEntry.lastTime || d.delivered_at > cityEntry.lastTime) cityEntry.lastTime = d.delivered_at;
-
-                if (!cityEntry.mcMap.has(d._shortMC)) {
-                    cityEntry.mcMap.set(d._shortMC, { shortMC: d._shortMC, totalHouses: 0, delivered: 0, unsent: 0, staffSet: new Set(), lastTime: null });
-                }
-                const mc = cityEntry.mcMap.get(d._shortMC);
-                mc.delivered += d._effectiveStatus === 'delivered' ? 1 : 0;
-                mc.unsent += d._effectiveStatus === 'unsent' ? 1 : 0;
-                mc.staffSet.add(email);
-                if (!mc.lastTime || d.delivered_at > mc.lastTime) mc.lastTime = d.delivered_at;
+            filtered.sort((a, b) => {
+                const mcCmp = (a._shortMC || '').localeCompare(b._shortMC || '');
+                if (mcCmp !== 0) return mcCmp;
+                const emailCmp = (a.staff_email || '').toLowerCase().localeCompare((b.staff_email || '').toLowerCase());
+                if (emailCmp !== 0) return emailCmp;
+                return new Date(a.delivered_at) - new Date(b.delivered_at);
             });
 
-            this._sidToLoc.forEach((loc, sid) => {
-                if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
-                const cityEntry = cityMap.get(loc.city);
-                if (!cityEntry) return;
-                const short = this._shortMC(loc.mc);
-                if (!cityEntry.mcMap.has(short)) {
-                    cityEntry.mcMap.set(short, { shortMC: short, totalHouses: 0, delivered: 0, unsent: 0, staffSet: new Set(), lastTime: null });
-                }
-                cityEntry.mcMap.get(short).totalHouses++;
+            const billMonth = this._selectedMonth || '—';
+            const rows = [['S.No', 'Survey ID', 'Staff Name', 'Staff Email', 'MC/UC', 'City', 'Billing Month', 'Date', 'Time', 'Status']];
+            filtered.forEach((d, idx) => {
+                const date = d.delivered_at ? d.delivered_at.split('T')[0] : '—';
+                const time = d.delivered_at ? this._fmtTime(d.delivered_at) : '—';
+                const status = d._effectiveStatus === 'delivered' ? 'Delivered' : 'Unsent';
+                rows.push([
+                    idx + 1,
+                    d.survey_id,
+                    this._staffName(d.staff_email, d.staff_name),
+                    d.staff_email || '—',
+                    d._shortMC || '—',
+                    d._city || '—',
+                    billMonth,
+                    date,
+                    time,
+                    status
+                ]);
             });
 
-            const csvRows = [['City', 'MC/UC', 'Houses', 'Total', 'Delivered', 'Unsent', 'Rate %', 'Active Staff', 'Last Activity']];
-            let grandHouses = 0, grandDelv = 0, grandUnst = 0, grandStaffCount = 0, grandMC = 0;
-            [...cityMap.values()].sort((a, b) => a.city.localeCompare(b.city)).forEach(city => {
-                let cityHouses = 0, cityDelv = 0, cityUnst = 0, cityStaff = 0;
-                const mcList = [...city.mcMap.values()].sort((a, b) => a.shortMC.localeCompare(b.shortMC));
-                mcList.forEach(mc => {
-                    const rate = mc.totalHouses > 0 ? Math.round((mc.delivered / mc.totalHouses) * 100) : 0;
-                    const mcTotal = mc.delivered + mc.unsent;
-                    csvRows.push([city.city, mc.shortMC, mc.totalHouses, mcTotal, mc.delivered, mc.unsent, rate, mc.staffSet.size, mc.lastTime ? mc.lastTime.split('T')[0] : '—']);
-                    cityHouses += mc.totalHouses; cityDelv += mc.delivered; cityUnst += mc.unsent; cityStaff += mc.staffSet.size;
-                });
-                const cityTotal = cityDelv + cityUnst;
-                const cityRate = cityHouses > 0 ? Math.round((cityDelv / cityHouses) * 100) : 0;
-                csvRows.push([city.city + ' Subtotal', '', cityHouses, cityTotal, cityDelv, cityUnst, cityRate, cityStaff, city.lastTime ? city.lastTime.split('T')[0] : '—']);
-                grandHouses += cityHouses; grandDelv += cityDelv; grandUnst += cityUnst; grandStaffCount += cityStaff; grandMC += mcList.length;
-            });
-            const grandRate = grandHouses > 0 ? Math.round((grandDelv / grandHouses) * 100) : 0;
-            const grandTotal = grandDelv + grandUnst;
-            csvRows.push(['GRAND TOTAL', '', grandHouses, grandTotal, grandDelv, grandUnst, grandRate, grandStaffCount, '']);
-
-            const csvContent = csvRows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+            const csvContent = '\uFEFF' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.setAttribute('href', URL.createObjectURL(blob));
-            link.setAttribute('download', `StaffPerformance_MCUC_${this._selectedMonth}.csv`);
+            link.setAttribute('download', `StaffPerformance_MCUC_Detail_${this._selectedMonth}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -25910,7 +26591,7 @@ window.StaffPerformanceModal = {
             });
         }
 
-        const csvContent = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+        const csvContent = '\uFEFF' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
