@@ -9569,7 +9569,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.30.1231</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.07.31.1018</span>
             </div>
         </div>
         
@@ -10214,18 +10214,6 @@ input[type=number] {
                                 <span id="delivery-composition"></span>
                             </div>
                             <div style="display:flex; gap:4px; margin-top:6px;">
-                                <button onclick="SpatialRouter.startDeliveryDraw()" class="routing-tool-btn gated-tool" id="btn-delivery-draw" title="Draw polygon to connect markers" style="color:#f97316;">
-                                    <span class="material-icons-round">crop_square</span>
-                                </button>
-                                <button onclick="SpatialRouter.finishDeliveryDraw()" class="routing-tool-btn" id="btn-delivery-finish" style="display:none; color:#10b981;">
-                                    <span class="material-icons-round">done</span>
-                                </button>
-                                <button onclick="SpatialRouter.cancelDeliveryDraw()" class="routing-tool-btn" id="btn-delivery-cancel" style="display:none; color:#ef4444;">
-                                    <span class="material-icons-round">close</span>
-                                </button>
-                                <button onclick="SpatialRouter.saveDeliveryRoute()" class="routing-tool-btn gated-tool" id="btn-delivery-save" title="Save delivery route to cloud" style="color:#16a34a;">
-                                    <span class="material-icons-round">save</span>
-                                </button>
                                 <button onclick="SpatialRouter.clearDeliverySelection()" class="routing-tool-btn gated-tool" id="btn-delivery-clear" title="Clear delivery selection" style="color:#ef4444;">
                                     <span class="material-icons-round">layers_clear</span>
                                 </button>
@@ -11162,7 +11150,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.30.1231";
+window.DATA_VERSION = "v2026.07.31.1018";
 window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -22310,6 +22298,13 @@ const SpatialRouter = {
         this.activeDisplayRoutes = [];
         this.activeTab = 'manager';
         this._sidebarDisplayIdx = null; // Un-highlight
+        // Clear delivery route display if active
+        if (this._deliveryRoute) {
+            if (this.deliveryMarkerLayer) { State.map.removeLayer(this.deliveryMarkerLayer); this.deliveryMarkerLayer = null; }
+            this._deliveryRoute = null;
+            this._deliveryDisplayIdx = null;
+            this.updateWatermark('');
+        }
         this.editingRouteIdx = null; // Un-highlight
         this.setEditMode(false);
         this.toggleRoutePager(false);
@@ -22356,11 +22351,13 @@ switchTab(tab) {
         if (info) info.style.display = (tab === 'editor' && this.activeDisplayRoutes.length > 0) ? 'flex' : 'none';
 
         if (tab === 'editor') this.renderRoute();
-        else if (tab === 'delivery') this.populateDeliveryDropdowns();
-        else this.renderRouteManager();
+        else if (tab === 'delivery') {
+            this.populateDeliveryDropdowns();
+            this.renderDeliverySavedList();
+        } else this.renderRouteManager();
 
-        // Cleanup delivery marker layer when switching away
-        if (tab !== 'delivery' && this.deliveryMarkerLayer) {
+        // Cleanup delivery marker layer when switching to manager (not editor)
+        if (tab !== 'delivery' && tab !== 'editor' && this.deliveryMarkerLayer) {
             State.map.removeLayer(this.deliveryMarkerLayer);
             this.deliveryMarkerLayer = null;
         }
@@ -22376,16 +22373,12 @@ switchTab(tab) {
 
         list.innerHTML = '';
         const hasSurveyRoutes = State.savedRoutes && State.savedRoutes.length > 0;
-        const hasDeliveryRoutes = State.deliveryRoutes && State.deliveryRoutes.length > 0;
 
-        if (!hasSurveyRoutes && !hasDeliveryRoutes) {
+        if (!hasSurveyRoutes) {
             list.innerHTML = '<div style="padding:20px; text-align:center; color:#94a3b8;">No saved routes found.</div>';
             return;
         }
 
-        if (!hasSurveyRoutes) {
-            // Skip survey section, render delivery only below
-        } else {
             // Pre-process and sort routes by Area
         const routesWithMeta = State.savedRoutes.map((route, originalIdx) => {
             const area = this.getRouteArea(route);
@@ -22471,73 +22464,6 @@ switchTab(tab) {
         `;
             list.appendChild(item);
         });
-        } // end else (survey routes)
-
-        // ─── Delivery Routes Subsection ───
-        const dRoutes = State.deliveryRoutes;
-        if (dRoutes && dRoutes.length) {
-            const dSep = document.createElement('div');
-            dSep.style.cssText = 'padding:8px 4px 4px 4px; font-size:9px; font-weight:800; color:#f97316; text-transform:uppercase; letter-spacing:1px; border-top:1px solid #fed7aa; margin-top:12px;';
-            dSep.textContent = '─── Delivery Routes ───';
-            list.appendChild(dSep);
-
-            const dGrouped = {};
-            dRoutes.forEach(r => {
-                const area = this.cleanMCName(r.mc_uc || '');
-                if (!dGrouped[area]) dGrouped[area] = { routes: [], pts: 0 };
-                dGrouped[area].routes.push(r);
-                dGrouped[area].pts += (r.route_data && r.route_data.sequence) ? r.route_data.sequence.length : 0;
-            });
-
-            const dSortedAreas = Object.keys(dGrouped).sort((a, b) => this.naturalCompare(a, b));
-            dSortedAreas.forEach(area => {
-                const grp = dGrouped[area];
-                const month = (grp.routes[0] && grp.routes[0].delivery_month) || '';
-                const isCollapsed = State.deliveryRouteCollapsedGroups.has(area);
-
-                const hdr = document.createElement('div');
-                hdr.style.cssText = 'padding:6px 8px; font-weight:800; font-size:11px; text-transform:uppercase; color:#f97316; background:#fff7ed; border-radius:6px; margin:8px 0 4px 0; letter-spacing:0.5px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;';
-                hdr.onclick = (e) => { e.stopPropagation(); this.toggleDeliveryMCGroup(area); };
-                hdr.innerHTML = `<span>${area} <span style="color:#f97316; font-weight:bold; margin-left:6px; font-size:10px;">(${grp.routes.length} routes, ${grp.pts} pts)</span><span style="font-size:9px; color:#94a3b8; margin-left:6px;">${month}</span></span> <span class="material-icons-round" style="font-size:14px;">${isCollapsed ? 'expand_more' : 'expand_less'}</span>`;
-                list.appendChild(hdr);
-                if (isCollapsed) return;
-
-                grp.routes.forEach((route, idx) => {
-                    const ptCount = (route.route_data && route.route_data.sequence) ? route.route_data.sequence.length : 0;
-                    const comp = route.composition || {};
-                    const displayName = route.route_name || `Delivery Route ${idx + 1}`;
-
-                    const item = document.createElement('div');
-                    item.className = 'v6-card';
-                    item.style.cssText = 'padding:8px;';
-                    item.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:6px; width:100%;" onclick="event.stopPropagation()">
-                        <div class="v6-badge" style="flex:0 0 24px; background:#fff7ed; color:#f97316;">${idx + 1}</div>
-                        <div class="v6-card-body" style="flex:1; min-width:0; padding:0 4px;" onclick="event.stopPropagation()">
-                            <div class="v6-card-title" style="font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#9a3412;" title="${displayName}">${displayName}</div>
-                            <div class="v6-card-sub" style="font-size:9px;">
-                                <span style="color:#f97316; font-weight:bold;">${ptCount} pts</span>
-                                <span style="margin:0 4px;">·</span>
-                                <span style="color:#22c55e;">🟢${comp.delivered || 0}</span>
-                                <span style="margin:0 2px;">·</span>
-                                <span style="color:#94a3b8;">🔴${comp.unsent || 0}</span>
-                                <span style="margin:0 2px;">·</span>
-                                <span style="color:#3b82f6;">🔵${comp.undelivered || 0}</span>
-                            </div>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:4px; margin-left:auto; flex-shrink:0;">
-                            <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryRouteDisplay('${route.id}')" class="v6-action-btn" style="color:#10b981;" title="Show on Map">
-                                <span class="material-icons-round" style="font-size:18px;">visibility</span>
-                            </button>
-                            <button onclick="event.stopPropagation(); SpatialRouter.deleteDeliveryRoute('${route.id}')" class="v6-action-btn" style="color:#ef4444;" title="Delete">
-                                <span class="material-icons-round" style="font-size:18px;">delete</span>
-                            </button>
-                        </div>
-                    </div>`;
-                    list.appendChild(item);
-                });
-            });
-        }
     },
 
     toggleSelectAllRoutes(checked, type = 'export') {
@@ -22887,6 +22813,8 @@ switchTab(tab) {
             
             // Skip if not in current filter (when filter is active)
             if (filterSet.size > 0 && !filterSet.has(sid)) return;
+            // Skip if delivery SID set is active and SID not in it
+            if (this.deliverySidSet?.size > 0 && !this.deliverySidSet.has(sid)) return;
             
             // Numerical boundary filter (super fast, completes in <2ms for all 170,504 records)
             if (lat >= bounds.getSouth() && lat <= bounds.getNorth() &&
@@ -23341,6 +23269,17 @@ switchTab(tab) {
     },
 
     changePage(delta) {
+        if (this._deliveryRoute) {
+            if (!this._deliveryRoute.route_data) return;
+            const seq = this._deliveryRoute.route_data.sequence;
+            if (!seq || seq.length === 0) return;
+            const totalChunks = Math.ceil(seq.length / this.chunkSize) || 1;
+            let target = (this.currentPage || 1) + delta;
+            if (target < 1 || target > totalChunks) return;
+            this.currentPage = target;
+            this._deliveryDisplayIdx = (this.currentPage - 1) * this.chunkSize;
+            return this._deliveryChangeMarker(0);
+        }
         if (this._sidebarDisplayIdx === null) return;
         const r = State.savedRoutes[this._sidebarDisplayIdx];
         if (!r || !r.sequence) return;
@@ -23361,6 +23300,7 @@ switchTab(tab) {
     },
 
     changeMarker(delta, skipCard = false) {
+        if (this._deliveryRoute) return this._deliveryChangeMarker(delta, skipCard);
         if (this._sidebarDisplayIdx === null) return;
         const r = State.savedRoutes[this._sidebarDisplayIdx];
         if (!r || !r.sequence || r.sequence.length === 0) return;
@@ -23544,6 +23484,9 @@ switchTab(tab) {
             const isEnd = seqIdx !== -1 && seqIdx === this.sequence.length - 1;
 
             let area = row && row[12] ? this.cleanMCName(row[12]) : '';
+            const deliveryStatus = this.deliveryContext?.statusMap?.get(cleanSid);
+            const statusBadge = deliveryStatus === 'delivered' ? '🟢' : deliveryStatus === 'unsent' ? '🔴' : deliveryStatus === 'undelivered' ? '🔵' : '';
+            const statusText = this.deliveryContext ? (deliveryStatus || 'undelivered') : (seqIdx === -1 ? 'Pool' : (isStart ? 'Start' : isEnd ? 'End' : 'Sequenced'));
             const item = document.createElement('div');
             item.className = 'v6-card';
             item.setAttribute('data-sid', sid);
@@ -23556,8 +23499,8 @@ switchTab(tab) {
                                onclick="event.stopPropagation()">
                     </div>
                     <div class="v6-card-body">
-                        <div class="v6-card-title">#${sid}</div>
-                        <div class="v6-card-sub">${area || name || ''} | ${seqIdx === -1 ? 'Pool' : (isStart ? 'Start' : isEnd ? 'End' : 'Sequenced')}</div>
+                        <div class="v6-card-title">${statusBadge} #${sid}</div>
+                        <div class="v6-card-sub">${area || name || ''} | ${statusText}</div>
                     </div>
                     <button onclick="event.stopPropagation(); ListView.jumpFromMap('${sid}')" class="v6-action-btn" style="color:#64748b; margin-right:4px;" title="View Details">
                         <span class="material-icons-round" style="font-size:16px;">visibility</span>
@@ -23831,7 +23774,9 @@ switchTab(tab) {
             // Shadow Markers Preview
             if (this.points.length > 2) {
                 const polyPts = this.points.map(p => ({ lat: p.lat, lng: p.lng }));
-                const searchPool = State.filtered || [];
+                const searchPool = this.deliverySidSet?.size > 0
+                    ? (window.RAW_DATA || []).filter(r => this.deliverySidSet.has(String(r[0]).replace(/\.0$/, '').trim()))
+                    : (State.filtered || []);
                 const bounds = L.latLngBounds(this.points);
                 searchPool.forEach(row => {
                     if (!row[1] || !row[2]) return;
@@ -23995,6 +23940,45 @@ switchTab(tab) {
     save() { this.saveRoute(); },
     async saveRoute(forceDownload = false) {
         if (this.sequence.length === 0) return;
+
+        // Delivery context: save to delivery_routes instead of saved_routes
+        if (this.deliveryContext) {
+            const { month, mc, statusMap } = this.deliveryContext;
+            let d = 0, u = 0, ud = 0;
+            this.sequence.forEach(s => {
+                const st = statusMap.get(String(s.id));
+                if (st === 'delivered') d++;
+                else if (st === 'unsent') u++;
+                else ud++;
+            });
+            const routeNum = (State.deliveryRoutes.filter(r => this.cleanMCName(r.mc_uc || '') === mc).length || 0) + 1;
+            const defaultName = `DEL-${mc.replace(/[,\s]+/g, '_')}_R${String(routeNum).padStart(2, '0')}_${month}`;
+            const finalName = prompt("Enter a name for this delivery route:", defaultName);
+            if (finalName === null || finalName.trim() === "") {
+                if (App.showToast) App.showToast("Save cancelled.");
+                return;
+            }
+            const polygon = this.activePolygon?.getLatLngs()?.[0]?.map(ll => [ll.lat, ll.lng]) || null;
+            const { error } = await window._supabase.from('delivery_routes').insert({
+                route_name: finalName.trim(),
+                mc_uc: mc,
+                delivery_month: month,
+                route_data: { sequence: this.sequence, polygon, points: this.sequence.map(s => ({ id: s.id, lat: s.lat, lng: s.lng })) },
+                composition: { total: this.sequence.length, delivered: d, unsent: u, undelivered: ud }
+            });
+            if (error) {
+                console.error(error);
+                if (App.showToast) App.showToast("Failed to save delivery route.");
+                return;
+            }
+            this.deliveryContext = null;
+            this.deliverySidSet = null;
+            this.resetCurrentRoute();
+            await this.loadDeliveryRoutes();
+            this.renderDeliverySavedList();
+            if (App.showToast) App.showToast(`Delivery route saved: ${finalName.trim()}`);
+            return;
+        }
 
         let defaultName;
         if (this.editingRouteIdx !== null && this.editingRouteIdx !== undefined && this.editingRouteName) {
@@ -24308,6 +24292,7 @@ switchTab(tab) {
             State.deliveryRoutes = data || [];
             this.renderDeliverySidebar();
             this.renderRouteManager();
+            this.renderDeliverySavedList();
         } catch (e) {
             console.warn("loadDeliveryRoutes error:", e);
             State.deliveryRoutes = [];
@@ -24348,7 +24333,11 @@ switchTab(tab) {
         this.deliveryMarkerLayer = null;
         this.deliverySequence = [];
         this.deliveryMc = '';
+        this.deliverySidSet = null;
+        this.deliveryContext = null;
         document.getElementById('delivery-stats').style.display = 'none';
+        const dl = document.getElementById('delivery-route-list');
+        if (dl) dl.innerHTML = '';
 
         // Populate MC/UC dropdown for this city
         if (!city) {
@@ -24373,7 +24362,10 @@ switchTab(tab) {
         this.deliveryMarkerLayer = L.layerGroup().addTo(State.map);
         this.deliverySequence = [];
 
-        const sids = (window.RAW_DATA || []).filter(r => r[11] === city && r[12] === mc).map(r => String(r[0]));
+        const sids = (window.RAW_DATA || []).filter(r => {
+            if (State.hideZubairSids && window.ZUBAIR_SIDS?.has(String(r[0]))) return false;
+            return r[11] === city && r[12] === mc;
+        }).map(r => String(r[0]));
         if (!sids.length) {
             if (spinner) spinner.style.display = 'none';
             return;
@@ -24381,27 +24373,30 @@ switchTab(tab) {
 
         let delivered = 0, unsent = 0;
         const markerData = [];
-        const sidChunks = this._chunkArray(sids, 100);
-        for (const chunk of sidChunks) {
-            const { data } = await window._supabase
+        const sidChunks = this._chunkArray(sids, 500);
+        const promises = sidChunks.map(chunk =>
+            window._supabase
                 .from('delivery_log')
                 .select('survey_id, status, capture_gps_lat, capture_gps_lng, distance_to_target')
                 .eq('bill_month', month)
-                .in('survey_id', chunk);
-            (data || []).forEach(d => {
-                const status = (d.status === 'unsent' || Number(d.distance_to_target || 0) > 50) ? 'unsent' : 'delivered';
-                const lat = d.capture_gps_lat, lng = d.capture_gps_lng;
-                if (lat && lng) markerData.push({ sid: String(d.survey_id), lat, lng, status });
-                if (status === 'delivered') delivered++;
-                else unsent++;
-            });
-        }
+                .in('survey_id', chunk)
+        );
+        const results = await Promise.all(promises);
+        results.forEach(({ data }) => (data || []).forEach(d => {
+            const sid = String(d.survey_id);
+            if (State.hideZubairSids && window.ZUBAIR_SIDS?.has(sid)) return;
+            const status = (d.status === 'unsent' || Number(d.distance_to_target || 0) > 50) ? 'unsent' : 'delivered';
+            const lat = d.capture_gps_lat, lng = d.capture_gps_lng;
+            if (lat && lng) markerData.push({ sid, lat, lng, status });
+            if (status === 'delivered') delivered++;
+            else unsent++;
+        }));
 
         const deliveredSids = new Set();
         markerData.forEach(m => {
             deliveredSids.add(m.sid);
             const color = m.status === 'delivered' ? '#22c55e' : '#94a3b8';
-            L.circleMarker([m.lat, m.lng], { radius: 5, color, fillOpacity: 0.8, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
+            L.circleMarker([m.lat, m.lng], { radius: 5, fillColor: color, color: 'rgba(0,0,0,0.6)', weight: 1, fillOpacity: 0.6, interactive: false, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
             this.deliverySequence.push({ id: m.sid, lat: m.lat, lng: m.lng, status: m.status });
         });
 
@@ -24410,7 +24405,7 @@ switchTab(tab) {
             if (deliveredSids.has(sid)) return;
             const row = window.SID_MAP.get(sid);
             if (row && row[1] && row[2]) {
-                L.circleMarker([parseFloat(row[1]), parseFloat(row[2])], { radius: 5, color: '#3b82f6', fillOpacity: 0.6, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
+                L.circleMarker([parseFloat(row[1]), parseFloat(row[2])], { radius: 5, fillColor: '#3b82f6', color: 'rgba(0,0,0,0.6)', weight: 1, fillOpacity: 0.6, interactive: false, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
                 this.deliverySequence.push({ id: sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), status: 'undelivered' });
                 undeliveredCount++;
             }
@@ -24423,6 +24418,14 @@ switchTab(tab) {
         if (stats) stats.style.display = 'block';
         document.getElementById('delivery-marker-count').textContent = `${sids.length} houses`;
         document.getElementById('delivery-composition').textContent = `🟢${delivered} delivered · 🔴${unsent} unsent · 🔵${undeliveredCount} undelivered`;
+
+        this.deliverySidSet = new Set(sids);
+        this.deliveryContext = {
+            month: this.deliveryMonth,
+            city: this.deliveryCity,
+            mc: this.deliveryMc,
+            statusMap: new Map(this.deliverySequence.map(s => [String(s.id), s.status]))
+        };
     },
 
     startDeliveryDraw() {
@@ -24481,6 +24484,8 @@ switchTab(tab) {
         this.deliveryEditing = false;
         this._deliveryDrawPoints = [];
         this.deliveryDrawnPolygon = null;
+        this.deliverySidSet = null;
+        this.deliveryContext = null;
         State.map.off('click', this._deliveryClick);
         State.map.getContainer().style.cursor = '';
         document.getElementById('btn-delivery-finish').style.display = 'none';
@@ -24546,8 +24551,12 @@ switchTab(tab) {
         this.deliveryMc = '';
         this.deliveryCity = '';
         this.deliveryMonth = '';
+        this.deliverySidSet = null;
+        this.deliveryContext = null;
         const stats = document.getElementById('delivery-stats');
         if (stats) stats.style.display = 'none';
+        const dl = document.getElementById('delivery-route-list');
+        if (dl) dl.innerHTML = '';
     },
 
     async refreshDeliveryData() {
@@ -24642,34 +24651,136 @@ switchTab(tab) {
         });
     },
 
+    renderDeliverySavedList() {
+        const container = document.getElementById('delivery-route-list');
+        if (!container) return;
+        container.innerHTML = '';
+        const mc = this.deliveryMc;
+        if (!mc) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#94a3b8; font-size:11px;">Select MC/UC to view saved delivery routes.</div>';
+            return;
+        }
+        const routes = State.deliveryRoutes.filter(r => this.cleanMCName(r.mc_uc || '') === mc);
+        if (!routes.length) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#94a3b8; font-size:11px;">No saved delivery routes for this MC. Use the Editor tab to draw routes.</div>';
+            return;
+        }
+        routes.forEach((r, idx) => {
+            const seq = r.route_data?.sequence || [];
+            const comp = r.composition || {};
+            const d = document.createElement('div');
+            d.style.cssText = 'padding:8px; border-radius:8px; background:white; border:1px solid #e2e8f0; cursor:pointer; margin-bottom:4px;';
+            d.innerHTML = `
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <div style="width:22px; height:22px; background:#fff7ed; color:#f97316; border-radius:4px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:10px; flex-shrink:0;">${idx + 1}</div>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:700; font-size:10px; color:#1e293b;">${r.route_name || 'Route ' + (idx + 1)}</div>
+                        <div style="font-size:9px; color:#64748b;">${seq.length} pts · 🟢${comp.delivered || 0} 🔴${comp.unsent || 0} 🔵${comp.undelivered || 0}</div>
+                    </div>
+                    <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryRouteDisplay('${r.id}')" style="background:none; border:none; cursor:pointer; padding:2px; color:#10b981;"><span class="material-icons-round" style="font-size:16px;">visibility</span></button>
+                    <button onclick="event.stopPropagation(); SpatialRouter.deleteDeliveryRoute('${r.id}')" style="background:none; border:none; cursor:pointer; padding:2px; color:#ef4444;"><span class="material-icons-round" style="font-size:16px;">delete</span></button>
+                </div>`;
+            d.onclick = () => this.toggleDeliveryRouteDisplay(r.id);
+            container.appendChild(d);
+        });
+    },
+
     toggleDeliveryRouteDisplay(routeId) {
+        // Toggle off if already showing this route
+        if (this._deliveryRoute && String(this._deliveryRoute.id) === String(routeId)) {
+            this._clearDeliveryRouteDisplay();
+            this.renderDeliverySidebar();
+            return;
+        }
+
         const route = State.deliveryRoutes.find(r => String(r.id) === String(routeId));
         if (!route || !route.route_data) return;
 
+        this._deliveryRoute = route;
+        this._deliveryDisplayIdx = 0;
+        this.currentPage = 1;
+
+        // Clear any existing survey route display
+        if (this._displayLayer) {
+            State.map.removeLayer(this._displayLayer);
+            this._displayLayer = null;
+        }
+        this._sidebarDisplayIdx = null;
+
+        // Remove existing delivery marker layer
         if (this.deliveryMarkerLayer) {
             State.map.removeLayer(this.deliveryMarkerLayer);
             this.deliveryMarkerLayer = null;
         }
 
+        // Build markers + polygon on delivery layer
         this.deliveryMarkerLayer = L.layerGroup().addTo(State.map);
-
         const data = route.route_data;
         if (data.polygon && data.polygon.length >= 3) {
             L.polygon(data.polygon, { color: '#f97316', weight: 2, fillOpacity: 0.1, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
         }
-
         (data.sequence || []).forEach(s => {
             const color = s.status === 'delivered' ? '#22c55e' : s.status === 'unsent' ? '#94a3b8' : '#3b82f6';
             L.circleMarker([s.lat, s.lng], { radius: 5, color, fillOpacity: 0.8, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
         });
 
-        State.map.fitBounds(this.deliveryMarkerLayer.getBounds().pad(0.1));
+        this.updateWatermark(route.route_name);
+        this.toggleRoutePager(true);
+        const seq = data.sequence || [];
+        this._activeMarkerIdx = 0;
+        this.updatePagerInfo(seq.length);
+
+        setTimeout(() => this._deliveryChangeMarker(0, false), 400);
+
+        this.renderDeliverySidebar();
+        if (App.showToast) App.showToast(`Showing: ${route.route_name}`);
     },
 
     clearDeliveryMapDisplay() {
         if (this.deliveryMarkerLayer) State.map.removeLayer(this.deliveryMarkerLayer);
         this.deliveryMarkerLayer = null;
+        this._deliveryRoute = null;
+        this._deliveryDisplayIdx = null;
         State.deliveryRouteDisplayIndices.clear();
+        this.toggleRoutePager(false);
+        this.updateWatermark('');
+        this.renderDeliverySidebar();
+    },
+
+    _deliveryChangeMarker(delta, skipCard = false) {
+        if (!this._deliveryRoute || !this._deliveryRoute.route_data) return;
+        const seq = this._deliveryRoute.route_data.sequence;
+        if (!seq || seq.length === 0) return;
+
+        if (this._deliveryDisplayIdx === undefined || this._deliveryDisplayIdx === null)
+            this._deliveryDisplayIdx = -1;
+
+        const total = seq.length;
+        this._deliveryDisplayIdx = (this._deliveryDisplayIdx || 0) + delta;
+        if (this._deliveryDisplayIdx < 0) this._deliveryDisplayIdx = 0;
+        if (this._deliveryDisplayIdx >= total) this._deliveryDisplayIdx = total - 1;
+
+        const pt = seq[this._deliveryDisplayIdx];
+        if (!pt) return;
+
+        State.map.flyTo([pt.lat, pt.lng], 19, { padding: [100, 100], duration: 0.5 });
+        this._activeMarkerIdx = this._deliveryDisplayIdx;
+        this.updatePagerInfo(total);
+
+        const sid = String(pt.surveyId || pt.id);
+        this.highlightMarker(sid, pt.lat, pt.lng, skipCard);
+    },
+
+    _clearDeliveryRouteDisplay() {
+        if (this.deliveryMarkerLayer) {
+            State.map.removeLayer(this.deliveryMarkerLayer);
+            this.deliveryMarkerLayer = null;
+        }
+        this._deliveryRoute = null;
+        this._deliveryDisplayIdx = null;
+        this._activeMarkerIdx = null;
+        this.toggleRoutePager(false);
+        this.updateWatermark('');
     },
 
     toggleDeliveryMCGroup(group) {
