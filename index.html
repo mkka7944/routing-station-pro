@@ -8816,8 +8816,9 @@ input[type=number] {
 }
 
 #route-watermark-text {
-        white-space: normal;
-        word-break: break-word;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         line-height: 1.3;
 }
 
@@ -9569,7 +9570,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.07.31.1018</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.08.01.1233</span>
             </div>
         </div>
         
@@ -10244,7 +10245,7 @@ input[type=number] {
                 <button onclick="ListView.prev()" style="width:34px; height:34px; border-radius:8px; background:#f1f5f9; color:var(--text); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="Previous"><span class="material-icons-round" style="font-size:18px;">chevron_left</span></button>
                 <div style="font-weight:700; font-size:11px; white-space:nowrap; padding:0 4px;"><span id="lv-idx">1</span> / <span id="lv-total">0</span></div>
                 <button onclick="ListView.next()" style="width:34px; height:34px; border-radius:8px; background:#f1f5f9; color:var(--text); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="Next"><span class="material-icons-round" style="font-size:18px;">chevron_right</span></button>
-                <button onclick="ViewSwitcher.toMap()" style="width:34px; height:34px; border-radius:8px; background:var(--primary); color:white; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; margin-left:8px;" title="Go to Map"><span class="material-icons-round" style="font-size:18px;">map</span></button>
+                <button onclick="ListView.showCurrentOnMap()" style="width:34px; height:34px; border-radius:8px; background:var(--primary); color:white; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; margin-left:8px;" title="Go to Map"><span class="material-icons-round" style="font-size:18px;">map</span></button>
             </div>
         </div>
     </div>
@@ -11150,7 +11151,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.07.31.1018";
+window.DATA_VERSION = "v2026.08.01.1233";
 window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -12825,6 +12826,12 @@ const ViewSwitcher = {
                     SpatialRouter.closeMarkerCard();
                 }
                 
+                // Remember whether the route pager was open, then hide it while the list is shown
+                if(window.SpatialRouter) {
+                    SpatialRouter._restorePager = SpatialRouter._restorePager || (typeof SpatialRouter.isRoutePagerActive === 'function' && SpatialRouter.isRoutePagerActive());
+                    SpatialRouter.toggleRoutePager(false);
+                }
+                
                 // Ensure list view is refreshed with potentially new filters
                 if(window.SpatialRouter && SpatialRouter._sidebarDisplayIdx !== null) {
                     SpatialRouter.renderDisplayLayer(); // This will sync State.filtered
@@ -12853,6 +12860,15 @@ const ViewSwitcher = {
             document.getElementById('paid-dashboard-stage').style.display = 'none';
             document.getElementById('map').style.visibility = 'visible';
             State.originView = 'map'; 
+            
+            // Restore the route pager if it was open before the list was shown
+            if(window.SpatialRouter && SpatialRouter._restorePager) {
+                SpatialRouter._restorePager = false;
+                const routeShown = SpatialRouter._sidebarDisplayIdx !== null || !!SpatialRouter._deliveryRoute;
+                if(routeShown && typeof SpatialRouter.isMarkingMode === 'function' && !SpatialRouter.isMarkingMode()) {
+                    SpatialRouter.toggleRoutePager(true);
+                }
+            }
             
             // Immediate resize for responsive layout
             if(State.map) State.map.invalidateSize();
@@ -13541,11 +13557,22 @@ const ListView = {
     },
 
 
+    showCurrentOnMap() {
+        const rec = State.filtered[State.currentIdx];
+        if (rec) {
+            this.showOnMap(String(rec[0]));
+            if (window.SpatialRouter && typeof SpatialRouter.syncPagerToSid === 'function') {
+                SpatialRouter.syncPagerToSid(String(rec[0]));
+            }
+        } else {
+            ViewSwitcher.toMap();
+        }
+    },
+
     showOnMap(id, isolate = false) {
         const sidStr = String(id).trim();
         const record = window.SID_MAP ? window.SID_MAP.get(sidStr) : null;
         if (!record) return;
-
         if (isolate) {
             if (State.hideZubairSids && window.ZUBAIR_SIDS && window.ZUBAIR_SIDS.has(sidStr)) return;
             State.history.push({
@@ -21219,6 +21246,7 @@ const SpatialRouter = {
     deliveryMc: '',
     deliveryMarkerLayer: null,
     _deliveryDrawPoints: [],
+    _restorePager: false,
 
     init() {
         window.SpatialRouter = this;
@@ -21335,6 +21363,7 @@ const SpatialRouter = {
             btnListView.onclick = () => {
                 this.closeMarkerCard();
                 if (window.ListView && ListView.jumpFromMap) {
+                    this._restorePager = true; // route lists come back to the map with the route pager
                     ListView.jumpFromMap(sid);
                 } else {
                     const sidIdx = State.filtered.findIndex(r => String(r[0]) === String(sid));
@@ -22181,6 +22210,11 @@ const SpatialRouter = {
         if (toolbar) toolbar.style.display = (this.activeTab === 'editor' && val) ? 'flex' : (this.activeTab === 'editor' ? 'flex' : 'none');
     },
 
+    toggleClearRouteButton(val) {
+        const btn = document.getElementById('btn-clear-route');
+        if (btn) btn.style.display = val ? 'flex' : 'none';
+    },
+
     _applyRoutes(data) {
         if (data && Array.isArray(data)) {
             // CRITICAL: Do NOT overwrite window.RAW_ROUTES as it contains the build-time area metadata
@@ -22356,13 +22390,14 @@ switchTab(tab) {
             this.renderDeliverySavedList();
         } else this.renderRouteManager();
 
-        // Cleanup delivery marker layer when switching to manager (not editor)
-        if (tab !== 'delivery' && tab !== 'editor' && this.deliveryMarkerLayer) {
-            State.map.removeLayer(this.deliveryMarkerLayer);
-            this.deliveryMarkerLayer = null;
+        // Cleanup delivery route display only when entering the manager tab (the editor keeps
+        // the loaded MC markers on the map so delivery routes can be drawn/edited there)
+        if (tab === 'manager' && (this.deliveryMarkerLayer || this._deliveryRoute)) {
+            this._clearDeliveryRouteDisplay();
+            this.renderDeliverySidebar();
         }
-        // Cancel any active delivery drawing
-        if (tab !== 'delivery' && this.deliveryEditing) {
+        // Cancel any active delivery drawing (keep it live when the editor tab is used)
+        if (tab === 'manager' && this.deliveryEditing) {
             this.cancelDeliveryDraw();
         }
     },
@@ -22513,7 +22548,6 @@ switchTab(tab) {
         State.currentIdx = 0;
 
         this.renderDisplayLayer();
-        this.toggleRoutePager(true);
         if (window.MapNavigator) MapNavigator.updateUI();
 
         // Refinement: Start at first marker on load
@@ -22979,6 +23013,8 @@ switchTab(tab) {
         this._sidebarDisplayIdx = null; // Fix sticky highlight
         this.editingRouteId = null;
         this.editingRouteName = null;
+        this.editingDeliveryRouteId = null;
+        this.editingDeliveryRouteName = null;
         this.activeDisplayRoutes = [];
         if (this.activePolygon) {
             State.map.removeLayer(this.activePolygon);
@@ -22986,6 +23022,7 @@ switchTab(tab) {
         }
         this.activePolygonPts = [];
         this.setEditMode(false);
+        this.toggleClearRouteButton(false);
         this.renderRoute();
         this.toggleRoutePager(false);
         this.renderRouteManager();
@@ -23260,9 +23297,11 @@ switchTab(tab) {
             State.map.fitBounds(L.latLngBounds(chunkPts), { padding: [50, 50], animate: true, duration: 0.8 });
         }
 
-        // LISTVIEW SYNC: Only show current 25 houses in ListView
-        const chunkSIDs = new Set(chunk.map(p => String(p.surveyId || p.id)));
-        State.filtered = (window.RAW_DATA || []).filter(row => chunkSIDs.has(String(row[0])));
+        // LISTVIEW SYNC: Only show the current 25 houses in ListView (in route order)
+        const chunkSIDs = new Map(chunk.map((p, i) => [String(p.surveyId || p.id), i]));
+        State.filtered = (window.RAW_DATA || [])
+            .filter(row => chunkSIDs.has(String(row[0])))
+            .sort((rowA, rowB) => chunkSIDs.get(String(rowA[0])) - chunkSIDs.get(String(rowB[0])));
         if (typeof ListView !== 'undefined' && document.getElementById('list-view-stage')?.classList.contains('active')) {
             ListView.render();
         }
@@ -23278,6 +23317,7 @@ switchTab(tab) {
             if (target < 1 || target > totalChunks) return;
             this.currentPage = target;
             this._deliveryDisplayIdx = (this.currentPage - 1) * this.chunkSize;
+            this.renderDeliveryDisplayLayer();
             return this._deliveryChangeMarker(0);
         }
         if (this._sidebarDisplayIdx === null) return;
@@ -23341,7 +23381,51 @@ switchTab(tab) {
         }
 
         // 2. Highlight map marker with pulse
-        this.highlightMarker(surveyID, activePt.lat, activePt.lng, skipCard);
+        this.highlightMarker(surveyID, activePt.lat, activePt.lng, skipCard, true);
+    },
+
+    syncPagerToSid(sid) {
+        const deliveryShown = !!this._deliveryRoute;
+        const surveyShown = this._sidebarDisplayIdx !== null;
+        if (!deliveryShown && !surveyShown) return;
+
+        let seq = null;
+        if (deliveryShown) {
+            seq = this._deliveryRoute.route_data ? this._deliveryRoute.route_data.sequence : null;
+        } else {
+            const r = State.savedRoutes[this._sidebarDisplayIdx];
+            seq = r ? r.sequence : null;
+        }
+        if (!seq) return;
+
+        const sidStr = String(sid);
+        const idx = seq.findIndex(p => String(p.surveyId || p.id) === sidStr);
+        if (idx === -1) return;
+
+        const pt = seq[idx];
+        const targetPage = Math.floor(idx / this.chunkSize) + 1;
+
+        if (this.currentPage !== targetPage) {
+            // Re-render the block the record belongs to so the map + pager + list all agree
+            this.currentPage = targetPage;
+            if (deliveryShown) {
+                this._deliveryDisplayIdx = idx;
+                this.renderDeliveryDisplayLayer();
+            } else {
+                this._activeMarkerIdx = idx;
+                this.renderDisplayLayer();
+            }
+            this.updatePagerInfo(seq.length);
+        } else {
+            if (deliveryShown) this._deliveryDisplayIdx = idx;
+            this._activeMarkerIdx = idx;
+            this.updatePagerInfo(seq.length);
+        }
+
+        // Pulse the marker without moving the map (showOnMap already flew there)
+        if (pt && !this.isMarkingMode()) {
+            this.highlightMarker(sidStr, pt.lat, pt.lng, true, true);
+        }
     },
 
 
@@ -23360,12 +23444,36 @@ switchTab(tab) {
     async openRouteInListView(idx) {
         const success = await this.ensureRouteData(idx);
         if (!success) return;
-
-        this.toggleSidebarRouteDisplay(idx);
         const r = State.savedRoutes[idx];
+        if (!r || !r.sequence) return;
 
-        // Switch to list view (pass false to skip index reset)
+        const alreadyShown = this._sidebarDisplayIdx === idx && !!this._displayLayer;
+        if (!alreadyShown) {
+            // Draw route on map WITHOUT opening the pager or popping the image modal
+            if (this._displayLayer) { State.map.removeLayer(this._displayLayer); this._displayLayer = null; }
+            this._sidebarDisplayIdx = idx;
+            this.activeDisplayRoutes = [r.name];
+            this.currentPage = 1;
+            this._activeMarkerIdx = 0;
+            this.renderDisplayLayer();
+            this.renderRouteManager();
+            this.renderSavedList();
+            this.toggleRoutePager(false);
+        }
+
+        // Focus the list on the marker the pager is currently at (falls back to the first house)
+        const startIdx = (this.currentPage - 1) * this.chunkSize;
+        const chunk = r.sequence.slice(startIdx, startIdx + this.chunkSize);
+        let focusIdx = -1;
+        if (this._activeMarkerIdx !== undefined && this._activeMarkerIdx !== null && this._activeMarkerIdx !== -1) {
+            const within = this._activeMarkerIdx - startIdx;
+            if (within >= 0 && within < chunk.length) focusIdx = within;
+        }
+        State.currentIdx = focusIdx === -1 ? 0 : focusIdx;
+
+        // Switch to list view (pass false to skip index reset); State.filtered is already the current chunk
         if (window.ViewSwitcher) {
+            this._restorePager = true; // return to the map should bring the route pager back
             ViewSwitcher.toList(false);
             if (App.showToast) App.showToast(`List View: ${r.name}`);
         }
@@ -23375,6 +23483,7 @@ switchTab(tab) {
         const wm = document.getElementById('route-watermark-text');
         if (wm) {
             wm.innerText = routeName || '';
+            wm.title = routeName || '';
         }
     },
 
@@ -23662,7 +23771,7 @@ switchTab(tab) {
             `;
     },
 
-    highlightMarker(sid, optLat, optLng, skipCard = false) {
+    highlightMarker(sid, optLat, optLng, skipCard = false, skipCenter = false) {
         let lat = optLat, lng = optLng;
         if (lat === undefined || lng === undefined) {
             const isMapReady = window.SID_MAP instanceof Map;
@@ -23672,8 +23781,9 @@ switchTab(tab) {
             lng = parseFloat(row[2]);
         }
 
-        // Center map on the marker (but skip if marking to prevent "jerks")
-        if (State.map && !this.isMarkingMode()) {
+        // Center map on the marker (but skip if marking to prevent "jerks",
+        // and skip if the pager already flew the map itself)
+        if (State.map && !this.isMarkingMode() && !skipCenter) {
             State.map.setView([lat, lng], 18);
         }
 
@@ -23946,37 +24056,52 @@ switchTab(tab) {
             const { month, mc, statusMap } = this.deliveryContext;
             let d = 0, u = 0, ud = 0;
             this.sequence.forEach(s => {
-                const st = statusMap.get(String(s.id));
+                const st = statusMap.get(String(s.id).replace(/\.0$/, '').trim());
                 if (st === 'delivered') d++;
                 else if (st === 'unsent') u++;
                 else ud++;
             });
-            const routeNum = (State.deliveryRoutes.filter(r => this.cleanMCName(r.mc_uc || '') === mc).length || 0) + 1;
-            const defaultName = `DEL-${mc.replace(/[,\s]+/g, '_')}_R${String(routeNum).padStart(2, '0')}_${month}`;
-            const finalName = prompt("Enter a name for this delivery route:", defaultName);
+            const isEditing = !!this.editingDeliveryRouteId;
+            let defaultName;
+            if (isEditing && this.editingDeliveryRouteName) {
+                defaultName = this.editingDeliveryRouteName;
+            } else {
+                const routeNum = (State.deliveryRoutes.filter(r => this.cleanMCName(r.mc_uc || '') === mc).length || 0) + 1;
+                const shortMC = this.cleanMCName(mc);
+                defaultName = `DEL-${shortMC}_R${String(routeNum).padStart(2, '0')}_${month}`;
+            }
+            const finalName = prompt(isEditing ? "Update this delivery route name (or keep same):" : "Enter a name for this delivery route:", defaultName);
             if (finalName === null || finalName.trim() === "") {
                 if (App.showToast) App.showToast("Save cancelled.");
                 return;
             }
             const polygon = this.activePolygon?.getLatLngs()?.[0]?.map(ll => [ll.lat, ll.lng]) || null;
-            const { error } = await window._supabase.from('delivery_routes').insert({
+            const payload = {
                 route_name: finalName.trim(),
                 mc_uc: mc,
                 delivery_month: month,
                 route_data: { sequence: this.sequence, polygon, points: this.sequence.map(s => ({ id: s.id, lat: s.lat, lng: s.lng })) },
                 composition: { total: this.sequence.length, delivered: d, unsent: u, undelivered: ud }
-            });
-            if (error) {
-                console.error(error);
+            };
+            let result;
+            if (isEditing) {
+                result = await window._supabase.from('delivery_routes').update(payload).eq('id', this.editingDeliveryRouteId);
+            } else {
+                result = await window._supabase.from('delivery_routes').insert(payload);
+            }
+            if (result.error) {
+                console.error(result.error);
                 if (App.showToast) App.showToast("Failed to save delivery route.");
                 return;
             }
+            this.editingDeliveryRouteId = null;
+            this.editingDeliveryRouteName = null;
             this.deliveryContext = null;
             this.deliverySidSet = null;
             this.resetCurrentRoute();
             await this.loadDeliveryRoutes();
             this.renderDeliverySavedList();
-            if (App.showToast) App.showToast(`Delivery route saved: ${finalName.trim()}`);
+            if (App.showToast) App.showToast(isEditing ? `Delivery route updated: ${finalName.trim()}` : `Delivery route saved: ${finalName.trim()}`);
             return;
         }
 
@@ -24283,13 +24408,26 @@ switchTab(tab) {
 
     async loadDeliveryRoutes() {
         try {
-            const { data, error } = await window._supabase
-                .from('delivery_routes')
-                .select('*')
-                .order('mc_uc', { ascending: true })
-                .order('route_name', { ascending: true });
-            if (error) throw error;
-            State.deliveryRoutes = data || [];
+            // Paginated fetch (Supabase caps at 1000 rows per query)
+            const all = [];
+            let from = 0, step = 1000;
+            while (true) {
+                const { data, error } = await window._supabase
+                    .from('delivery_routes')
+                    .select('*')
+                    .order('mc_uc', { ascending: true })
+                    .order('route_name', { ascending: true })
+                    .range(from, from + step - 1);
+                if (error) throw error;
+                if (!data || data.length === 0) break;
+                all.push(...data);
+                from += step;
+            }
+            State.deliveryRoutes = all;
+
+            // Default: collapse all MC groups so the sidebar stays compact with many MCs
+            State.deliveryRouteCollapsedGroups = new Set(all.map(r => this.cleanMCName(r.mc_uc || 'Unknown')));
+
             this.renderDeliverySidebar();
             this.renderRouteManager();
             this.renderDeliverySavedList();
@@ -24587,6 +24725,63 @@ switchTab(tab) {
         if (App.showToast) App.showToast("Delivery route deleted.");
     },
 
+    async loadDeliveryRouteForEdit(routeId) {
+        if (!window.USER || window.USER.role !== 'admin') {
+            if (App.showToast) App.showToast("Unauthorized: Admins only.");
+            return;
+        }
+        const route = State.deliveryRoutes.find(r => String(r.id) === String(routeId));
+        if (!route || !route.route_data) return;
+        const seq = route.route_data.sequence || [];
+        if (!seq.length) {
+            if (App.showToast) App.showToast("This route has no markers to edit.");
+            return;
+        }
+
+        this.isBatchMode = false;
+        this.batchRouteSequences = [];
+        this.batchRoutePolygons = [];
+        this.currentPage = 1;
+        this._activeMarkerIdx = -1;
+
+        this.resetCurrentRoute();
+
+        // Build statusMap with cleaned SID keys (matches renderRoute lookups)
+        const statusMap = new Map();
+        const sids = seq.map(s => String(s.surveyId || s.id).replace(/\.0$/, '').trim());
+        seq.forEach((s, i) => statusMap.set(sids[i], s.status || 'undelivered'));
+
+        this.editingDeliveryRouteId = route.id;
+        this.editingDeliveryRouteName = route.route_name || '';
+        this.deliveryContext = {
+            month: route.delivery_month,
+            mc: route.mc_uc,
+            statusMap
+        };
+        this.deliverySidSet = new Set(sids);
+
+        this.capturedIDs = [...sids];
+        this.sequence = seq.map((s, i) => ({ id: sids[i], lat: s.lat, lng: s.lng, name: s.name }));
+        this.activeDisplayRoutes = [this.editingDeliveryRouteName];
+        if (route.route_data.polygon) {
+            this.activePolygon = L.polygon(route.route_data.polygon, { color: '#3b82f6', fillOpacity: 0.1, weight: 2 });
+        }
+        this.setEditMode(true);
+        this.renderRoute();
+        if (App.showToast) App.showToast(`Editing: ${this.editingDeliveryRouteName}`);
+
+        this.updateWatermark(this.editingDeliveryRouteName);
+
+        this.switchTab('editor');
+
+        this.updatePagerInfo(this.sequence.length);
+        const first = seq[0];
+        setTimeout(() => {
+            State.map.flyTo([first.lat, first.lng], 19, { padding: [100, 100], duration: 0.5 });
+            this.highlightMarker(sids[0], first.lat, first.lng, false, true);
+        }, 400);
+    },
+
     renderDeliverySidebar() {
         const side = document.getElementById('side-delivery-route-list');
         if (!side) return;
@@ -24613,13 +24808,13 @@ switchTab(tab) {
         const sortedAreas = Object.keys(grouped).sort((a, b) => this.naturalCompare(a, b));
         sortedAreas.forEach(area => {
             const grp = grouped[area];
-            const month = (grp.routes[0] && grp.routes[0].delivery_month) || '';
+            const months = [...new Set(grp.routes.map(r => r.delivery_month).filter(Boolean))].join(', ');
             const isCollapsed = State.deliveryRouteCollapsedGroups.has(area);
 
             const hdr = document.createElement('div');
             hdr.style.cssText = 'padding:4px 8px; font-weight:800; font-size:11px; text-transform:uppercase; color:#f97316; background:#fff7ed; border-radius:6px; margin:6px 0 4px 0; cursor:pointer; display:flex; justify-content:space-between; align-items:center;';
             hdr.onclick = (e) => { e.stopPropagation(); this.toggleDeliveryMCGroup(area); };
-            hdr.innerHTML = `<span>${area} <span style="color:#f97316; font-weight:bold; margin-left:6px; font-size:10px;">(${grp.routes.length} routes, ${grp.pts} pts)</span><span style="font-size:9px; color:#94a3b8; margin-left:6px;">${month}</span></span> <span class="material-icons-round" style="font-size:14px;">${isCollapsed ? 'expand_more' : 'expand_less'}</span>`;
+            hdr.innerHTML = `<span>${area} <span style="color:#f97316; font-weight:bold; margin-left:6px; font-size:10px;">(${grp.routes.length} routes, ${grp.pts} pts)</span><span style="font-size:9px; color:#94a3b8; margin-left:6px;">${months}</span></span> <span class="material-icons-round" style="font-size:14px;">${isCollapsed ? 'expand_more' : 'expand_less'}</span>`;
             side.appendChild(hdr);
             if (isCollapsed) return;
 
@@ -24628,18 +24823,28 @@ switchTab(tab) {
                 const comp = route.composition || {};
                 const compText = `${comp.delivered || 0}d · ${comp.unsent || 0}u · ${comp.undelivered || 0}ud`;
                 const displayName = route.route_name || `Route ${idx + 1}`;
+                const month = route.delivery_month || '—';
+                const isActive = this._deliveryRoute && String(this._deliveryRoute.id) === String(route.id);
+                const activeStyle = isActive ? 'background:#eff6ff; border-left:3px solid #f97316;' : 'background:#fff; border:1px solid #e2e8f0;';
 
                 const div = document.createElement('div');
-                div.style.cssText = 'display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:8px; cursor:pointer; background:#fff; border:1px solid #e2e8f0; transition:background 0.2s;';
+                div.style.cssText = `display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:8px; cursor:pointer; transition:background 0.2s; ${activeStyle}`;
                 div.title = compText;
                 div.innerHTML = `
                     <div style="width:22px; height:22px; background:#fff7ed; color:#f97316; border-radius:4px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:10px; flex-shrink:0;">${idx + 1}</div>
                     <div style="flex:1; min-width:0;">
                         <div style="font-weight:700; font-size:10px; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${displayName}">${displayName}</div>
-                        <div style="font-size:8px; color:#94a3b8;"><span style="color:#f97316; font-weight:bold;">${ptCount > 0 ? ptCount + ' pts' : '(Fetch...)'}</span></div>
+                        <div style="font-size:8px; color:#94a3b8;">
+                            <span style="color:#f97316; font-weight:bold;">${ptCount > 0 ? ptCount + ' pts' : '(Fetch...)'}</span>
+                            <span style="margin-left:4px;">· ${month}</span>
+                            <span style="margin-left:4px;">· ${compText}</span>
+                        </div>
                     </div>
-                    <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryRouteDisplay('${route.id}')" title="Show/Hide on Map" style="background:none; border:none; cursor:pointer; padding:2px; color:#10b981; flex-shrink:0;">
-                        <span class="material-icons-round" style="font-size:16px;">visibility</span>
+                    <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryRouteDisplay('${route.id}')" title="${isActive ? 'Hide' : 'Show'} on Map" style="background:none; border:none; cursor:pointer; padding:2px; color:${isActive ? '#ef4444' : '#10b981'}; flex-shrink:0;">
+                        <span class="material-icons-round" style="font-size:16px;">${isActive ? 'visibility_off' : 'visibility'}</span>
+                    </button>
+                    <button onclick="event.stopPropagation(); SpatialRouter.openDeliveryRouteInListView('${route.id}')" title="Open in List View" style="background:none; border:none; cursor:pointer; padding:2px; color:#06b6d4; flex-shrink:0;">
+                        <span class="material-icons-round" style="font-size:16px;">view_list</span>
                     </button>
                     <button onclick="event.stopPropagation(); SpatialRouter.clearDeliveryMapDisplay()" title="Clear Map" style="background:none; border:none; cursor:pointer; padding:2px; color:#ef4444; flex-shrink:0;">
                         <span class="material-icons-round" style="font-size:16px;">close</span>
@@ -24651,43 +24856,92 @@ switchTab(tab) {
         });
     },
 
+    openDeliveryRouteInListView(routeId) {
+        const route = State.deliveryRoutes.find(r => String(r.id) === String(routeId));
+        if (!route || !route.route_data) return;
+        const seq = route.route_data.sequence;
+        if (!seq || seq.length === 0) return;
+
+        const alreadyShown = this._deliveryRoute && String(this._deliveryRoute.id) === String(routeId);
+        if (!alreadyShown) {
+            // Draw route on map WITHOUT opening the pager or popping the image modal
+            this.toggleDeliveryRouteDisplay(routeId, { noPager: true, noToast: true, noToggle: true });
+            this.toggleRoutePager(false);
+        }
+
+        // Focus the list on the marker the pager is currently at (falls back to the first house)
+        const startIdx = (this.currentPage - 1) * this.chunkSize;
+        const chunk = seq.slice(startIdx, startIdx + this.chunkSize);
+        let focusIdx = -1;
+        if (this._activeMarkerIdx !== undefined && this._activeMarkerIdx !== null && this._activeMarkerIdx !== -1) {
+            const within = this._activeMarkerIdx - startIdx;
+            if (within >= 0 && within < chunk.length) focusIdx = within;
+        }
+        State.currentIdx = focusIdx === -1 ? 0 : focusIdx;
+
+        // Switch to list view (pass false to skip index reset); State.filtered is already the current chunk
+        if (window.ViewSwitcher) {
+            this._restorePager = true; // return to the map should bring the route pager back
+            ViewSwitcher.toList(false);
+            if (App.showToast) App.showToast(`List View: ${route.route_name || ''}`);
+        }
+    },
+
     renderDeliverySavedList() {
         const container = document.getElementById('delivery-route-list');
         if (!container) return;
         container.innerHTML = '';
-        const mc = this.deliveryMc;
-        if (!mc) {
-            container.innerHTML = '<div style="padding:20px; text-align:center; color:#94a3b8; font-size:11px;">Select MC/UC to view saved delivery routes.</div>';
+        const routes = State.deliveryRoutes;
+        if (!routes || !routes.length) {
+            container.innerHTML = '<div style="padding:20px; text-align:center; color:#94a3b8; font-size:11px;">No saved delivery routes found.</div>';
             return;
         }
-        const routes = State.deliveryRoutes.filter(r => this.cleanMCName(r.mc_uc || '') === mc);
-        if (!routes.length) {
-            container.innerHTML = '<div style="padding:20px; text-align:center; color:#94a3b8; font-size:11px;">No saved delivery routes for this MC. Use the Editor tab to draw routes.</div>';
-            return;
-        }
-        routes.forEach((r, idx) => {
-            const seq = r.route_data?.sequence || [];
-            const comp = r.composition || {};
-            const d = document.createElement('div');
-            d.style.cssText = 'padding:8px; border-radius:8px; background:white; border:1px solid #e2e8f0; cursor:pointer; margin-bottom:4px;';
-            d.innerHTML = `
+
+        // Group by MC/UC (mirrors sidebar grouping)
+        const grouped = {};
+        routes.forEach(r => {
+            const area = this.cleanMCName(r.mc_uc || 'Unknown');
+            if (!grouped[area]) grouped[area] = [];
+            grouped[area].push(r);
+        });
+
+        const sortedAreas = Object.keys(grouped).sort((a, b) => this.naturalCompare(a, b));
+        sortedAreas.forEach(area => {
+            const grp = grouped[area].sort((a, b) => String(b.delivery_month || '').localeCompare(String(a.delivery_month || '')));
+            const month = (grp[0] && grp[0].delivery_month) || '';
+
+            const hdr = document.createElement('div');
+            hdr.style.cssText = 'padding:6px 8px; font-weight:800; font-size:11px; text-transform:uppercase; color:#f97316; background:#fff7ed; border-radius:6px; margin:8px 0 4px 0; letter-spacing:0.5px; display:flex; justify-content:space-between; align-items:center;';
+            hdr.innerHTML = `<span>${area} <span style="color:#f97316; font-weight:bold; margin-left:6px; font-size:10px;">(${grp.length} routes)</span><span style="font-size:9px; color:#94a3b8; margin-left:6px;">${month || '—'}</span></span>`;
+            container.appendChild(hdr);
+
+            grp.forEach((r, idx) => {
+                const seq = r.route_data?.sequence || [];
+                const comp = r.composition || {};
+                const rMonth = r.delivery_month || '—';
+                const d = document.createElement('div');
+                d.style.cssText = 'padding:8px; border-radius:8px; background:white; border:1px solid #e2e8f0; cursor:pointer; margin-bottom:4px;';
+                d.title = `${comp.delivered || 0}d · ${comp.unsent || 0}u · ${comp.undelivered || 0}ud`;
+                d.innerHTML = `
                 <div style="display:flex; align-items:center; gap:6px;">
                     <div style="width:22px; height:22px; background:#fff7ed; color:#f97316; border-radius:4px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:10px; flex-shrink:0;">${idx + 1}</div>
                     <div style="flex:1; min-width:0;">
-                        <div style="font-weight:700; font-size:10px; color:#1e293b;">${r.route_name || 'Route ' + (idx + 1)}</div>
-                        <div style="font-size:9px; color:#64748b;">${seq.length} pts · 🟢${comp.delivered || 0} 🔴${comp.unsent || 0} 🔵${comp.undelivered || 0}</div>
+                        <div style="font-weight:700; font-size:10px; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.route_name || 'Route ' + (idx + 1)}</div>
+                        <div style="font-size:9px; color:#64748b;"><span style="background:#fef3c7; color:#92400e; border-radius:4px; padding:0 4px; font-weight:700;">${rMonth}</span> · ${seq.length} pts · 🟢${comp.delivered || 0} 🔴${comp.unsent || 0} 🔵${comp.undelivered || 0}</div>
                     </div>
-                    <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryRouteDisplay('${r.id}')" style="background:none; border:none; cursor:pointer; padding:2px; color:#10b981;"><span class="material-icons-round" style="font-size:16px;">visibility</span></button>
-                    <button onclick="event.stopPropagation(); SpatialRouter.deleteDeliveryRoute('${r.id}')" style="background:none; border:none; cursor:pointer; padding:2px; color:#ef4444;"><span class="material-icons-round" style="font-size:16px;">delete</span></button>
+                    <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryRouteDisplay('${r.id}')" title="Show on Map" style="background:none; border:none; cursor:pointer; padding:2px; color:#10b981;"><span class="material-icons-round" style="font-size:16px;">visibility</span></button>
+                    <button onclick="event.stopPropagation(); SpatialRouter.loadDeliveryRouteForEdit('${r.id}')" title="Edit Route" style="background:none; border:none; cursor:pointer; padding:2px; color:#3b82f6;"><span class="material-icons-round" style="font-size:16px;">edit</span></button>
+                    <button onclick="event.stopPropagation(); SpatialRouter.deleteDeliveryRoute('${r.id}')" title="Delete Route" style="background:none; border:none; cursor:pointer; padding:2px; color:#ef4444;"><span class="material-icons-round" style="font-size:16px;">delete</span></button>
                 </div>`;
-            d.onclick = () => this.toggleDeliveryRouteDisplay(r.id);
-            container.appendChild(d);
+                d.onclick = () => this.toggleDeliveryRouteDisplay(r.id);
+                container.appendChild(d);
+            });
         });
     },
 
-    toggleDeliveryRouteDisplay(routeId) {
-        // Toggle off if already showing this route
-        if (this._deliveryRoute && String(this._deliveryRoute.id) === String(routeId)) {
+    toggleDeliveryRouteDisplay(routeId, opts = {}) {
+        // Toggle off only in normal (view) mode
+        if (!opts.noToggle && this._deliveryRoute && String(this._deliveryRoute.id) === String(routeId)) {
             this._clearDeliveryRouteDisplay();
             this.renderDeliverySidebar();
             return;
@@ -24707,33 +24961,100 @@ switchTab(tab) {
         }
         this._sidebarDisplayIdx = null;
 
-        // Remove existing delivery marker layer
+        // Draw numbered squares (current 25) + full path + area outline
+        this.renderDeliveryDisplayLayer();
+
+        this.updateWatermark(route.route_name);
+        this._activeMarkerIdx = 0;
+
+        if (!opts.noPager) {
+            this.toggleRoutePager(true);
+            setTimeout(() => this._deliveryChangeMarker(0, false), 400);
+        }
+
+        this.renderDeliverySidebar();
+        if (!opts.noToast && App.showToast) App.showToast(`Showing: ${route.route_name}`);
+    },
+
+    renderDeliveryDisplayLayer() {
+        if (!this._deliveryRoute || !this._deliveryRoute.route_data) return;
+        const seq = this._deliveryRoute.route_data.sequence;
+        if (!seq || seq.length === 0) return;
+
         if (this.deliveryMarkerLayer) {
             State.map.removeLayer(this.deliveryMarkerLayer);
             this.deliveryMarkerLayer = null;
         }
-
-        // Build markers + polygon on delivery layer
         this.deliveryMarkerLayer = L.layerGroup().addTo(State.map);
-        const data = route.route_data;
+        const data = this._deliveryRoute.route_data;
+
+        const totalMarkers = seq.length;
+        const totalChunks = Math.ceil(totalMarkers / this.chunkSize) || 1;
+        if (this.currentPage > totalChunks) this.currentPage = totalChunks;
+        if (this.currentPage < 1) this.currentPage = 1;
+
+        // JITTER FIX: skip fitBounds when a marker is being navigated (changeMarker flies itself)
+        const isNavigatingMarker = this._deliveryDisplayIdx !== undefined && this._deliveryDisplayIdx !== null && this._deliveryDisplayIdx !== -1;
+
+        this.updatePagerInfo(totalMarkers);
+
+        const rpPrev = document.getElementById('rp-prev');
+        if (rpPrev) rpPrev.disabled = this.currentPage === 1;
+        const rpFirst = document.getElementById('rp-first');
+        if (rpFirst) rpFirst.disabled = this.currentPage === 1;
+        const rpNext = document.getElementById('rp-next');
+        if (rpNext) rpNext.disabled = this.currentPage === totalChunks;
+        const rpLast = document.getElementById('rp-last');
+        if (rpLast) rpLast.disabled = this.currentPage === totalChunks;
+
+        // Full path line + area outline
+        const pts = seq.map(p => [p.lat, p.lng]);
+        if (pts.length > 1) {
+            L.polyline(pts, { color: '#3b82f6', weight: 4, opacity: 0.6, dashArray: '6,4' }).addTo(this.deliveryMarkerLayer);
+        }
         if (data.polygon && data.polygon.length >= 3) {
             L.polygon(data.polygon, { color: '#f97316', weight: 2, fillOpacity: 0.1, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
         }
-        (data.sequence || []).forEach(s => {
-            const color = s.status === 'delivered' ? '#22c55e' : s.status === 'unsent' ? '#94a3b8' : '#3b82f6';
-            L.circleMarker([s.lat, s.lng], { radius: 5, color, fillOpacity: 0.8, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
+
+        // Current 25-house block as numbered squares (matches existing route look)
+        const startIdx = (this.currentPage - 1) * this.chunkSize;
+        const chunk = seq.slice(startIdx, startIdx + this.chunkSize);
+        const chunkPts = [];
+        chunk.forEach((s, relativeIdx) => {
+            const sIdx = startIdx + relativeIdx;
+            const sid = String(s.surveyId || s.id);
+            chunkPts.push([s.lat, s.lng]);
+
+            const bg = s.status === 'delivered' ? '#10b981' : s.status === 'unsent' ? '#94a3b8' : '#3b82f6';
+            const m = L.marker([s.lat, s.lng], {
+                icon: L.divIcon({
+                    className: 'route-marker-square',
+                    html: `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; border-radius:inherit; background:${bg}; color:white;">${sIdx + 1}</div>`
+                }),
+                sid: sid,
+                pane: 'routingMarkerPane'
+            }).addTo(this.deliveryMarkerLayer);
+
+            m.bindTooltip(`#${sid}`, { permanent: false, direction: 'top', offset: [0, -10] });
+            m.on('click', () => {
+                App._markerHit = true;
+                m.closeTooltip();
+                this.showMarkerCard(sid);
+            });
         });
 
-        this.updateWatermark(route.route_name);
-        this.toggleRoutePager(true);
-        const seq = data.sequence || [];
-        this._activeMarkerIdx = 0;
-        this.updatePagerInfo(seq.length);
+        if (chunkPts.length > 0 && !isNavigatingMarker) {
+            State.map.fitBounds(L.latLngBounds(chunkPts), { padding: [50, 50], animate: true, duration: 0.8 });
+        }
 
-        setTimeout(() => this._deliveryChangeMarker(0, false), 400);
-
-        this.renderDeliverySidebar();
-        if (App.showToast) App.showToast(`Showing: ${route.route_name}`);
+        // LISTVIEW SYNC: Only show the current 25 houses in ListView (in route order)
+        const chunkSIDs = new Map(chunk.map((s, i) => [String(s.surveyId || s.id), i]));
+        State.filtered = (window.RAW_DATA || [])
+            .filter(row => chunkSIDs.has(String(row[0])))
+            .sort((rowA, rowB) => chunkSIDs.get(String(rowA[0])) - chunkSIDs.get(String(rowB[0])));
+        if (typeof ListView !== 'undefined' && document.getElementById('list-view-stage')?.classList.contains('active')) {
+            ListView.render();
+        }
     },
 
     clearDeliveryMapDisplay() {
@@ -24760,15 +25081,23 @@ switchTab(tab) {
         if (this._deliveryDisplayIdx < 0) this._deliveryDisplayIdx = 0;
         if (this._deliveryDisplayIdx >= total) this._deliveryDisplayIdx = total - 1;
 
+        // Automatically change blocks if we walk outside the current 25-house window
+        const targetPage = Math.floor(this._deliveryDisplayIdx / this.chunkSize) + 1;
+        if (targetPage !== this.currentPage) {
+            this.currentPage = targetPage;
+            this.renderDeliveryDisplayLayer();
+        } else {
+            this.updatePagerInfo(total);
+        }
+
         const pt = seq[this._deliveryDisplayIdx];
         if (!pt) return;
 
         State.map.flyTo([pt.lat, pt.lng], 19, { padding: [100, 100], duration: 0.5 });
         this._activeMarkerIdx = this._deliveryDisplayIdx;
-        this.updatePagerInfo(total);
 
         const sid = String(pt.surveyId || pt.id);
-        this.highlightMarker(sid, pt.lat, pt.lng, skipCard);
+        this.highlightMarker(sid, pt.lat, pt.lng, skipCard, true);
     },
 
     _clearDeliveryRouteDisplay() {
@@ -24785,8 +25114,18 @@ switchTab(tab) {
 
     toggleDeliveryMCGroup(group) {
         const wasCollapsed = State.deliveryRouteCollapsedGroups.has(group);
-        State.deliveryRouteCollapsedGroups.clear();
-        if (wasCollapsed) State.deliveryRouteCollapsedGroups.delete(group);
+
+        // Accordion logic: First, collapse all known groups
+        State.deliveryRoutes.forEach(route => {
+            State.deliveryRouteCollapsedGroups.add(this.cleanMCName(route.mc_uc || 'Unknown'));
+        });
+
+        // If the clicked group was collapsed before, open it now
+        if (wasCollapsed) {
+            State.deliveryRouteCollapsedGroups.delete(group);
+        }
+        // Otherwise it remains collapsed (toggled off)
+
         this.renderDeliverySidebar();
         this.renderRouteManager();
     },
@@ -25453,6 +25792,8 @@ window.StaffPerformanceModal = {
         return m ? `${m[1].toUpperCase()}-${m[2]}` : mcFull.split(' ')[0];
     },
 
+    _cleanAreaList(arr) { return arr.filter(v => v && v !== '—'); },
+
     _hoursDiff(startISO, endISO) {
         if (!startISO || !endISO) return '0h';
         const diff = new Date(endISO) - new Date(startISO);
@@ -25630,6 +25971,26 @@ window.StaffPerformanceModal = {
         return { activeMs, breakMs: totalMs - activeMs, totalMs, breakGaps };
     },
 
+    // Day-accurate aggregation across a multi-day range: compute sessions per day
+    // and sum them, so overnight gaps are never counted as break time.
+    _computeRangeSessions(timestamps) {
+        if (!timestamps || timestamps.length === 0) return { activeMs: 0, breakMs: 0, totalMs: 0 };
+        const byDay = new Map();
+        timestamps.forEach(t => {
+            const day = String(t).split('T')[0];
+            if (!byDay.has(day)) byDay.set(day, []);
+            byDay.get(day).push(t);
+        });
+        let activeMs = 0, breakMs = 0, totalMs = 0;
+        byDay.forEach(arr => {
+            const s = this._computeDaySessions(arr);
+            activeMs += s.activeMs;
+            breakMs += s.breakMs;
+            totalMs += s.totalMs;
+        });
+        return { activeMs, breakMs, totalMs };
+    },
+
     async open() {
         const today = new Date();
         this._startDate = this._fmt(today);
@@ -25676,9 +26037,8 @@ window.StaffPerformanceModal = {
     _syncStaffDropdown() {
         const sel = document.getElementById('spm-staff-select');
         if (!sel) return;
-        const currentVal = sel.value;
         sel.innerHTML = `<option value="all">All Staff</option>
-            ${this._staffOpts.map(s => `<option value="${s.email}" ${s.email === currentVal ? 'selected' : ''}>${s.name}</option>`).join('')}`;
+            ${this._staffOpts.map(s => `<option value="${s.email}" ${s.email === this._selectedStaff ? 'selected' : ''}>${s.name}</option>`).join('')}`;
     },
 
     _renderOverlay() {
@@ -25786,7 +26146,7 @@ window.StaffPerformanceModal = {
                     ${isMc ? '' : `
                     <select id="spm-staff-select" onchange="StaffPerformanceModal._applyStaffFilter()" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; outline:none; max-width:200px;">
                         <option value="all">All Staff</option>
-                        ${this._staffOpts.map(s => `<option value="${s.email}">${s.name}</option>`).join('')}
+                        ${this._staffOpts.map(s => `<option value="${s.email}" ${s.email === this._selectedStaff ? 'selected' : ''}>${s.name}</option>`).join('')}
                     </select>`}
                     <select id="spm-city-select" onchange="StaffPerformanceModal._applyCityFilter()" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; font-weight:600; background:white; outline:none; max-width:150px;">
                         <option value="all">All Cities</option>
@@ -25863,8 +26223,8 @@ window.StaffPerformanceModal = {
         const allTimes = data.filter(d => d.delivered_at).map(d => d.delivered_at).sort();
         const overallStart = allTimes.length > 0 ? this._fmtTime(allTimes[0]) : '—';
         const overallEnd = allTimes.length > 0 ? this._fmtTime(allTimes[allTimes.length - 1]) : '—';
-        const overallSpan = allTimes.length > 0 ? this._hoursDiff(allTimes[0], allTimes[allTimes.length - 1]) : '0h';
-        const overallSessions = this._computeDaySessions(allTimes);
+        const overallSpan = allTimes.length > 0 ? this._fmtDuration(this._computeRangeSessions(allTimes).totalMs) : '0h';
+        const overallSessions = this._computeRangeSessions(allTimes);
         const overallActive = this._fmtDuration(overallSessions.activeMs);
         const overallBreak = this._fmtDuration(overallSessions.breakMs);
 
@@ -25917,38 +26277,42 @@ window.StaffPerformanceModal = {
                                 <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Unst</th>
                                 <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Start</th>
                                 <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">End</th>
+                                <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Span</th>
                                 <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Active</th>
+                                <th style="padding:8px 10px; text-align:center; font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; border-bottom:2px solid #e2e8f0;">Break</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${staffRows.map(([email, staff]) => {
                                 const days = [...staff.days.entries()].sort();
-                                const allMCs = [...new Set(days.flatMap(([, mcM]) => [...mcM.keys()]))];
-                                const allCities = [...new Set(days.flatMap(([, mcM]) => [...mcM.values()].map(e => e.city)))].filter(Boolean);
+                                const allMCs = this._cleanAreaList([...new Set(days.flatMap(([, mcM]) => [...mcM.keys()]))]);
+                                const allCities = this._cleanAreaList([...new Set(days.flatMap(([, mcM]) => [...mcM.values()].map(e => e.city)))]);
                                 const times = days.flatMap(([, mcM]) => [...mcM.values()].flatMap(e => [...e.deliveries, ...e.unsents])).filter(Boolean).sort();
                                 const tot = times.length;
                                 const delv = days.reduce((s, [, mcM]) => s + [...mcM.values()].reduce((ss, e) => ss + e.deliveries.length, 0), 0);
                                 const unst = times.length - delv;
                                 const start = times.length > 0 ? this._fmtTime(times[0]) : '—';
                                 const end = times.length > 0 ? this._fmtTime(times[times.length - 1]) : '—';
-                                const sessions = this._computeDaySessions(times);
+                                const sessions = this._computeRangeSessions(times);
                                 const active = this._fmtDuration(sessions.activeMs);
                                 const span = this._fmtDuration(sessions.totalMs);
                                 const breakStr = this._fmtDuration(sessions.breakMs);
 
                                 return `<tr onclick="StaffPerformanceModal._toggleStaffExpand('${email}')" style="cursor:pointer; border-bottom:1px solid #f1f5f9;">
                                     <td style="padding:8px 10px; font-weight:700; color:#1e293b; white-space:nowrap;">${staff.name}</td>
-                                    <td style="padding:8px 10px; color:#64748b;">${allCities.join(', ')}</td>
-                                    <td style="padding:8px 10px; color:#64748b; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${allMCs.join(', ')}">${allMCs.join(', ')}</td>
+                                    <td style="padding:8px 10px; color:#64748b;">${allCities.join(', ') || '—'}</td>
+                                    <td style="padding:8px 10px; color:#64748b; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${allMCs.join(', ') || '—'}">${allMCs.join(', ') || '—'}</td>
                                     <td style="padding:8px 10px; text-align:center; font-weight:700; color:#1e293b;">${tot}</td>
                                     <td style="padding:8px 10px; text-align:center; color:#16a34a; font-weight:700;">${delv}</td>
                                     <td style="padding:8px 10px; text-align:center; color:#dc2626; font-weight:700;">${unst}</td>
                                     <td style="padding:8px 10px; text-align:center; color:#64748b; font-weight:600;">${start}</td>
                                     <td style="padding:8px 10px; text-align:center; color:#64748b; font-weight:600;">${end}</td>
-                                    <td style="padding:8px 10px; text-align:center; font-weight:700; color:#ea580c; cursor:default;" title="Span: ${span} · Break: ${breakStr}">${active}</td>
+                                    <td style="padding:8px 10px; text-align:center; color:#ea580c; font-weight:600;">${span}</td>
+                                    <td style="padding:8px 10px; text-align:center; font-weight:700; color:#ea580c;">${active}</td>
+                                    <td style="padding:8px 10px; text-align:center; color:#64748b; font-weight:600;">${breakStr}</td>
                                 </tr>
                                 <tr id="spm-expand-${email}" style="display:none;">
-                                    <td colspan="9" style="padding:0;">
+                                    <td colspan="11" style="padding:0;">
                                         <div style="padding:12px 16px; background:#f8fafc; border-top:1px solid #e2e8f0;">
                                             ${this._renderStaffDailyTable(staff)}
                                         </div>
@@ -25987,87 +26351,42 @@ window.StaffPerformanceModal = {
                         <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Unst</th>
                         <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Start</th>
                         <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">End</th>
-                        <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Hours</th>
+                        <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Span</th>
+                        <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Active</th>
+                        <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase;">Break</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${days.map(([date, mcMap]) => {
-                        // Sort MC entries by first timestamp
-                        const mcEntries = [...mcMap.entries()].sort((a, b) => {
-                            const aTimes = [...a[1].deliveries, ...a[1].unsents].filter(Boolean).sort();
-                            const bTimes = [...b[1].deliveries, ...b[1].unsents].filter(Boolean).sort();
-                            if (aTimes.length === 0) return 1; if (bTimes.length === 0) return -1;
-                            return new Date(aTimes[0]) - new Date(bTimes[0]);
-                        });
-
-                        // All timestamps for this day (for session detection)
+                        const mcEntries = [...mcMap.entries()];
                         const allDayTimes = mcEntries.flatMap(([, e]) => [...e.deliveries, ...e.unsents]).filter(Boolean).sort();
+                        if (allDayTimes.length === 0) return '';
+
+                        const tot = allDayTimes.length;
+                        const delv = mcEntries.reduce((s, [, e]) => s + e.deliveries.length, 0);
+                        const unst = tot - delv;
+                        const start = this._fmtTime(allDayTimes[0]);
+                        const end = this._fmtTime(allDayTimes[allDayTimes.length - 1]);
                         const sessions = this._computeDaySessions(allDayTimes);
+                        const spanStr = this._fmtDuration(sessions.totalMs);
                         const activeStr = this._fmtDuration(sessions.activeMs);
                         const breakStr = this._fmtDuration(sessions.breakMs);
-                        const spanStr = this._fmtDuration(sessions.totalMs);
+                        const cities = this._cleanAreaList([...new Set(mcEntries.map(([, e]) => e.city))]).join(', ') || '—';
+                        const mcs = this._cleanAreaList([...new Set(mcEntries.map(([, e]) => e.shortMC))]).join(', ') || '—';
 
-                        // Build rows with break indicators between MCs
-                        let rows = '';
-                        mcEntries.forEach(([mcKey, entry], idx) => {
-                            const times = [...entry.deliveries, ...entry.unsents].filter(Boolean).sort();
-                            const start = times.length > 0 ? this._fmtTime(times[0]) : '—';
-                            const end = times.length > 0 ? this._fmtTime(times[times.length - 1]) : '—';
-                            const hours = times.length > 0 ? this._hoursDiff(times[0], times[times.length - 1]) : '0h';
-                            const tot = entry.deliveries.length + entry.unsents.length;
-
-                            rows += `<tr style="border-bottom:1px solid #f1f5f9;">
-                                <td style="padding:6px 8px; font-weight:700; color:#1e293b; white-space:nowrap;">${idx === 0 ? date : ''}</td>
-                                <td style="padding:6px 8px; color:#64748b;">${entry.city || '—'}</td>
-                                <td style="padding:6px 8px; color:#64748b;">${mcKey}</td>
-                                <td style="padding:6px 8px; text-align:center; font-weight:700; color:#1e293b;">${tot}</td>
-                                <td style="padding:6px 8px; text-align:center; color:#16a34a; font-weight:700;">${entry.deliveries.length}</td>
-                                <td style="padding:6px 8px; text-align:center; color:#dc2626; font-weight:700;">${entry.unsents.length}</td>
-                                <td style="padding:6px 8px; text-align:center; color:#64748b; font-weight:600;">${start}</td>
-                                <td style="padding:6px 8px; text-align:center; color:#64748b; font-weight:600;">${end}</td>
-                                <td style="padding:6px 8px; text-align:center; font-weight:700; color:#ea580c;">${hours}</td>
-                            </tr>`;
-
-                            // Check for break to next MC
-                            if (idx < mcEntries.length - 1) {
-                                const nextEntry = mcEntries[idx + 1][1];
-                                const nextTimes = [...nextEntry.deliveries, ...nextEntry.unsents].filter(Boolean).sort();
-                                if (times.length > 0 && nextTimes.length > 0) {
-                                    const currLast = times[times.length - 1];
-                                    const nextFirst = nextTimes[0];
-                                    const gapMs = new Date(nextFirst) - new Date(currLast);
-                                    if (gapMs > 30 * 60 * 1000) {
-                                        const gapStr = this._fmtDuration(gapMs);
-                                        const gapFrom = this._fmtTime(currLast);
-                                        const gapTo = this._fmtTime(nextFirst);
-                                        rows += `<tr style="background:#fffbeb;">
-                                            <td colspan="9" style="padding:4px 8px; font-size:10px; color:#d97706; font-weight:600;">
-                                                <span style="display:flex; align-items:center; gap:6px;">
-                                                    <span>☀</span>
-                                                    <span>Break ${gapStr} · ${gapFrom} → ${gapTo}</span>
-                                                </span>
-                                            </td>
-                                        </tr>`;
-                                    }
-                                }
-                            }
-                        });
-
-                        // Daily total row
-                        const dayTot = allDayTimes.length;
-                        const dayDelv = mcEntries.reduce((s, [, e]) => s + e.deliveries.length, 0);
-                        const dayUnst = dayTot - dayDelv;
-                        rows += `<tr style="background:#f8fafc; font-weight:700; border-top:2px solid #e2e8f0;">
-                            <td style="padding:6px 8px; font-size:10px; color:#475569;">Day total</td>
-                            <td colspan="2" style="padding:6px 8px; font-size:10px; color:#64748b;">Active: ${activeStr} · Break: ${breakStr}</td>
-                            <td style="padding:6px 8px; text-align:center;">${dayTot}</td>
-                            <td style="padding:6px 8px; text-align:center; color:#16a34a;">${dayDelv}</td>
-                            <td style="padding:6px 8px; text-align:center; color:#dc2626;">${dayUnst}</td>
-                            <td colspan="2" style="padding:6px 8px; text-align:center; font-size:10px; color:#64748b;">Span: ${spanStr}</td>
-                            <td style="padding:6px 8px; text-align:center; color:#ea580c;">${activeStr}</td>
-                        </tr>
-                        <tr><td colspan="9" style="padding:0; border-bottom:2px solid #e2e8f0;"></td></tr>`;
-                        return rows;
+                        return `<tr style="border-bottom:1px solid #f1f5f9;">
+                            <td style="padding:6px 8px; font-weight:700; color:#1e293b; white-space:nowrap;">${date}</td>
+                            <td style="padding:6px 8px; color:#64748b;">${cities}</td>
+                            <td style="padding:6px 8px; color:#64748b;">${mcs}</td>
+                            <td style="padding:6px 8px; text-align:center; font-weight:700; color:#1e293b;">${tot}</td>
+                            <td style="padding:6px 8px; text-align:center; color:#16a34a; font-weight:700;">${delv}</td>
+                            <td style="padding:6px 8px; text-align:center; color:#dc2626; font-weight:700;">${unst}</td>
+                            <td style="padding:6px 8px; text-align:center; color:#64748b; font-weight:600;">${start}</td>
+                            <td style="padding:6px 8px; text-align:center; color:#64748b; font-weight:600;">${end}</td>
+                            <td style="padding:6px 8px; text-align:center; color:#ea580c; font-weight:600;">${spanStr}</td>
+                            <td style="padding:6px 8px; text-align:center; font-weight:700; color:#ea580c;">${activeStr}</td>
+                            <td style="padding:6px 8px; text-align:center; color:#64748b; font-weight:600;">${breakStr}</td>
+                        </tr>`;
                     }).join('')}
                 </tbody>
             </table>`;
@@ -26651,38 +26970,50 @@ window.StaffPerformanceModal = {
                 }
             });
 
-            const headers = ['Staff Name', 'Email', 'Date', 'City', 'MC', 'Total', 'Delivered', 'Unsent', 'Start', 'End', 'Active Hours', 'Span'];
+            const headers = ['Staff Name', 'Email', 'Date', 'City', 'MC', 'Total', 'Delivered', 'Unsent', 'Start', 'End', 'Span', 'Active', 'Break'];
             rows = [headers];
+
+            // Distinct dates across the whole report — used to decide whether to add per-staff TOTAL rows
+            const distinctDates = new Set();
+            [...staffMap.entries()].forEach(([, staff]) => [...staff.days.keys()].forEach(d => distinctDates.add(d)));
+            const addStaffTotals = distinctDates.size > 1;
+
             [...staffMap.entries()].sort().forEach(([email, staff]) => {
                 [...staff.days.entries()].sort().forEach(([date, mcMap]) => {
-                    const mcEntries = [...mcMap.entries()].sort();
-                    mcEntries.forEach(([mcKey, entry], idx) => {
-                        const times = [...entry.deliveries, ...entry.unsents].filter(Boolean).sort();
-                        const start = times.length > 0 ? this._fmtTime(times[0]) : '—';
-                        const end = times.length > 0 ? this._fmtTime(times[times.length - 1]) : '—';
-                        const hours = times.length > 0 ? this._hoursDiff(times[0], times[times.length - 1]) : '0h';
-                        rows.push([
-                            staff.name, email, date, entry.city || '—', mcKey,
-                            entry.deliveries.length + entry.unsents.length,
-                            entry.deliveries.length, entry.unsents.length,
-                            start, end, hours, ''
-                        ]);
-                    });
-                    // Add a day summary row
+                    const mcEntries = [...mcMap.entries()];
                     const allTimes = mcEntries.flatMap(([, e]) => [...e.deliveries, ...e.unsents]).filter(Boolean).sort();
+                    if (allTimes.length === 0) return;
+                    const delv = mcEntries.reduce((s, [, e]) => s + e.deliveries.length, 0);
                     const sessions = this._computeDaySessions(allTimes);
-                    const activeHrs = this._fmtDuration(sessions.activeMs);
-                    const spanHrs = this._fmtDuration(sessions.totalMs);
-                    const staffName = staff.name;
-                    const emailCol = email;
-                    rows.push([staffName, emailCol, date, '—', '—DAY TOTAL—',
-                        allTimes.length,
-                        mcEntries.reduce((s, [, e]) => s + e.deliveries.length, 0),
-                        allTimes.length - mcEntries.reduce((s, [, e]) => s + e.deliveries.length, 0),
+                    const cities = this._cleanAreaList([...new Set(mcEntries.map(([, e]) => e.city))]).join(', ') || '—';
+                    const mcs = this._cleanAreaList([...new Set(mcEntries.map(([, e]) => e.shortMC))]).join(', ') || '—';
+                    rows.push([
+                        staff.name, email, date, cities, mcs,
+                        allTimes.length, delv, allTimes.length - delv,
                         this._fmtTime(allTimes[0]), this._fmtTime(allTimes[allTimes.length - 1]),
-                        activeHrs, spanHrs
+                        this._fmtDuration(sessions.totalMs),
+                        this._fmtDuration(sessions.activeMs),
+                        this._fmtDuration(sessions.breakMs)
                     ]);
                 });
+
+                if (addStaffTotals) {
+                    const staffTimes = [...staff.days.values()].flatMap(mcMap => [...mcMap.values()].flatMap(e => [...e.deliveries, ...e.unsents])).filter(Boolean).sort();
+                    if (staffTimes.length > 0) {
+                        const delv = [...staff.days.values()].reduce((s, mcMap) => s + [...mcMap.values()].reduce((ss, e) => ss + e.deliveries.length, 0), 0);
+                        const rangeSessions = this._computeRangeSessions(staffTimes);
+                        const cities = this._cleanAreaList([...new Set([...staff.days.values()].flatMap(mcMap => [...mcMap.values()].map(e => e.city)))]).join(', ') || '—';
+                        const mcs = this._cleanAreaList([...new Set([...staff.days.values()].flatMap(mcMap => [...mcMap.keys()]))]).join(', ') || '—';
+                        rows.push([
+                            staff.name, email, 'TOTAL', cities, mcs,
+                            staffTimes.length, delv, staffTimes.length - delv,
+                            this._fmtTime(staffTimes[0]), this._fmtTime(staffTimes[staffTimes.length - 1]),
+                            this._fmtDuration(rangeSessions.totalMs),
+                            this._fmtDuration(rangeSessions.activeMs),
+                            this._fmtDuration(rangeSessions.breakMs)
+                        ]);
+                    }
+                }
             });
         } else {
             const headers = ['Surveyor', 'Date', 'City', 'MC', 'Surveys Done', 'First Scan', 'Last Scan', 'Duration'];
