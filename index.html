@@ -9348,6 +9348,39 @@ input[type=number] {
         border-color: #dc2626;
 }
 
+/* Delivery-mode numbered squares must be clickable so dots can be toggled */
+.route-marker-square.delivery-clickable {
+        pointer-events: auto !important;
+        cursor: pointer;
+}
+
+#delivery-mode-chip button:hover {
+        opacity: 0.7;
+}
+
+/* Delivery route silhouette labels */
+.delivery-silhouette-label {
+        background: none;
+        border: none;
+}
+
+.delivery-route-label {
+        background: rgba(255, 255, 255, 0.92);
+        color: #92400e;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.3px;
+        padding: 2px 7px;
+        border-radius: 4px;
+        border: 1px solid #fbbf24;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+        white-space: nowrap;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        line-height: 1.2;
+        font-family: inherit;
+}
+
 .route-item-actions {
         display: flex;
         gap: 4px;
@@ -9570,7 +9603,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.08.01.1233</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.08.03.1243</span>
             </div>
         </div>
         
@@ -10089,6 +10122,14 @@ input[type=number] {
                         </button>
 
                         <div style="width:1px; background:#e2e8f0; margin:0 2px;"></div>
+
+                        <span id="delivery-mode-chip" style="display:none; align-items:center; gap:6px; background:#fff7ed; color:#f97316; border:1px solid #fdba74; border-radius:20px; padding:3px 10px; font-size:10px; font-weight:800; white-space:nowrap;" title="Delivery route mode active">
+                            <span class="material-icons-round" style="font-size:14px;">local_shipping</span>
+                            <span id="delivery-mode-chip-text">DELIVERY</span>
+                            <button onclick="event.stopPropagation(); SpatialRouter.exitDeliveryMode()" title="Exit delivery mode (back to portal routing)" style="background:none; border:none; cursor:pointer; color:#f97316; padding:0; display:flex;">
+                                <span class="material-icons-round" style="font-size:14px;">close</span>
+                            </button>
+                        </span>
 
                         <button onclick="event.stopPropagation(); SpatialRouter.sortBySequenceNumber()" class="routing-tool-btn gated-tool" id="btn-sort-seq" title="Sort by Sequence #">
                             <span class="material-icons-round">sort</span>
@@ -11151,7 +11192,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.08.01.1233";
+window.DATA_VERSION = "v2026.08.03.1243";
 window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -21239,6 +21280,9 @@ const SpatialRouter = {
     deliveryDrawLayer: null,
     deliveryCaptureIDs: [],
     deliverySequence: [],
+    deliveryCoordMap: new Map(),
+    deliverySidSet: null,
+    deliveryContext: null,
     deliveryPolygonState: null,
     deliveryDrawnPolygon: null,
     deliveryMonth: '',
@@ -22392,8 +22436,8 @@ switchTab(tab) {
 
         // Cleanup delivery route display only when entering the manager tab (the editor keeps
         // the loaded MC markers on the map so delivery routes can be drawn/edited there)
-        if (tab === 'manager' && (this.deliveryMarkerLayer || this._deliveryRoute)) {
-            this._clearDeliveryRouteDisplay();
+        if (tab === 'manager' && (this.deliveryMarkerLayer || this._deliveryRoute || this.deliveryContext)) {
+            this.exitDeliveryMode();
             this.renderDeliverySidebar();
         }
         // Cancel any active delivery drawing (keep it live when the editor tab is used)
@@ -22838,7 +22882,29 @@ switchTab(tab) {
         
         // Fast numerical pre-filtering using Leaflet bounding box
         const bounds = L.latLngBounds(pts);
-        
+
+        // Delivery mode: test the visible delivery dots (capture GPS coords) against the polygon.
+        // The dots are their own whitelist - never apply the stale portal filter here.
+        if (this.deliverySidSet?.size > 0 && this.deliveryCoordMap && this.deliveryCoordMap.size > 0) {
+            // Skip houses already captured by earlier saved routes of this MC+month
+            const taken = this._deliveryTakenSids();
+            this.deliveryCoordMap.forEach((c, sid) => {
+                if (!c.lat || !c.lng) return;
+                if (!this.deliverySidSet.has(sid)) return;
+                if (taken.has(sid)) return;
+                if (c.lat >= bounds.getSouth() && c.lat <= bounds.getNorth() &&
+                    c.lng >= bounds.getWest() && c.lng <= bounds.getEast()) {
+                    if (this.isPointInPoly([c.lat, c.lng], pts)) {
+                        newIds.push(sid);
+                    }
+                }
+            });
+            if (this.drawnPolygons) {
+                this.drawnPolygons.forEach(p => p.setStyle({ color: '#94a3b8', fillOpacity: 0.1, weight: 1.5 }));
+            }
+            return newIds;
+        }
+
         dataPool.forEach(row => {
             if (!row[1] || !row[2]) return;
             const lat = parseFloat(row[1]);
@@ -22877,7 +22943,7 @@ switchTab(tab) {
     addManualPoint(row) {
         if (this.isLocked) return;
         this.saveSnapshot();
-        const sid = String(row[0]);
+        const sid = String(row[0]).replace(/\.0$/, '').trim();
         if (this.sequence.find(p => String(p.id) === sid)) return;
         if (!this.capturedIDs.includes(sid)) this.capturedIDs.push(sid);
         this.sequence.push({ id: sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) });
@@ -22885,9 +22951,24 @@ switchTab(tab) {
     },
 
     addManualID(id) {
-        const cleanId = String(id).replace(/\.0$/, '').trim();
+        const pt = this._sidPoint(id);
+        if (!pt) return;
+        if (this.sequence.find(p => String(p.id) === pt.id)) return;
+        this.saveSnapshot();
+        if (!this.capturedIDs.includes(pt.id)) this.capturedIDs.push(pt.id);
+        this.sequence.push({ id: pt.id, lat: pt.lat, lng: pt.lng, name: pt.name });
+        this.renderRoute();
+    },
+
+    _sidPoint(sid) {
+        const cleanId = String(sid).replace(/\.0$/, '').trim();
+        if (this.deliveryContext && this.deliveryCoordMap && this.deliveryCoordMap.has(cleanId)) {
+            const c = this.deliveryCoordMap.get(cleanId);
+            return { id: cleanId, lat: c.lat, lng: c.lng, name: c.name || '' };
+        }
         const row = window.SID_MAP ? window.SID_MAP.get(cleanId) : null;
-        if (row) this.addManualPoint(row);
+        if (!row) return null;
+        return { id: cleanId, lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) };
     },
 
     updateSequenceManual(sid, newPos) {
@@ -22899,13 +22980,12 @@ switchTab(tab) {
         const idx = this.sequence.findIndex(p => String(p.id) === sidStr);
 
         if (idx === -1) {
-            // If not in sequence, find in RAW_DATA and add it at the requested position
-            const cleanSid = String(sidStr).replace(/\.0$/, '').trim();
-            const row = window.SID_MAP ? window.SID_MAP.get(cleanSid) : null;
-            if (row) {
-                const item = { id: sidStr, lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) };
+            // If not in sequence, find coords and add it at the requested position
+            const pt = this._sidPoint(sidStr);
+            if (pt) {
+                const item = { id: pt.id, lat: pt.lat, lng: pt.lng, name: pt.name };
                 this.sequence.splice(pos - 1, 0, item);
-                if (!this.capturedIDs.includes(sidStr)) this.capturedIDs.push(sidStr);
+                if (!this.capturedIDs.includes(pt.id)) this.capturedIDs.push(pt.id);
             }
         } else {
             // Move existing item to new position
@@ -22935,11 +23015,10 @@ switchTab(tab) {
         this.saveSnapshot();
         const sid = String(id);
         if (this.sequence.find(p => String(p.id) === sid)) return;
-        const cleanSid = String(sid).replace(/\.0$/, '').trim();
-        const row = window.SID_MAP ? window.SID_MAP.get(cleanSid) : null;
-        if (!row) return;
+        const pt = this._sidPoint(sid);
+        if (!pt) return;
         const idx = Math.max(0, Math.min((pos || this.sequence.length + 1) - 1, this.sequence.length));
-        this.sequence.splice(idx, 0, { id: sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) });
+        this.sequence.splice(idx, 0, { id: pt.id, lat: pt.lat, lng: pt.lng, name: pt.name });
         this.renderRoute();
     },
 
@@ -23583,9 +23662,10 @@ switchTab(tab) {
             const cleanSid = String(sid).replace(/\.0$/, '').trim();
             const row = window.SID_MAP ? window.SID_MAP.get(cleanSid) : null;
             const seqEntry = sequenceMap.get(cleanSid);
-            const lat = row ? parseFloat(row[1]) : (seqEntry ? seqEntry.lat : null);
-            const lng = row ? parseFloat(row[2]) : (seqEntry ? seqEntry.lng : null);
-            const name = row ? decodePII(row[4]) : (seqEntry ? seqEntry.name : '');
+            const pt = this._sidPoint(cleanSid);
+            const lat = pt ? pt.lat : (seqEntry ? seqEntry.lat : null);
+            const lng = pt ? pt.lng : (seqEntry ? seqEntry.lng : null);
+            const name = row ? decodePII(row[4]) : (pt && pt.name ? pt.name : (seqEntry ? seqEntry.name : ''));
             if (lat === null) return;
 
             const seqIdx = sequenceIndices.has(cleanSid) ? sequenceIndices.get(cleanSid) : -1;
@@ -23681,21 +23761,22 @@ switchTab(tab) {
         }
 
         // SINGLE MODE
+        const isDelivery = !!(this.deliveryContext && this.deliveryCoordMap && this.deliveryCoordMap.size > 0);
         this.capturedIDs.forEach(sid => {
             const cleanSid = String(sid).replace(/\.0$/, '').trim();
-            const row = window.SID_MAP ? window.SID_MAP.get(cleanSid) : null;
+            const pt = this._sidPoint(sid);
             const seqEntry = this.sequence.find(p => String(p.id) === String(sid));
-            const lat = row ? parseFloat(row[1]) : (seqEntry ? seqEntry.lat : null);
-            const lng = row ? parseFloat(row[2]) : (seqEntry ? seqEntry.lng : null);
+            const lat = pt ? pt.lat : (seqEntry ? seqEntry.lat : null);
+            const lng = pt ? pt.lng : (seqEntry ? seqEntry.lng : null);
             if (lat === null) return;
             const idx = this.sequence.findIndex(p => String(p.id) === String(sid));
 
             const m = L.marker([lat, lng], {
                 icon: L.divIcon({
-                    className: idx === -1 ? 'route-marker-pool-dot' : 'route-marker-square',
+                    className: (idx === -1 ? 'route-marker-pool-dot' : 'route-marker-square') + (isDelivery ? ' delivery-clickable' : ''),
                     html: idx === -1 ? '' : (idx + 1)
                 }),
-                pane: 'routingMarkerPane'
+                pane: isDelivery ? 'routingMarkerPane' : 'routingMarkerPane'
             }).addTo(this.sequenceLayer);
 
             m.on('click', (e) => {
@@ -23774,11 +23855,10 @@ switchTab(tab) {
     highlightMarker(sid, optLat, optLng, skipCard = false, skipCenter = false) {
         let lat = optLat, lng = optLng;
         if (lat === undefined || lng === undefined) {
-            const isMapReady = window.SID_MAP instanceof Map;
-            const row = isMapReady ? window.SID_MAP.get(String(sid)) : null;
-            if (!row) return;
-            lat = parseFloat(row[1]);
-            lng = parseFloat(row[2]);
+            const pt = this._sidPoint(sid);
+            if (!pt) return;
+            lat = pt.lat;
+            lng = pt.lng;
         }
 
         // Center map on the marker (but skip if marking to prevent "jerks",
@@ -23884,21 +23964,32 @@ switchTab(tab) {
             // Shadow Markers Preview
             if (this.points.length > 2) {
                 const polyPts = this.points.map(p => ({ lat: p.lat, lng: p.lng }));
-                const searchPool = this.deliverySidSet?.size > 0
-                    ? (window.RAW_DATA || []).filter(r => this.deliverySidSet.has(String(r[0]).replace(/\.0$/, '').trim()))
-                    : (State.filtered || []);
                 const bounds = L.latLngBounds(this.points);
-                searchPool.forEach(row => {
-                    if (!row[1] || !row[2]) return;
-                    const lat = parseFloat(row[1]);
-                    const lng = parseFloat(row[2]);
+                const drawPreview = (lat, lng) => {
                     if (lat >= bounds.getSouth() && lat <= bounds.getNorth() &&
                         lng >= bounds.getWest() && lng <= bounds.getEast()) {
                         if (this.isPointInPoly([lat, lng], polyPts)) {
                             L.circleMarker([lat, lng], { radius: 2, color: '#94a3b8', fillOpacity: 0.5, stroke: false, pane: 'routingPane' }).addTo(this.currentDrawLayer);
                         }
                     }
-                });
+                };
+                if (this.deliverySidSet?.size > 0 && this.deliveryCoordMap && this.deliveryCoordMap.size > 0) {
+                    // Delivery mode: preview uses the visible delivery dot coords (capture GPS).
+                    // Skip houses already captured by earlier saved routes so preview matches capture.
+                    const taken = this._deliveryTakenSids();
+                    this.deliveryCoordMap.forEach((c, sid) => {
+                        if (!this.deliverySidSet.has(sid)) return;
+                        if (taken.has(sid)) return;
+                        if (!c.lat || !c.lng) return;
+                        drawPreview(c.lat, c.lng);
+                    });
+                } else {
+                    const searchPool = State.filtered || [];
+                    searchPool.forEach(row => {
+                        if (!row[1] || !row[2]) return;
+                        drawPreview(parseFloat(row[1]), parseFloat(row[2]));
+                    });
+                }
             }
             L.circleMarker(e.latlng, { radius: 3, color: '#3b82f6' }).addTo(this.currentDrawLayer);
         };
@@ -24096,11 +24187,10 @@ switchTab(tab) {
             }
             this.editingDeliveryRouteId = null;
             this.editingDeliveryRouteName = null;
-            this.deliveryContext = null;
-            this.deliverySidSet = null;
             this.resetCurrentRoute();
             await this.loadDeliveryRoutes();
             this.renderDeliverySavedList();
+            this.updateDeliveryModeChip();
             if (App.showToast) App.showToast(isEditing ? `Delivery route updated: ${finalName.trim()}` : `Delivery route saved: ${finalName.trim()}`);
             return;
         }
@@ -24215,8 +24305,9 @@ switchTab(tab) {
                 const isMapReady = window.SID_MAP instanceof Map;
                 const row = isMapReady ? window.SID_MAP.get(sidStr) : null;
                 const seqEntry = currentIdx !== -1 ? this.sequence[currentIdx] : null;
-                const lat = row ? parseFloat(row[1]) : (seqEntry ? seqEntry.lat : null);
-                const lng = row ? parseFloat(row[2]) : (seqEntry ? seqEntry.lng : null);
+                const pt = this._sidPoint(sidStr);
+                const lat = pt ? pt.lat : (seqEntry ? seqEntry.lat : (row ? parseFloat(row[1]) : null));
+                const lng = pt ? pt.lng : (seqEntry ? seqEntry.lng : (row ? parseFloat(row[2]) : null));
                 this.highlightMarker(sidStr, lat, lng);
                 this.highlightListItem(sidStr);
             });
@@ -24281,17 +24372,16 @@ switchTab(tab) {
         if (this.isLocked) { if (App.showToast) App.showToast("Sequence is locked."); return; }
         const sidStr = String(sid).replace(/\.0$/, '').trim();
         if (this.sequence.findIndex(p => String(p.id) === sidStr) !== -1) return;
-        const isMapReady = window.SID_MAP instanceof Map;
-        const row = isMapReady ? window.SID_MAP.get(sidStr) : null;
-        if (row) {
-            this.sequence.push({ id: sidStr, lat: parseFloat(row[1]), lng: parseFloat(row[2]), name: decodePII(row[4]) });
-            
+        const pt = this._sidPoint(sidStr);
+        if (pt) {
+            this.sequence.push({ id: pt.id, lat: pt.lat, lng: pt.lng, name: pt.name });
+
             // CRITICAL: Ensure present in capturedIDs pool
-            if (!this.capturedIDs.includes(sidStr)) {
-                this.capturedIDs.push(sidStr);
+            if (!this.capturedIDs.includes(pt.id)) {
+                this.capturedIDs.push(pt.id);
                 this.renderRoute(); // Force list card generation and refresh
             } else {
-                this.updateSpecificRouteItem(sidStr); // Fast update
+                this.updateSpecificRouteItem(pt.id); // Fast update
             }
         }
     },
@@ -24431,6 +24521,8 @@ switchTab(tab) {
             this.renderDeliverySidebar();
             this.renderRouteManager();
             this.renderDeliverySavedList();
+            // Keep silhouettes in sync (runs after save/update/delete too)
+            if (this.deliveryContext) this.renderDeliveryRouteSilhouettes();
         } catch (e) {
             console.warn("loadDeliveryRoutes error:", e);
             State.deliveryRoutes = [];
@@ -24469,10 +24561,16 @@ switchTab(tab) {
         // Clear previous markers
         if (this.deliveryMarkerLayer) State.map.removeLayer(this.deliveryMarkerLayer);
         this.deliveryMarkerLayer = null;
+        if (this.deliverySilhouetteLayer) {
+            State.map.removeLayer(this.deliverySilhouetteLayer);
+            this.deliverySilhouetteLayer = null;
+        }
         this.deliverySequence = [];
+        this.deliveryCoordMap = new Map();
         this.deliveryMc = '';
         this.deliverySidSet = null;
         this.deliveryContext = null;
+        this.updateDeliveryModeChip();
         document.getElementById('delivery-stats').style.display = 'none';
         const dl = document.getElementById('delivery-route-list');
         if (dl) dl.innerHTML = '';
@@ -24491,6 +24589,13 @@ switchTab(tab) {
         const month = this.deliveryMonth = document.getElementById('delivery-month-select').value;
         const city = this.deliveryCity;
         if (!city || !mc || !month) return;
+
+        // Drop any saved-route display leftovers so we return to plain marker mode
+        this._deliveryRoute = null;
+        this._deliveryDisplayIdx = null;
+        State.deliveryRouteDisplayIndices?.clear();
+        this.toggleRoutePager(false);
+        this.updateWatermark('');
 
         // Show spinner
         const spinner = document.getElementById('delivery-loading');
@@ -24531,11 +24636,13 @@ switchTab(tab) {
         }));
 
         const deliveredSids = new Set();
+        this.deliveryCoordMap = new Map();
         markerData.forEach(m => {
             deliveredSids.add(m.sid);
             const color = m.status === 'delivered' ? '#22c55e' : '#94a3b8';
             L.circleMarker([m.lat, m.lng], { radius: 5, fillColor: color, color: 'rgba(0,0,0,0.6)', weight: 1, fillOpacity: 0.6, interactive: false, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
             this.deliverySequence.push({ id: m.sid, lat: m.lat, lng: m.lng, status: m.status });
+            this.deliveryCoordMap.set(String(m.sid).replace(/\.0$/, '').trim(), { lat: m.lat, lng: m.lng, status: m.status });
         });
 
         let undeliveredCount = 0;
@@ -24545,6 +24652,7 @@ switchTab(tab) {
             if (row && row[1] && row[2]) {
                 L.circleMarker([parseFloat(row[1]), parseFloat(row[2])], { radius: 5, fillColor: '#3b82f6', color: 'rgba(0,0,0,0.6)', weight: 1, fillOpacity: 0.6, interactive: false, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
                 this.deliverySequence.push({ id: sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), status: 'undelivered' });
+                this.deliveryCoordMap.set(String(sid).replace(/\.0$/, '').trim(), { lat: parseFloat(row[1]), lng: parseFloat(row[2]), status: 'undelivered' });
                 undeliveredCount++;
             }
         });
@@ -24564,6 +24672,14 @@ switchTab(tab) {
             mc: this.deliveryMc,
             statusMap: new Map(this.deliverySequence.map(s => [String(s.id), s.status]))
         };
+
+        // Sync the portal filter to this MC's houses so no stale leftover filter can
+        // silently exclude dots from later polygon captures.
+        const cleanSids = new Set(sids.map(s => String(s).replace(/\.0$/, '').trim()));
+        State.filtered = (window.RAW_DATA || []).filter(r => cleanSids.has(String(r[0])));
+
+        this.renderDeliveryRouteSilhouettes();
+        this.updateDeliveryModeChip();
     },
 
     startDeliveryDraw() {
@@ -24619,15 +24735,21 @@ switchTab(tab) {
     cancelDeliveryDraw() {
         if (this.deliveryDrawLayer) State.map.removeLayer(this.deliveryDrawLayer);
         this.deliveryDrawLayer = null;
+        if (this.deliverySilhouetteLayer) {
+            State.map.removeLayer(this.deliverySilhouetteLayer);
+            this.deliverySilhouetteLayer = null;
+        }
         this.deliveryEditing = false;
         this._deliveryDrawPoints = [];
         this.deliveryDrawnPolygon = null;
         this.deliverySidSet = null;
         this.deliveryContext = null;
+        this.deliveryCoordMap = new Map();
         State.map.off('click', this._deliveryClick);
         State.map.getContainer().style.cursor = '';
         document.getElementById('btn-delivery-finish').style.display = 'none';
         document.getElementById('btn-delivery-cancel').style.display = 'none';
+        this.updateDeliveryModeChip();
     },
 
     async saveDeliveryRoute() {
@@ -24681,7 +24803,12 @@ switchTab(tab) {
     clearDeliverySelection() {
         if (this.deliveryMarkerLayer) State.map.removeLayer(this.deliveryMarkerLayer);
         this.deliveryMarkerLayer = null;
+        if (this.deliverySilhouetteLayer) {
+            State.map.removeLayer(this.deliverySilhouetteLayer);
+            this.deliverySilhouetteLayer = null;
+        }
         this.deliverySequence = [];
+        this.deliveryCoordMap = new Map();
         this.cancelDeliveryDraw();
         document.getElementById('delivery-city-select').value = '';
         document.getElementById('delivery-mc-select').value = '';
@@ -24691,10 +24818,50 @@ switchTab(tab) {
         this.deliveryMonth = '';
         this.deliverySidSet = null;
         this.deliveryContext = null;
+        this.updateDeliveryModeChip();
         const stats = document.getElementById('delivery-stats');
         if (stats) stats.style.display = 'none';
         const dl = document.getElementById('delivery-route-list');
         if (dl) dl.innerHTML = '';
+    },
+
+    updateDeliveryModeChip() {
+        const chip = document.getElementById('delivery-mode-chip');
+        if (!chip) return;
+        if (this.deliveryContext && this.deliveryContext.mc) {
+            chip.style.display = 'flex';
+            const shortMC = this.cleanMCName(this.deliveryContext.mc);
+            const month = this.deliveryContext.month || '';
+            const text = document.getElementById('delivery-mode-chip-text');
+            if (text) text.textContent = `DELIVERY · ${shortMC}${month ? ' · ' + month : ''}`;
+        } else {
+            chip.style.display = 'none';
+        }
+    },
+
+    exitDeliveryMode() {
+        // Back to portal routing: clear delivery markers + context, keep dropdown selections
+        if (this.deliveryMarkerLayer) {
+            State.map.removeLayer(this.deliveryMarkerLayer);
+            this.deliveryMarkerLayer = null;
+        }
+        if (this.deliverySilhouetteLayer) {
+            State.map.removeLayer(this.deliverySilhouetteLayer);
+            this.deliverySilhouetteLayer = null;
+        }
+        this.deliverySequence = [];
+        this.deliveryCoordMap = new Map();
+        this.deliverySidSet = null;
+        this.deliveryContext = null;
+        this.editingDeliveryRouteId = null;
+        this.editingDeliveryRouteName = null;
+        this._deliveryRoute = null;
+        this._deliveryDisplayIdx = null;
+        this.toggleRoutePager(false);
+        this.updateWatermark('');
+        this.resetCurrentRoute();
+        this.updateDeliveryModeChip();
+        if (App.showToast) App.showToast("Delivery mode exited. Back to portal routing.");
     },
 
     async refreshDeliveryData() {
@@ -24759,9 +24926,12 @@ switchTab(tab) {
             statusMap
         };
         this.deliverySidSet = new Set(sids);
+        this.updateDeliveryModeChip();
+        this.renderDeliveryRouteSilhouettes();
 
         this.capturedIDs = [...sids];
         this.sequence = seq.map((s, i) => ({ id: sids[i], lat: s.lat, lng: s.lng, name: s.name }));
+        this.deliveryCoordMap = new Map(seq.map((s, i) => [sids[i], { lat: s.lat, lng: s.lng, status: s.status || 'undelivered', name: s.name }]));
         this.activeDisplayRoutes = [this.editingDeliveryRouteName];
         if (route.route_data.polygon) {
             this.activePolygon = L.polygon(route.route_data.polygon, { color: '#3b82f6', fillOpacity: 0.1, weight: 2 });
@@ -24780,6 +24950,86 @@ switchTab(tab) {
             State.map.flyTo([first.lat, first.lng], 19, { padding: [100, 100], duration: 0.5 });
             this.highlightMarker(sids[0], first.lat, first.lng, false, true);
         }, 400);
+    },
+
+    _deliveryTakenSids() {
+        const taken = new Set();
+        if (!State.deliveryRoutes || !this.deliveryContext) return taken;
+        const mc = this.deliveryContext.mc;
+        const month = this.deliveryContext.month;
+        State.deliveryRoutes.forEach(r => {
+            if (r.mc_uc !== mc) return;
+            if (month && r.delivery_month !== month) return;
+            if (this.editingDeliveryRouteId && String(r.id) === String(this.editingDeliveryRouteId)) return;
+            const seq = (r.route_data && r.route_data.sequence) || [];
+            seq.forEach(s => {
+                const sid = String(s.surveyId || s.id).replace(/\.0$/, '').trim();
+                if (sid) taken.add(sid);
+            });
+        });
+        return taken;
+    },
+
+    _pointsCenter(pts) {
+        if (!pts || !pts.length) return null;
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        pts.forEach(p => {
+            const a = p[0], b = p[1];
+            if (a < minX) minX = a;
+            if (a > maxX) maxX = a;
+            if (b < minY) minY = b;
+            if (b > maxY) maxY = b;
+        });
+        return [(minX + maxX) / 2, (minY + maxY) / 2];
+    },
+
+    _deliverySilhouetteLabel(route, pt) {
+        const name = String(route.route_name || 'Route');
+        const short = name.length > 22 ? name.slice(0, 21) + '\u2026' : name;
+        L.marker(pt, {
+            icon: L.divIcon({
+                className: 'delivery-silhouette-label',
+                html: `<div class="delivery-route-label">${short}</div>`
+            }),
+            interactive: false,
+            pane: 'routingPane'
+        }).addTo(this.deliverySilhouetteLayer);
+    },
+
+    renderDeliveryRouteSilhouettes() {
+        try {
+            if (this.deliverySilhouetteLayer) {
+                State.map.removeLayer(this.deliverySilhouetteLayer);
+                this.deliverySilhouetteLayer = null;
+            }
+            if (!this.deliveryContext || !this.deliveryContext.mc || !State.deliveryRoutes) return;
+            const mc = this.deliveryContext.mc;
+            const month = this.deliveryContext.month;
+            const routes = State.deliveryRoutes.filter(r => r.mc_uc === mc && (!month || r.delivery_month === month));
+            if (!routes.length) return;
+            this.deliverySilhouetteLayer = L.layerGroup().addTo(State.map);
+            routes.forEach(r => {
+                const rd = r.route_data || {};
+                const poly = rd.polygon;
+                if (poly && poly.length >= 3) {
+                    L.polygon(poly, { color: '#f59e0b', weight: 1.5, dashArray: '4,4', fillColor: '#f59e0b', fillOpacity: 0.06, interactive: false, pane: 'routingPane' }).addTo(this.deliverySilhouetteLayer);
+                } else if (rd.sequence && rd.sequence.length > 1) {
+                    const pts = rd.sequence.map(s => [s.lat, s.lng]);
+                    L.polyline(pts, { color: '#f59e0b', weight: 1.5, dashArray: '4,4', opacity: 0.6, interactive: false, pane: 'routingPane' }).addTo(this.deliverySilhouetteLayer);
+                }
+                // Anchor the label at the middle of the route's houses (fallback: polygon bbox center)
+                let anchor = null;
+                if (rd.sequence && rd.sequence.length > 0) {
+                    anchor = this._pointsCenter(rd.sequence.map(s => [s.lat, s.lng]));
+                }
+                if (!anchor && poly && poly.length >= 3) {
+                    anchor = this._pointsCenter(poly);
+                }
+                if (anchor) this._deliverySilhouetteLabel(r, anchor);
+            });
+        } catch (e) {
+            console.warn("renderDeliveryRouteSilhouettes error:", e);
+        }
     },
 
     renderDeliverySidebar() {
@@ -26357,27 +26607,28 @@ window.StaffPerformanceModal = {
                     </tr>
                 </thead>
                 <tbody>
-                    ${days.map(([date, mcMap]) => {
-                        const mcEntries = [...mcMap.entries()];
-                        const allDayTimes = mcEntries.flatMap(([, e]) => [...e.deliveries, ...e.unsents]).filter(Boolean).sort();
-                        if (allDayTimes.length === 0) return '';
+                    ${days.map(([date, mcMap]) => [...mcMap.entries()]
+                        .sort((a, b) => String(a[1].shortMC || '').localeCompare(String(b[1].shortMC || '')))
+                        .map(([mcKey, e]) => {
+                            const times = [...e.deliveries, ...e.unsents].filter(Boolean).sort();
+                            if (times.length === 0) return '';
 
-                        const tot = allDayTimes.length;
-                        const delv = mcEntries.reduce((s, [, e]) => s + e.deliveries.length, 0);
-                        const unst = tot - delv;
-                        const start = this._fmtTime(allDayTimes[0]);
-                        const end = this._fmtTime(allDayTimes[allDayTimes.length - 1]);
-                        const sessions = this._computeDaySessions(allDayTimes);
-                        const spanStr = this._fmtDuration(sessions.totalMs);
-                        const activeStr = this._fmtDuration(sessions.activeMs);
-                        const breakStr = this._fmtDuration(sessions.breakMs);
-                        const cities = this._cleanAreaList([...new Set(mcEntries.map(([, e]) => e.city))]).join(', ') || '—';
-                        const mcs = this._cleanAreaList([...new Set(mcEntries.map(([, e]) => e.shortMC))]).join(', ') || '—';
+                            const tot = times.length;
+                            const delv = e.deliveries.length;
+                            const unst = tot - delv;
+                            const start = this._fmtTime(times[0]);
+                            const end = this._fmtTime(times[times.length - 1]);
+                            const sessions = this._computeDaySessions(times);
+                            const spanStr = this._fmtDuration(sessions.totalMs);
+                            const activeStr = this._fmtDuration(sessions.activeMs);
+                            const breakStr = this._fmtDuration(sessions.breakMs);
+                            const city = e.city || '—';
+                            const mc = e.shortMC || '—';
 
-                        return `<tr style="border-bottom:1px solid #f1f5f9;">
+                            return `<tr style="border-bottom:1px solid #f1f5f9;">
                             <td style="padding:6px 8px; font-weight:700; color:#1e293b; white-space:nowrap;">${date}</td>
-                            <td style="padding:6px 8px; color:#64748b;">${cities}</td>
-                            <td style="padding:6px 8px; color:#64748b;">${mcs}</td>
+                            <td style="padding:6px 8px; color:#64748b;">${city}</td>
+                            <td style="padding:6px 8px; color:#64748b;">${mc}</td>
                             <td style="padding:6px 8px; text-align:center; font-weight:700; color:#1e293b;">${tot}</td>
                             <td style="padding:6px 8px; text-align:center; color:#16a34a; font-weight:700;">${delv}</td>
                             <td style="padding:6px 8px; text-align:center; color:#dc2626; font-weight:700;">${unst}</td>
@@ -26387,7 +26638,7 @@ window.StaffPerformanceModal = {
                             <td style="padding:6px 8px; text-align:center; font-weight:700; color:#ea580c;">${activeStr}</td>
                             <td style="padding:6px 8px; text-align:center; color:#64748b; font-weight:600;">${breakStr}</td>
                         </tr>`;
-                    }).join('')}
+                        }).join('')).join('')}
                 </tbody>
             </table>`;
         return html;
