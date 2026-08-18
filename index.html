@@ -8769,7 +8769,7 @@ input[type=number] {
         bottom: 30px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
-        z-index: 10002 !important;
+        z-index: 21500 !important;
         background: rgba(15, 23, 42, 0.95) !important;
         backdrop-filter: blur(12px) !important;
         border-radius: 20px !important;
@@ -8813,6 +8813,34 @@ input[type=number] {
         letter-spacing: 0.8px;
         min-width: 0;
         flex: 1;
+}
+
+#pager-portal-toggle {
+        display: flex;
+        align-items: center;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: not-allowed;
+        color: #94a3b8;
+        opacity: 0.5;
+        transition: all 0.2s;
+}
+
+#pager-portal-toggle.active {
+        color: #f59e0b;
+        opacity: 1;
+        cursor: pointer;
+}
+
+#pager-portal-toggle.active:hover {
+        transform: scale(1.15);
+}
+
+#pager-portal-toggle.disabled {
+        color: #94a3b8;
+        opacity: 0.5;
+        cursor: not-allowed;
 }
 
 #route-watermark-text {
@@ -9354,6 +9382,13 @@ input[type=number] {
         cursor: pointer;
 }
 
+/* The square the pager is currently visiting */
+.route-marker-square.active {
+        border-color: #ef4444 !important;
+        box-shadow: 0 0 0 2px #fff, 0 0 0 5px #ef4444, 0 3px 8px rgba(0, 0, 0, 0.4) !important;
+        z-index: 1000 !important;
+}
+
 #delivery-mode-chip button:hover {
         opacity: 0.7;
 }
@@ -9362,16 +9397,36 @@ input[type=number] {
 .delivery-silhouette-label {
         background: none;
         border: none;
+        width: auto !important;
+        height: auto !important;
+}
+
+/* Original portal marker (unsent houses) */
+.delivery-portal-marker {
+        background: none;
+        border: none;
+}
+
+.delivery-portal-marker-inner {
+        width: 12px;
+        height: 12px;
+        border: 2px solid #f59e0b;
+        background: rgba(245, 158, 11, 0.25);
+        border-radius: 3px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+        transform: rotate(45deg);
 }
 
 .delivery-route-label {
+        display: inline-block;
+        width: max-content;
         background: rgba(255, 255, 255, 0.92);
         color: #92400e;
         font-size: 10px;
         font-weight: 800;
         letter-spacing: 0.3px;
         padding: 2px 7px;
-        border-radius: 4px;
+        border-radius: 999px;
         border: 1px solid #fbbf24;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
         white-space: nowrap;
@@ -9603,7 +9658,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.08.17.1545</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.08.18.1659</span>
             </div>
         </div>
         
@@ -10259,6 +10314,9 @@ input[type=number] {
                                 <button onclick="SpatialRouter.clearDeliverySelection()" class="routing-tool-btn gated-tool" id="btn-delivery-clear" title="Clear delivery selection" style="color:#ef4444;">
                                     <span class="material-icons-round">layers_clear</span>
                                 </button>
+                                <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryPortalMarkers()" class="routing-tool-btn gated-tool" id="btn-delivery-portal" title="Show original portal markers for unsent houses" style="color:#94a3b8;">
+                                    <span class="material-icons-round">location_searching</span>
+                                </button>
                                 <div style="flex:1;"></div>
                                 <button onclick="SpatialRouter.refreshDeliveryData()" class="routing-tool-btn" id="btn-delivery-refresh" title="Refresh delivery data from server">
                                     <span class="material-icons-round" style="color:#64748b;">refresh</span>
@@ -10295,7 +10353,9 @@ input[type=number] {
     <div id="route-pager-container" style="display:none;">
         <div class="route-pager-header">
             <div id="map-route-watermark" title="Route Name">
-                <span class="material-icons-round" style="font-size:18px; flex-shrink:0;">route</span> 
+                <button id="pager-portal-toggle" onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryPortalMarkers()" title="Only available for delivery routes" style="background:none; border:none; cursor:pointer; padding:0; display:flex; align-items:center; color:#94a3b8;">
+                    <span class="material-icons-round" style="font-size:18px; flex-shrink:0;">route</span>
+                </button>
                 <span id="route-watermark-text">Route Name</span>
             </div>
             <button id="btn-clear-active-route" onclick="SpatialRouter.clearMapDisplay()" title="Clear Map">
@@ -11192,7 +11252,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.08.17.1545";
+window.DATA_VERSION = "v2026.08.18.1659";
 window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -21289,6 +21349,9 @@ const SpatialRouter = {
     deliveryCity: '',
     deliveryMc: '',
     deliveryMarkerLayer: null,
+    deliveryPortalLayer: null,
+    deliveryShowPortal: false,
+    _deliverySquares: [],
     _deliveryDrawPoints: [],
     _restorePager: false,
 
@@ -21299,7 +21362,7 @@ const SpatialRouter = {
 
 
 
-    async showMarkerCard(sid) {
+    async showMarkerCard(sid, skipFly = false) {
         if (!sid) return;
         
         console.log('[DEBUG showMarkerCard] Called with sid:', sid);
@@ -21435,8 +21498,8 @@ const SpatialRouter = {
             modal.classList.add('active');
         }
 
-        // Tight focus for better visibility
-        if (window.map && row[1] && row[2]) {
+        // Tight focus for better visibility (skipped when navigation already moved the camera)
+        if (window.map && row[1] && row[2] && !skipFly) {
             const lat = parseFloat(row[1]);
             const lng = parseFloat(row[2]);
             const center = window.map.getCenter();
@@ -22379,10 +22442,14 @@ const SpatialRouter = {
         // Clear delivery route display if active
         if (this._deliveryRoute) {
             if (this.deliveryMarkerLayer) { State.map.removeLayer(this.deliveryMarkerLayer); this.deliveryMarkerLayer = null; }
+            if (this.deliveryPortalLayer) { State.map.removeLayer(this.deliveryPortalLayer); this.deliveryPortalLayer = null; }
+            this.deliveryShowPortal = false;
             this._deliveryRoute = null;
             this._deliveryDisplayIdx = null;
             this.updateWatermark('');
         }
+        this._clearDeliveryHighlight();
+        this._syncPortalToggleButtons();
         this.editingRouteIdx = null; // Un-highlight
         this.setEditMode(false);
         this.toggleRoutePager(false);
@@ -23419,7 +23486,7 @@ switchTab(tab) {
     },
 
     changeMarker(delta, skipCard = false) {
-        if (this._deliveryRoute) return this._deliveryChangeMarker(delta, skipCard);
+        if (this._deliveryRoute) return this._deliveryChangeMarker(delta);
         if (this._sidebarDisplayIdx === null) return;
         const r = State.savedRoutes[this._sidebarDisplayIdx];
         if (!r || !r.sequence || r.sequence.length === 0) return;
@@ -23587,6 +23654,7 @@ switchTab(tab) {
                 setTimeout(() => UIInteractions.toggleExtraCtrls(true), 300);
             }
         }
+        if (typeof this._syncPortalToggleButtons === 'function') this._syncPortalToggleButtons();
     },
 
     renderRoute() {
@@ -23852,7 +23920,7 @@ switchTab(tab) {
             `;
     },
 
-    highlightMarker(sid, optLat, optLng, skipCard = false, skipCenter = false) {
+    highlightMarker(sid, optLat, optLng, skipCard = false, skipCenter = false, skipFly = false) {
         let lat = optLat, lng = optLng;
         if (lat === undefined || lng === undefined) {
             const pt = this._sidPoint(sid);
@@ -23889,7 +23957,7 @@ switchTab(tab) {
 
         // Automatically pop up the modal card unless skipped or in marking mode
         if (!skipCard && !this.isMarkingMode()) {
-            this.showMarkerCard(sid);
+            this.showMarkerCard(sid, skipFly);
         }
     },
 
@@ -24167,11 +24235,18 @@ switchTab(tab) {
                 return;
             }
             const polygon = this.activePolygon?.getLatLngs()?.[0]?.map(ll => [ll.lat, ll.lng]) || null;
+            const statusSeq = this.sequence.map(s => ({
+                id: s.id,
+                lat: s.lat,
+                lng: s.lng,
+                name: s.name,
+                status: statusMap.get(String(s.id).replace(/\.0$/, '').trim()) || 'undelivered'
+            }));
             const payload = {
                 route_name: finalName.trim(),
                 mc_uc: mc,
                 delivery_month: month,
-                route_data: { sequence: this.sequence, polygon, points: this.sequence.map(s => ({ id: s.id, lat: s.lat, lng: s.lng })) },
+                route_data: { sequence: statusSeq, polygon, points: statusSeq.map(s => ({ id: s.id, lat: s.lat, lng: s.lng })) },
                 composition: { total: this.sequence.length, delivered: d, unsent: u, undelivered: ud }
             };
             let result;
@@ -24593,6 +24668,8 @@ switchTab(tab) {
         // Drop any saved-route display leftovers so we return to plain marker mode
         this._deliveryRoute = null;
         this._deliveryDisplayIdx = null;
+        this.deliveryShowPortal = false;
+        this._clearDeliveryHighlight();
         State.deliveryRouteDisplayIndices?.clear();
         this.toggleRoutePager(false);
         this.updateWatermark('');
@@ -24639,7 +24716,7 @@ switchTab(tab) {
         this.deliveryCoordMap = new Map();
         markerData.forEach(m => {
             deliveredSids.add(m.sid);
-            const color = m.status === 'delivered' ? '#22c55e' : '#94a3b8';
+            const color = m.status === 'delivered' ? '#22c55e' : '#ef4444';
             L.circleMarker([m.lat, m.lng], { radius: 5, fillColor: color, color: 'rgba(0,0,0,0.6)', weight: 1, fillOpacity: 0.6, interactive: false, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
             this.deliverySequence.push({ id: m.sid, lat: m.lat, lng: m.lng, status: m.status });
             this.deliveryCoordMap.set(String(m.sid).replace(/\.0$/, '').trim(), { lat: m.lat, lng: m.lng, status: m.status });
@@ -24680,6 +24757,8 @@ switchTab(tab) {
 
         this.renderDeliveryRouteSilhouettes();
         this.updateDeliveryModeChip();
+        this._updatePortalMarkers();
+        this._syncPortalToggleButtons();
     },
 
     startDeliveryDraw() {
@@ -24807,6 +24886,10 @@ switchTab(tab) {
             State.map.removeLayer(this.deliverySilhouetteLayer);
             this.deliverySilhouetteLayer = null;
         }
+        if (this.deliveryPortalLayer) State.map.removeLayer(this.deliveryPortalLayer);
+        this.deliveryPortalLayer = null;
+        this.deliveryShowPortal = false;
+        this._clearDeliveryHighlight();
         this.deliverySequence = [];
         this.deliveryCoordMap = new Map();
         this.cancelDeliveryDraw();
@@ -24819,6 +24902,7 @@ switchTab(tab) {
         this.deliverySidSet = null;
         this.deliveryContext = null;
         this.updateDeliveryModeChip();
+        this._syncPortalToggleButtons();
         const stats = document.getElementById('delivery-stats');
         if (stats) stats.style.display = 'none';
         const dl = document.getElementById('delivery-route-list');
@@ -24839,6 +24923,86 @@ switchTab(tab) {
         }
     },
 
+    toggleDeliveryPortalMarkers() {
+        this.deliveryShowPortal = !this.deliveryShowPortal;
+        this._updatePortalMarkers();
+        this._syncPortalToggleButtons();
+        if (App.showToast) App.showToast(this.deliveryShowPortal ? "Portal markers on (unsent houses)." : "Portal markers off.");
+    },
+
+    _updatePortalMarkers() {
+        if (this.deliveryPortalLayer) {
+            State.map.removeLayer(this.deliveryPortalLayer);
+            this.deliveryPortalLayer = null;
+        }
+        if (!this.deliveryShowPortal) return;
+        const seen = new Set();
+        const pts = [];
+        if (this._deliveryRoute && this._deliveryRoute.route_data) {
+            const seq = this._deliveryRoute.route_data.sequence;
+            if (seq && seq.length) {
+                const startIdx = (this.currentPage - 1) * this.chunkSize;
+                seq.slice(startIdx, startIdx + this.chunkSize).forEach(s => {
+                    const sid = String(s.surveyId || s.id).replace(/\.0$/, '').trim();
+                    if (s.status !== 'unsent' || seen.has(sid)) return;
+                    seen.add(sid);
+                    const row = window.SID_MAP ? window.SID_MAP.get(sid) : null;
+                    if (row && row[1] && row[2]) pts.push({ sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), from: [s.lat, s.lng] });
+                });
+            }
+        } else {
+            (this.deliverySequence || []).forEach(s => {
+                const sid = String(s.id).replace(/\.0$/, '').trim();
+                if (s.status !== 'unsent' || seen.has(sid)) return;
+                seen.add(sid);
+                const row = window.SID_MAP ? window.SID_MAP.get(sid) : null;
+                if (row && row[1] && row[2]) pts.push({ sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), from: [s.lat, s.lng] });
+            });
+        }
+        if (!pts.length) return;
+        this.deliveryPortalLayer = L.layerGroup().addTo(State.map);
+        pts.forEach(p => {
+            if (p.from && p.from[0] && p.from[1]) {
+                L.polyline([p.from, [p.lat, p.lng]], {
+                    color: '#f59e0b',
+                    weight: 2,
+                    dashArray: '4,4',
+                    opacity: 0.7,
+                    pane: 'routingMarkerPane',
+                    interactive: false
+                }).addTo(this.deliveryPortalLayer);
+            }
+            L.marker([p.lat, p.lng], {
+                icon: L.divIcon({
+                    className: 'delivery-portal-marker',
+                    html: '<div class="delivery-portal-marker-inner"></div>',
+                    iconSize: [14, 14]
+                }),
+                pane: 'routingMarkerPane',
+                interactive: false
+            }).addTo(this.deliveryPortalLayer);
+        });
+    },
+
+    _syncPortalToggleButtons() {
+        const pagerBtn = document.getElementById('pager-portal-toggle');
+        if (pagerBtn) {
+            const isDelivery = !!this._deliveryRoute;
+            pagerBtn.classList.toggle('active', isDelivery && this.deliveryShowPortal);
+            pagerBtn.classList.toggle('disabled', !isDelivery);
+            pagerBtn.title = isDelivery
+                ? (this.deliveryShowPortal ? 'Hide portal markers' : 'Show original portal markers for unsent houses')
+                : 'Only available for delivery routes';
+        }
+        const tbBtn = document.getElementById('btn-delivery-portal');
+        if (tbBtn) {
+            tbBtn.style.color = this.deliveryShowPortal ? '#f59e0b' : '#94a3b8';
+            tbBtn.title = this.deliveryShowPortal
+                ? 'Hide portal markers'
+                : 'Show original portal markers for unsent houses';
+        }
+    },
+
     exitDeliveryMode() {
         // Back to portal routing: clear delivery markers + context, keep dropdown selections
         if (this.deliveryMarkerLayer) {
@@ -24849,6 +25013,11 @@ switchTab(tab) {
             State.map.removeLayer(this.deliverySilhouetteLayer);
             this.deliverySilhouetteLayer = null;
         }
+        if (this.deliveryPortalLayer) {
+            State.map.removeLayer(this.deliveryPortalLayer);
+            this.deliveryPortalLayer = null;
+        }
+        this.deliveryShowPortal = false;
         this.deliverySequence = [];
         this.deliveryCoordMap = new Map();
         this.deliverySidSet = null;
@@ -24857,10 +25026,12 @@ switchTab(tab) {
         this.editingDeliveryRouteName = null;
         this._deliveryRoute = null;
         this._deliveryDisplayIdx = null;
+        this._clearDeliveryHighlight();
         this.toggleRoutePager(false);
         this.updateWatermark('');
         this.resetCurrentRoute();
         this.updateDeliveryModeChip();
+        this._syncPortalToggleButtons();
         if (App.showToast) App.showToast("Delivery mode exited. Back to portal routing.");
     },
 
@@ -24892,6 +25063,30 @@ switchTab(tab) {
         if (App.showToast) App.showToast("Delivery route deleted.");
     },
 
+    async _resolveRouteStatuses(route) {
+        const seq = route?.route_data?.sequence || [];
+        const sids = seq.map(s => String(s.surveyId || s.id).replace(/\.0$/, '').trim()).filter(Boolean);
+        const statusMap = new Map();
+        if (!sids.length || !route.delivery_month) return statusMap;
+        const sidChunks = this._chunkArray(sids, 500);
+        const promises = sidChunks.map(chunk =>
+            window._supabase
+                .from('delivery_log')
+                .select('survey_id, status, distance_to_target')
+                .eq('bill_month', route.delivery_month)
+                .in('survey_id', chunk)
+        );
+        const results = await Promise.all(promises);
+        results.forEach(({ data }) => (data || []).forEach(d => {
+            const sid = String(d.survey_id).replace(/\.0$/, '').trim();
+            if (State.hideZubairSids && window.ZUBAIR_SIDS?.has(String(d.survey_id))) return;
+            const status = (d.status === 'unsent' || Number(d.distance_to_target || 0) > 50) ? 'unsent' : 'delivered';
+            statusMap.set(sid, status);
+        }));
+        sids.forEach(sid => { if (!statusMap.has(sid)) statusMap.set(sid, 'undelivered'); });
+        return statusMap;
+    },
+
     async loadDeliveryRouteForEdit(routeId) {
         if (!window.USER || window.USER.role !== 'admin') {
             if (App.showToast) App.showToast("Unauthorized: Admins only.");
@@ -24904,6 +25099,13 @@ switchTab(tab) {
             if (App.showToast) App.showToast("This route has no markers to edit.");
             return;
         }
+
+        const fetchedStatuses = await this._resolveRouteStatuses(route);
+        seq.forEach(s => {
+            const sid = String(s.surveyId || s.id).replace(/\.0$/, '').trim();
+            const st = fetchedStatuses.get(sid);
+            if (st) s.status = st;
+        });
 
         this.isBatchMode = false;
         this.batchRouteSequences = [];
@@ -24930,7 +25132,7 @@ switchTab(tab) {
         this.renderDeliveryRouteSilhouettes();
 
         this.capturedIDs = [...sids];
-        this.sequence = seq.map((s, i) => ({ id: sids[i], lat: s.lat, lng: s.lng, name: s.name }));
+        this.sequence = seq.map((s, i) => ({ id: sids[i], lat: s.lat, lng: s.lng, name: s.name, status: s.status }));
         this.deliveryCoordMap = new Map(seq.map((s, i) => [sids[i], { lat: s.lat, lng: s.lng, status: s.status || 'undelivered', name: s.name }]));
         this.activeDisplayRoutes = [this.editingDeliveryRouteName];
         if (route.route_data.polygon) {
@@ -25202,6 +25404,7 @@ switchTab(tab) {
 
         this._deliveryRoute = route;
         this._deliveryDisplayIdx = 0;
+        this._activeMarkerIdx = 0;
         this.currentPage = 1;
 
         // Clear any existing survey route display
@@ -25215,14 +25418,27 @@ switchTab(tab) {
         this.renderDeliveryDisplayLayer();
 
         this.updateWatermark(route.route_name);
-        this._activeMarkerIdx = 0;
 
         if (!opts.noPager) {
             this.toggleRoutePager(true);
-            setTimeout(() => this._deliveryChangeMarker(0, false), 400);
+            setTimeout(() => this._deliveryChangeMarker(0), 400);
         }
 
         this.renderDeliverySidebar();
+        this._resolveRouteStatuses(route).then(statusMap => {
+            if (this._deliveryRoute !== route) return;
+            const rseq = route.route_data.sequence;
+            if (rseq) {
+                rseq.forEach(s => {
+                    const sid = String(s.surveyId || s.id).replace(/\.0$/, '').trim();
+                    const st = statusMap.get(sid);
+                    if (st) s.status = st;
+                });
+            }
+            this.renderDeliveryDisplayLayer();
+            this._syncPortalToggleButtons();
+        });
+        this._syncPortalToggleButtons();
         if (!opts.noToast && App.showToast) App.showToast(`Showing: ${route.route_name}`);
     },
 
@@ -25270,12 +25486,13 @@ switchTab(tab) {
         const startIdx = (this.currentPage - 1) * this.chunkSize;
         const chunk = seq.slice(startIdx, startIdx + this.chunkSize);
         const chunkPts = [];
+        this._deliverySquares = [];
         chunk.forEach((s, relativeIdx) => {
             const sIdx = startIdx + relativeIdx;
             const sid = String(s.surveyId || s.id);
             chunkPts.push([s.lat, s.lng]);
 
-            const bg = s.status === 'delivered' ? '#10b981' : s.status === 'unsent' ? '#94a3b8' : '#3b82f6';
+            const bg = s.status === 'delivered' ? '#10b981' : s.status === 'unsent' ? '#ef4444' : '#3b82f6';
             const m = L.marker([s.lat, s.lng], {
                 icon: L.divIcon({
                     className: 'route-marker-square',
@@ -25284,14 +25501,17 @@ switchTab(tab) {
                 sid: sid,
                 pane: 'routingMarkerPane'
             }).addTo(this.deliveryMarkerLayer);
+            this._deliverySquares[sIdx] = m;
 
             m.bindTooltip(`#${sid}`, { permanent: false, direction: 'top', offset: [0, -10] });
             m.on('click', () => {
                 App._markerHit = true;
                 m.closeTooltip();
-                this.showMarkerCard(sid);
+                this._deliveryDisplayIdx = sIdx;
+                this._deliveryChangeMarker(0);
             });
         });
+        this._setActiveDeliverySquare(this._deliveryDisplayIdx);
 
         if (chunkPts.length > 0 && !isNavigatingMarker) {
             State.map.fitBounds(L.latLngBounds(chunkPts), { padding: [50, 50], animate: true, duration: 0.8 });
@@ -25305,17 +25525,24 @@ switchTab(tab) {
         if (typeof ListView !== 'undefined' && document.getElementById('list-view-stage')?.classList.contains('active')) {
             ListView.render();
         }
+        this._updatePortalMarkers();
+        this._syncPortalToggleButtons();
     },
 
     clearDeliveryMapDisplay() {
         if (this.deliveryMarkerLayer) State.map.removeLayer(this.deliveryMarkerLayer);
         this.deliveryMarkerLayer = null;
+        if (this.deliveryPortalLayer) State.map.removeLayer(this.deliveryPortalLayer);
+        this.deliveryPortalLayer = null;
+        this.deliveryShowPortal = false;
         this._deliveryRoute = null;
         this._deliveryDisplayIdx = null;
+        this._clearDeliveryHighlight();
         State.deliveryRouteDisplayIndices.clear();
         this.toggleRoutePager(false);
         this.updateWatermark('');
         this.renderDeliverySidebar();
+        this._syncPortalToggleButtons();
     },
 
     _deliveryChangeMarker(delta, skipCard = false) {
@@ -25330,6 +25557,7 @@ switchTab(tab) {
         this._deliveryDisplayIdx = (this._deliveryDisplayIdx || 0) + delta;
         if (this._deliveryDisplayIdx < 0) this._deliveryDisplayIdx = 0;
         if (this._deliveryDisplayIdx >= total) this._deliveryDisplayIdx = total - 1;
+        this._activeMarkerIdx = this._deliveryDisplayIdx;
 
         // Automatically change blocks if we walk outside the current 25-house window
         const targetPage = Math.floor(this._deliveryDisplayIdx / this.chunkSize) + 1;
@@ -25343,11 +25571,32 @@ switchTab(tab) {
         const pt = seq[this._deliveryDisplayIdx];
         if (!pt) return;
 
+        this._setActiveDeliverySquare(this._deliveryDisplayIdx);
+
         State.map.flyTo([pt.lat, pt.lng], 19, { padding: [100, 100], duration: 0.5 });
-        this._activeMarkerIdx = this._deliveryDisplayIdx;
 
         const sid = String(pt.surveyId || pt.id);
-        this.highlightMarker(sid, pt.lat, pt.lng, skipCard, true);
+        this.highlightMarker(sid, pt.lat, pt.lng, false, true, true);
+    },
+
+    _setActiveDeliverySquare(idx) {
+        (this._deliverySquares || []).forEach(m => {
+            const el = m && m.getElement ? m.getElement() : null;
+            if (el) el.classList.remove('active');
+        });
+        const m = this._deliverySquares && this._deliverySquares[idx];
+        if (m) {
+            const el = m.getElement ? m.getElement() : null;
+            if (el) el.classList.add('active');
+        }
+    },
+
+    _clearDeliveryHighlight() {
+        (this._deliverySquares || []).forEach(m => {
+            const el = m && m.getElement ? m.getElement() : null;
+            if (el) el.classList.remove('active');
+        });
+        this._deliverySquares = [];
     },
 
     _clearDeliveryRouteDisplay() {
@@ -25355,11 +25604,18 @@ switchTab(tab) {
             State.map.removeLayer(this.deliveryMarkerLayer);
             this.deliveryMarkerLayer = null;
         }
+        if (this.deliveryPortalLayer) {
+            State.map.removeLayer(this.deliveryPortalLayer);
+            this.deliveryPortalLayer = null;
+        }
+        this.deliveryShowPortal = false;
         this._deliveryRoute = null;
         this._deliveryDisplayIdx = null;
         this._activeMarkerIdx = null;
+        this._clearDeliveryHighlight();
         this.toggleRoutePager(false);
         this.updateWatermark('');
+        this._syncPortalToggleButtons();
     },
 
     toggleDeliveryMCGroup(group) {
