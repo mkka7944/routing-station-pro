@@ -9658,7 +9658,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.08.24.1326</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.08.24.1630</span>
             </div>
         </div>
         
@@ -9695,8 +9695,14 @@ input[type=number] {
                     <div id="side-delivery-route-list" style="display:flex; flex-direction:column; gap:8px;">
                         <div style="text-align:center; padding:12px; color:#94a3b8; font-size:11px;">No delivery routes found</div>
                     </div>
-                    <div id="side-route-list" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
-                        <div style="text-align:center; padding:12px; color:#94a3b8; font-size:11px;">No saved routes found</div>
+                    <div id="portal-routes-section" style="margin-top:8px;">
+                        <div id="portal-routes-header" onclick="SpatialRouter.togglePortalSection()" title="Toggle Portal Routes" style="padding:4px 0; font-size:9px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+                            <span>─── Portal Routes ───</span>
+                            <span class="material-icons-round" id="portal-routes-icon" style="font-size:14px;">expand_more</span>
+                        </div>
+                        <div id="side-route-list" style="display:none; flex-direction:column; gap:8px; margin-top:4px;">
+                            <div style="text-align:center; padding:12px; color:#94a3b8; font-size:11px;">No saved routes found</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -10020,7 +10026,7 @@ input[type=number] {
                 </button>
             </div>
         </div>
-        <button id="btn-map-refresh" onclick="location.reload()" title="Refresh App" style="position:absolute; top:66px; right:16px; z-index:5000; width:42px; height:42px; border-radius:50%; background:rgba(255,255,255,0.95); border:1px solid rgba(255,255,255,0.45); box-shadow:0 10px 30px rgba(0,0,0,0.15); display:flex; align-items:center; justify-content:center; cursor:pointer;">
+        <button id="btn-map-refresh" onclick="softRefresh()" title="Refresh App" style="position:absolute; top:66px; right:16px; z-index:5000; width:42px; height:42px; border-radius:50%; background:rgba(255,255,255,0.95); border:1px solid rgba(255,255,255,0.45); box-shadow:0 10px 30px rgba(0,0,0,0.15); display:flex; align-items:center; justify-content:center; cursor:pointer;">
             <span class="material-icons-round" style="font-size:20px; color:#64748b;">refresh</span>
         </button>
         <div id="map"></div>
@@ -10343,7 +10349,7 @@ input[type=number] {
             <div id="lv-content" class="record-card"></div>
         </div>
         <div class="list-pagination">
-            <div style="display:flex; gap:4px; align-items:center; flex:1;">
+            <div style="display:flex; gap:4px; align-items:center; flex:1; justify-content:center;">
                 <button onclick="ListView.prev()" style="width:34px; height:34px; border-radius:8px; background:#f1f5f9; color:var(--text); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="Previous"><span class="material-icons-round" style="font-size:18px;">chevron_left</span></button>
                 <div style="font-weight:700; font-size:11px; white-space:nowrap; padding:0 4px;"><span id="lv-idx">1</span> / <span id="lv-total">0</span></div>
                 <button onclick="ListView.next()" style="width:34px; height:34px; border-radius:8px; background:#f1f5f9; color:var(--text); border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;" title="Next"><span class="material-icons-round" style="font-size:18px;">chevron_right</span></button>
@@ -11199,6 +11205,7 @@ const State = {
     deliveryRouteCollapsedGroups: new Set(),
     deliveryRouteDisplayIndices: new Set(),
     deliveryRouteLayer: null,
+    portalRoutesCollapsed: true,
     hideStandardTooltips: false,
     hideZubairSids: true,
     filtered: [],
@@ -11258,7 +11265,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.08.24.1326";
+window.DATA_VERSION = "v2026.08.24.1630";
 window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -12920,6 +12927,34 @@ closeNearbyMarkersPopup() {
         }, duration);
     }
 };
+
+// Soft refresh: re-fetch Supabase-sourced data WITHOUT a full page reload.
+// Does NOT reload the static build (RAW_DATA, data_part*, paid_data) — those
+// are served from GitHub Pages and unchanged within a build, so reloading them
+// only wastes egress.
+async function softRefresh() {
+    if (window.__refreshing) return;               // prevent double-clicks
+    window.__refreshing = true;
+    if (App && App.showToast) App.showToast('Refreshing data...');
+    try {
+        if (typeof fetchAppSettings === 'function') await fetchAppSettings();
+        if (window.DeliveryModule && DeliveryModule.loadDeliveryCache) await DeliveryModule.loadDeliveryCache();
+        if (window.Settings && Settings.fetchGlobalVerifications) await Settings.fetchGlobalVerifications(true);
+        if (window.SpatialRouter) {
+            if (SpatialRouter.loadRoutes) await SpatialRouter.loadRoutes();
+            if (SpatialRouter.loadDeliveryRoutes) await SpatialRouter.loadDeliveryRoutes();
+        }
+        if (window.DriveSync && DriveSync.fetchAllSyncedData) await DriveSync.fetchAllSyncedData();
+        if (App && App.apply) { App.apply(true); App.render(); }
+        if (window.ListView && ListView.render) ListView.render();
+        if (App && App.showToast) App.showToast('Data refreshed ✓');
+    } catch (e) {
+        console.warn("[softRefresh] Error:", e);
+        if (App && App.showToast) App.showToast('Refresh error: ' + (e.message || e));
+    } finally {
+        window.__refreshing = false;
+    }
+}
 
 
 // === 05_view_switcher.js ===
@@ -18146,7 +18181,6 @@ const LayerManager = {
         this._deliveryActivityOpen = true;
         this._deliveryActivityMonth = window.ACTIVE_BILLING_MONTH || '';
         this._populateDapMonthDropdown();
-        this._startDeliveryActivityTimer();
         if (!this._deliveryActivityData || this._deliveryActivityMonthCached !== this._deliveryActivityMonth) {
             this._fetchDeliveryActivityData(false);
         } else {
@@ -18181,11 +18215,6 @@ const LayerManager = {
         this._deliveryActivityMonth = sel.value;
         this._deliveryActivityMonthCached = '';
         this._deliveryActivityData = null;
-        if (this._deliveryActivityMonth === window.ACTIVE_BILLING_MONTH) {
-            this._startDeliveryActivityTimer();
-        } else {
-            this._stopDeliveryActivityTimer();
-        }
         await this._fetchDeliveryActivityData(false);
     },
 
@@ -19291,11 +19320,8 @@ const LayerManager = {
     },
 
     _startDeliveryActivityTimer() {
-        this._stopDeliveryActivityTimer();
-        if (this._deliveryActivityMonth !== window.ACTIVE_BILLING_MONTH) return;
-        var self = this;
-        this._deliveryActivityTimer = setInterval(function() { if (self._deliveryActivityOpen) self._fetchDeliveryActivityData(true); }, 60000);
-        this._deliveryActivityTickTimer = setInterval(function() { self._updateLastUpdated(); }, 1000);
+        // On-demand refresh only: no 60s auto-poll and no tick timer (saves egress).
+        // Panel fetches fresh data on open and via its refresh button.
     },
 
     _stopDeliveryActivityTimer() {
@@ -19306,11 +19332,13 @@ const LayerManager = {
     _updateLastUpdated() {
         var el = document.getElementById('dap-updated');
         if (!el || !this._deliveryActivityLastFetch) return;
-        var elapsed = Date.now() - new Date(this._deliveryActivityLastFetch).getTime();
-        var remaining = Math.max(0, 60000 - elapsed);
-        var seconds = Math.ceil(remaining / 1000);
-        el.textContent = 'Next refresh in ' + seconds + 's';
-        el.style.color = '#16a34a';
+        try {
+            var d = new Date(this._deliveryActivityLastFetch);
+            var hh = String(d.getHours()).padStart(2, '0');
+            var mm = String(d.getMinutes()).padStart(2, '0');
+            el.textContent = 'Last updated: ' + hh + ':' + mm;
+            el.style.color = '#16a34a';
+        } catch (e) {}
     },
 
     _toggleDeliveryLogSelect(sid, checked) {
@@ -22280,6 +22308,14 @@ const SpatialRouter = {
         this.renderSavedList();
     },
 
+    togglePortalSection() {
+        State.portalRoutesCollapsed = !State.portalRoutesCollapsed;
+        const list = document.getElementById('side-route-list');
+        const icon = document.getElementById('portal-routes-icon');
+        if (list) list.style.display = State.portalRoutesCollapsed ? 'none' : 'flex';
+        if (icon) icon.textContent = State.portalRoutesCollapsed ? 'expand_more' : 'expand_less';
+    },
+
     saveSnapshot() {
         this.undoStack.push({
             sequence: JSON.parse(JSON.stringify(this.sequence)),
@@ -23219,6 +23255,10 @@ switchTab(tab) {
         const side = document.getElementById('side-route-list');
         if (!side) return;
         side.innerHTML = '';
+        // Sync portal section collapse state (collapsed by default so staff focus stays on delivery routes)
+        side.style.display = State.portalRoutesCollapsed ? 'none' : 'flex';
+        const portalIcon = document.getElementById('portal-routes-icon');
+        if (portalIcon) portalIcon.textContent = State.portalRoutesCollapsed ? 'expand_more' : 'expand_less';
         const hasSurveyRoutes = State.savedRoutes && State.savedRoutes.length > 0;
 
         if (hasSurveyRoutes) {
@@ -26113,33 +26153,83 @@ window.DeliveryModule = {
     },
 
     // ─── Delivery Cache ──────────────────────────
-    async loadDeliveryCache() {
+    async loadDeliveryCache(force = false) {
         if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
+        const billMonth = window.ACTIVE_BILLING_MONTH;
         try {
-            var allData = [];
-            var from = 0;
-            var step = 1000;
-            while (true) {
-                var { data } = await window._supabase
-                    .from('delivery_log')
-                    .select('survey_id, status, distance_to_target, staff_email, staff_name')
-                    .eq('bill_month', window.ACTIVE_BILLING_MONTH)
-                    .order('delivered_at', { ascending: false })
-                    .range(from, from + step - 1);
-                if (!data || data.length === 0) break;
-                allData = allData.concat(data);
-                from += step;
+            // 1. Try IndexedDB cache first (avoids re-fetching all rows on every app open)
+            var cachedData = null;
+            if (!force && typeof _dbGetCache === 'function') {
+                cachedData = await _dbGetCache(billMonth);
             }
-            if (allData.length > 0) {
-                this._deliveryCache = new Map(allData.map(d => {
+            if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
+                this._deliveryCache = new Map(cachedData.map(d => {
                     var effectiveStatus = d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50) ? 'unsent' : 'delivered';
                     var staffName = '';
                     if (d.staff_name) staffName = d.staff_name;
                     else if (d.staff_email) staffName = d.staff_email.split('@')[0];
                     return [String(d.survey_id), { status: effectiveStatus, staffName: staffName }];
                 }));
-                console.log(`[DeliveryModule] Loaded ${this._deliveryCache.size} delivery records`);
+                console.log(`[DeliveryModule] Delivery cache restored from IndexedDB: ${this._deliveryCache.size} records`);
+            } else {
+                this._deliveryCache = new Map();
             }
+
+            // 2. DELTA SYNC: fetch only records newer than the cached max delivered_at.
+            //    Falls back to a full fetch when there is no cache (cold start / force).
+            var latestTime = "2000-01-01T00:00:00Z";
+            if (cachedData && cachedData.length > 0) {
+                var times = cachedData.filter(d => d.delivered_at).map(d => d.delivered_at);
+                if (times.length > 0) latestTime = times.sort().reverse()[0];
+            }
+            var newData = [];
+            var from = 0;
+            var step = 1000;
+            while (true) {
+                var q = window._supabase
+                    .from('delivery_log')
+                    .select('survey_id, status, distance_to_target, staff_email, staff_name, delivered_at')
+                    .eq('bill_month', billMonth);
+                if (cachedData && cachedData.length > 0) {
+                    q = q.gt('delivered_at', latestTime);
+                }
+                var { data } = await q.order('delivered_at', { ascending: false }).range(from, from + step - 1);
+                if (!data || data.length === 0) break;
+                newData = newData.concat(data);
+                from += step;
+                if (data.length < step) break;
+            }
+
+            // 3. Merge new records into the in-memory cache (and persist combined set)
+            var merged = newData.length > 0
+                ? (cachedData || []).concat(newData)
+                : (cachedData || []);
+            // Dedupe by survey_id keeping the latest (newData order is newest-first)
+            if (newData.length > 0) {
+                var map = new Map();
+                merged.forEach(d => map.set(String(d.survey_id), d));
+                merged = Array.from(map.values());
+            }
+            newData.forEach(d => {
+                var effectiveStatus = d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50) ? 'unsent' : 'delivered';
+                var staffName = '';
+                if (d.staff_name) staffName = d.staff_name;
+                else if (d.staff_email) staffName = d.staff_email.split('@')[0];
+                this._deliveryCache.set(String(d.survey_id), { status: effectiveStatus, staffName: staffName });
+            });
+
+            if (merged.length > 0 && typeof _dbSetCache === 'function') {
+                var compact = merged.map(d => ({
+                    survey_id: d.survey_id,
+                    status: d.status,
+                    distance_to_target: d.distance_to_target,
+                    staff_email: d.staff_email,
+                    staff_name: d.staff_name,
+                    delivered_at: d.delivered_at
+                }));
+                await _dbSetCache(billMonth, compact);
+            }
+            console.log(`[DeliveryModule] Delivery cache synced: ${this._deliveryCache.size} records (delta ${newData.length})`);
         } catch (e) {
             console.warn("[DeliveryModule] Failed to load delivery cache:", e);
         }
