@@ -9401,20 +9401,19 @@ input[type=number] {
         height: auto !important;
 }
 
-/* Original portal marker (unsent houses) */
+/* Selected delivery stop portal marker */
 .delivery-portal-marker {
         background: none;
         border: none;
 }
 
 .delivery-portal-marker-inner {
-        width: 12px;
-        height: 12px;
-        border: 2px solid #f59e0b;
-        background: rgba(245, 158, 11, 0.25);
-        border-radius: 3px;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-        transform: rotate(45deg);
+        width: 16px;
+        height: 16px;
+        border: 2px solid #fff;
+        background: #a855f7;
+        border-radius: 50%;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 .delivery-route-label {
@@ -9658,7 +9657,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.08.24.1643</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.08.24.1803</span>
             </div>
         </div>
         
@@ -10323,7 +10322,7 @@ input[type=number] {
                                 <button onclick="SpatialRouter.clearDeliverySelection()" class="routing-tool-btn gated-tool" id="btn-delivery-clear" title="Clear delivery selection" style="color:#ef4444;">
                                     <span class="material-icons-round">layers_clear</span>
                                 </button>
-                                <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryPortalMarkers()" class="routing-tool-btn gated-tool" id="btn-delivery-portal" title="Show original portal markers for unsent houses" style="color:#94a3b8;">
+                                <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryPortalMarkers()" class="routing-tool-btn gated-tool" id="btn-delivery-portal" title="Show portal marker for selected delivery stop" style="color:#94a3b8;">
                                     <span class="material-icons-round">location_searching</span>
                                 </button>
                                 <div style="flex:1;"></div>
@@ -11265,7 +11264,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.08.24.1643";
+window.DATA_VERSION = "v2026.08.24.1803";
 window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -23627,6 +23626,9 @@ switchTab(tab) {
             this.updatePagerInfo(seq.length);
         }
 
+        // Keep the single portal marker in sync when selecting via sidebar/list
+        if (deliveryShown && this.deliveryShowPortal) this._updatePortalMarkers();
+
         // Pulse the marker without moving the map (showOnMap already flew there)
         if (pt && !this.isMarkingMode()) {
             this.highlightMarker(sidStr, pt.lat, pt.lng, true, true);
@@ -24997,7 +24999,7 @@ const routeObj = {
         this.deliveryShowPortal = !this.deliveryShowPortal;
         this._updatePortalMarkers();
         this._syncPortalToggleButtons();
-        if (App.showToast) App.showToast(this.deliveryShowPortal ? "Portal markers on (unsent houses)." : "Portal markers off.");
+        if (App.showToast) App.showToast(this.deliveryShowPortal ? "Portal marker on (selected stop)." : "Portal marker off.");
     },
 
     _updatePortalMarkers() {
@@ -25006,52 +25008,43 @@ const routeObj = {
             this.deliveryPortalLayer = null;
         }
         if (!this.deliveryShowPortal) return;
-        const seen = new Set();
-        const pts = [];
-        if (this._deliveryRoute && this._deliveryRoute.route_data) {
-            const seq = this._deliveryRoute.route_data.sequence;
-            if (seq && seq.length) {
-                const startIdx = (this.currentPage - 1) * this.chunkSize;
-                seq.slice(startIdx, startIdx + this.chunkSize).forEach(s => {
-                    const sid = String(s.surveyId || s.id).replace(/\.0$/, '').trim();
-                    if (s.status !== 'unsent' || seen.has(sid)) return;
-                    seen.add(sid);
-                    const row = window.SID_MAP ? window.SID_MAP.get(sid) : null;
-                    if (row && row[1] && row[2]) pts.push({ sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), from: [s.lat, s.lng] });
-                });
-            }
-        } else {
-            (this.deliverySequence || []).forEach(s => {
-                const sid = String(s.id).replace(/\.0$/, '').trim();
-                if (s.status !== 'unsent' || seen.has(sid)) return;
-                seen.add(sid);
-                const row = window.SID_MAP ? window.SID_MAP.get(sid) : null;
-                if (row && row[1] && row[2]) pts.push({ sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), from: [s.lat, s.lng] });
-            });
-        }
-        if (!pts.length) return;
+        if (!this._deliveryRoute || !this._deliveryRoute.route_data) return;
+        const seq = this._deliveryRoute.route_data.sequence;
+        if (!seq || seq.length === 0) return;
+
+        // Draw the portal marker ONLY for the currently selected delivery stop
+        const idx = (this._deliveryDisplayIdx !== undefined && this._deliveryDisplayIdx !== null && this._deliveryDisplayIdx !== -1)
+            ? this._deliveryDisplayIdx
+            : 0;
+        const pt = seq[idx];
+        if (!pt) return;
+
+        const sid = String(pt.surveyId || pt.id).replace(/\.0$/, '').trim();
+        const row = window.SID_MAP ? window.SID_MAP.get(sid) : null;
+        if (!row || !row[1] || !row[2]) return;
+
+        const from = [pt.lat, pt.lng];
+        const to = [parseFloat(row[1]), parseFloat(row[2])];
+        // Skip zero-length line (route stop is already at the house location)
+        if (from[0] === to[0] && from[1] === to[1]) return;
+
         this.deliveryPortalLayer = L.layerGroup().addTo(State.map);
-        pts.forEach(p => {
-            if (p.from && p.from[0] && p.from[1]) {
-                L.polyline([p.from, [p.lat, p.lng]], {
-                    color: '#f59e0b',
-                    weight: 2,
-                    dashArray: '4,4',
-                    opacity: 0.7,
-                    pane: 'routingMarkerPane',
-                    interactive: false
-                }).addTo(this.deliveryPortalLayer);
-            }
-            L.marker([p.lat, p.lng], {
-                icon: L.divIcon({
-                    className: 'delivery-portal-marker',
-                    html: '<div class="delivery-portal-marker-inner"></div>',
-                    iconSize: [14, 14]
-                }),
-                pane: 'routingMarkerPane',
-                interactive: false
-            }).addTo(this.deliveryPortalLayer);
-        });
+        L.polyline([from, to], {
+            color: '#a855f7',
+            weight: 3,
+            opacity: 0.9,
+            pane: 'routingMarkerPane',
+            interactive: false
+        }).addTo(this.deliveryPortalLayer);
+        L.marker(to, {
+            icon: L.divIcon({
+                className: 'delivery-portal-marker',
+                html: '<div class="delivery-portal-marker-inner"></div>',
+                iconSize: [16, 16]
+            }),
+            pane: 'routingMarkerPane',
+            interactive: false
+        }).addTo(this.deliveryPortalLayer);
     },
 
     _syncPortalToggleButtons() {
@@ -25061,15 +25054,15 @@ const routeObj = {
             pagerBtn.classList.toggle('active', isDelivery && this.deliveryShowPortal);
             pagerBtn.classList.toggle('disabled', !isDelivery);
             pagerBtn.title = isDelivery
-                ? (this.deliveryShowPortal ? 'Hide portal markers' : 'Show original portal markers for unsent houses')
+                ? (this.deliveryShowPortal ? 'Hide portal marker' : 'Show portal marker for selected delivery stop')
                 : 'Only available for delivery routes';
         }
         const tbBtn = document.getElementById('btn-delivery-portal');
         if (tbBtn) {
             tbBtn.style.color = this.deliveryShowPortal ? '#f59e0b' : '#94a3b8';
             tbBtn.title = this.deliveryShowPortal
-                ? 'Hide portal markers'
-                : 'Show original portal markers for unsent houses';
+                ? 'Hide portal marker for selected stop'
+                : 'Show portal marker for selected delivery stop';
         }
     },
 
@@ -25702,6 +25695,9 @@ const routeObj = {
 
         const sid = String(pt.surveyId || pt.id);
         this.highlightMarker(sid, pt.lat, pt.lng, false, true, true);
+
+        // Keep the single portal marker in sync with the selected delivery stop
+        if (this.deliveryShowPortal) this._updatePortalMarkers();
     },
 
     _setActiveDeliverySquare(idx) {
