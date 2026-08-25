@@ -9657,7 +9657,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.08.24.1803</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.08.25.1308</span>
             </div>
         </div>
         
@@ -10328,6 +10328,16 @@ input[type=number] {
                                 <div style="flex:1;"></div>
                                 <button onclick="SpatialRouter.refreshDeliveryData()" class="routing-tool-btn" id="btn-delivery-refresh" title="Refresh delivery data from server">
                                     <span class="material-icons-round" style="color:#64748b;">refresh</span>
+                                </button>
+                            </div>
+                            <div style="display:flex; gap:4px; margin-top:6px; align-items:center;">
+                                <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryDisplayAll(true)" style="padding:3px 6px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; font-size:8px; font-weight:800; color:#16a34a; cursor:pointer;" title="Select All Display">ALL D</button>
+                                <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryDisplayAll(false)" style="padding:3px 6px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; font-size:8px; font-weight:800; color:#16a34a; cursor:pointer;" title="Deselect All Display">0 D</button>
+                                <button onclick="event.stopPropagation(); SpatialRouter.batchLoadDeliveryDisplay()" style="padding:3px 8px; background:#f0fdf4; border:1px solid #16a34a; border-radius:4px; font-size:9px; font-weight:800; color:#16a34a; cursor:pointer; display:flex; align-items:center; gap:3px;" title="Display selected routes as reference on map">
+                                    <span class="material-icons-round" style="font-size:12px;">visibility</span> Display
+                                </button>
+                                <button onclick="event.stopPropagation(); SpatialRouter.clearDeliveryBatchDisplay()" style="padding:3px 8px; background:white; border:1px solid #fca5a5; border-radius:4px; font-size:9px; font-weight:800; color:#ef4444; cursor:pointer; display:flex; align-items:center; gap:3px;" title="Clear reference routes from map">
+                                    <span class="material-icons-round" style="font-size:12px;">layers_clear</span> Clean
                                 </button>
                             </div>
                         </div>
@@ -11264,7 +11274,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.08.24.1803";
+window.DATA_VERSION = "v2026.08.25.1308";
 window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -18144,7 +18154,7 @@ const LayerManager = {
     _dapAutoAdvance: false,
     _dapAutoInterval: 3,
     _dapAutoTimer: null,
-    _dapShowPortal: true,
+    _dapShowPortal: false,
     _dapNavigatorActive: false,
     _lastFilteredActivityRecords: null,
     _portalMarkerGroup: null,
@@ -18265,6 +18275,9 @@ const LayerManager = {
                     '<input id="dap-date-to" type="date" value="' + this._dapDateTo + '" onchange="LayerManager._dapDateTo=this.value;LayerManager._updateDeliveryActivityPanel(LayerManager._deliveryActivityData)" style="flex:1; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
                     '<button onclick="LayerManager._dapDateFrom=\'\';LayerManager._dapDateTo=\'\';document.getElementById(\'dap-date-from\').value=\'\';document.getElementById(\'dap-date-to\').value=\'\';LayerManager._updateDeliveryActivityPanel(LayerManager._deliveryActivityData)" style="padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Clear date filter">' +
                         '<span class="material-icons-round" style="font-size:16px;">clear</span>' +
+                    '</button>' +
+                    '<button id="dap-summary-portal-toggle" onclick="LayerManager._dapTogglePortal()" style="padding:4px 10px; border-radius:6px; border:1px solid #8b5cf6; background:#f5f3ff; color:#7c3aed; font-size:10px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:4px; font-family:inherit;" title="Show/hide portal markers on map">' +
+                        '<span class="material-icons-round" style="font-size:12px;">visibility</span> <span class="dap-portal-label">Portal: ON</span>' +
                     '</button>' +
                 '</div>' +
                 '<div id="dap-summary-sections">' +
@@ -18530,7 +18543,7 @@ const LayerManager = {
         this._dapMcFilter = '';
         this._dapActiveSid = null;
         this._dapAutoAdvance = false;
-        this._dapShowPortal = true;
+        this._dapShowPortal = false;
         this._dapStopAutoTimer();
         this._syncDapViewMode();
     },
@@ -18549,6 +18562,31 @@ const LayerManager = {
             analysis.style.display = '';
             this._renderDapAnalysis();
         }
+        this._syncDapPortalToggleUI();
+    },
+
+    _dapTogglePortal() {
+        this._dapShowPortal = !this._dapShowPortal;
+        if (this._dapActiveSid) {
+            var r = this._deliveryActivityData ? this._deliveryActivityData.find(function(x) { return String(x.survey_id).trim() === String(LayerManager._dapActiveSid).trim(); }) : null;
+            if (r) this.showDeliveryOnMap(this._dapActiveSid, { showPortal: this._dapShowPortal, useSimpleTooltip: true });
+        }
+        if (this._lastFilteredActivityRecords) this._showAllActivityMarkers(this._lastFilteredActivityRecords);
+        if (this._dapViewMode === 'analysis') this._renderDapAnalysis();
+        this._syncDapPortalToggleUI();
+    },
+
+    _syncDapPortalToggleUI() {
+        var btn = document.getElementById('dap-summary-portal-toggle');
+        if (!btn) return;
+        var on = !!this._dapShowPortal;
+        btn.style.border = '1px solid ' + (on ? '#8b5cf6' : '#e2e8f0');
+        btn.style.background = on ? '#f5f3ff' : 'white';
+        btn.style.color = on ? '#7c3aed' : '#64748b';
+        var icon = btn.querySelector('.material-icons-round');
+        if (icon) icon.textContent = on ? 'visibility' : 'visibility_off';
+        var label = btn.querySelector('.dap-portal-label');
+        if (label) label.textContent = 'Portal: ' + (on ? 'ON' : 'OFF');
     },
 
     _renderDapAnalysis() {
@@ -18809,7 +18847,7 @@ const LayerManager = {
             '</div>' +
             // Auto-advance controls
             '<div style="display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap;">' +
-            '<button onclick="LayerManager._dapShowPortal=!LayerManager._dapShowPortal;if(LayerManager._dapActiveSid){var r=LayerManager._deliveryActivityData.find(function(x){return String(x.survey_id).trim()===String(LayerManager._dapActiveSid).trim()});if(r)LayerManager.showDeliveryOnMap(LayerManager._dapActiveSid,{showPortal:LayerManager._dapShowPortal,useSimpleTooltip:true})}if(LayerManager._lastFilteredActivityRecords)LayerManager._showAllActivityMarkers(LayerManager._lastFilteredActivityRecords);LayerManager._renderDapAnalysis()" style="padding:4px 10px; border-radius:6px; border:1px solid ' + (self._dapShowPortal ? '#8b5cf6' : '#e2e8f0') + '; background:' + (self._dapShowPortal ? '#f5f3ff' : 'white') + '; color:' + (self._dapShowPortal ? '#7c3aed' : '#64748b') + '; font-size:10px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:4px; font-family:inherit;">' +
+            '<button onclick="LayerManager._dapTogglePortal()" style="padding:4px 10px; border-radius:6px; border:1px solid ' + (self._dapShowPortal ? '#8b5cf6' : '#e2e8f0') + '; background:' + (self._dapShowPortal ? '#f5f3ff' : 'white') + '; color:' + (self._dapShowPortal ? '#7c3aed' : '#64748b') + '; font-size:10px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:4px; font-family:inherit;">' +
             '<span class="material-icons-round" style="font-size:12px;">' + (self._dapShowPortal ? 'visibility' : 'visibility_off') + '</span> Portal: ' + (self._dapShowPortal ? 'ON' : 'OFF') + '</button>' +
             '<button onclick="LayerManager._dapToggleAutoAdvance()" style="padding:4px 10px; border-radius:6px; border:1px solid ' + (self._dapAutoAdvance ? '#8b5cf6' : '#e2e8f0') + '; background:' + (self._dapAutoAdvance ? '#f5f3ff' : 'white') + '; color:' + (self._dapAutoAdvance ? '#7c3aed' : '#64748b') + '; font-size:10px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:4px; font-family:inherit;">' +
             '<span class="material-icons-round" style="font-size:12px;">' + (self._dapAutoAdvance ? 'pause' : 'play_arrow') + '</span> ' + (self._dapAutoAdvance ? 'Auto: ON' : 'Auto: OFF') + '</button>' +
@@ -18838,13 +18876,15 @@ const LayerManager = {
                 '<span style="flex:1; min-width:0;">Consumer</span>' +
                 '<span style="flex:0 0 44px; text-align:center;">Status</span>' +
                 '<span style="flex:0 0 40px; text-align:right;">Dist</span>' +
+                '<span style="flex:0 0 66px; text-align:right; font-size:7px;">Date</span>' +
                 '<span onclick="LayerManager._dapDeliverySort=LayerManager._dapDeliverySort===\'asc\'?\'desc\':\'asc\';LayerManager._dapDeliveryPage=1;LayerManager._dapActiveSid=null;LayerManager._dapStopAutoTimer();LayerManager._renderDapAnalysis()" style="flex:0 0 36px; text-align:right; cursor:pointer; user-select:none; display:flex; align-items:center; justify-content:flex-end; gap:2px;">Time ' + (self._dapDeliverySort === 'asc' ? '↑' : '↓') + '</span>' +
                 '<span style="flex:0 0 115px; text-align:right; font-size:7px;">Capture GPS</span>' +
                 '</div>';
             pageRecords.forEach(function(r, idx) {
                 var isDel = r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50);
                 var isUnsent = self._isEffectiveUnsent(r);
-                var dateStr = r.delivered_at ? new Date(r.delivered_at).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) : '-';
+                var dateStr = r.delivered_at ? String(r.delivered_at).slice(0, 10) : '-';
+                var timeStr = r.delivered_at ? new Date(r.delivered_at).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) : '-';
                 var name = r.consumer_name ? r.consumer_name.substring(0, 10) : '-';
                 var isActive = String(r.survey_id) === String(self._dapActiveSid);
                 var captureGpsStr = r.capture_gps_lat && r.capture_gps_lng ? parseFloat(r.capture_gps_lat).toFixed(5) + ', ' + parseFloat(r.capture_gps_lng).toFixed(5) : '—';
@@ -18854,7 +18894,8 @@ const LayerManager = {
                     '<span style="flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; color:#1e293b;">' + name + '</span>' +
                     '<span style="display:inline-flex; align-items:center; gap:2px; padding:1px 4px; border-radius:3px; font-size:8px; font-weight:800; background:' + (isDel ? '#dcfce7' : isUnsent ? '#fee2e2' : '#fef3c7') + '; color:' + (isDel ? '#15803d' : isUnsent ? '#b91c1c' : '#d97706') + ';">' + (isDel ? '✓' : isUnsent ? '✗' : '') + '</span>' +
                     '<span style="flex:0 0 40px; text-align:right; color:#94a3b8; font-size:9px;">' + (r.distance_to_target ? r.distance_to_target + 'm' : '-') + '</span>' +
-                    '<span style="flex:0 0 36px; text-align:right; color:#94a3b8; font-size:9px;">' + dateStr + '</span>' +
+                    '<span style="flex:0 0 66px; text-align:right; color:#94a3b8; font-size:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + dateStr + '</span>' +
+                    '<span style="flex:0 0 36px; text-align:right; color:#94a3b8; font-size:9px;">' + timeStr + '</span>' +
                     '<span style="flex:0 0 115px; text-align:right; color:#94a3b8; font-size:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + captureGpsStr + '</span>' +
                     '</div>';
             });
@@ -18876,7 +18917,7 @@ const LayerManager = {
         this._dapNavigatorActive = true;
         this._dapActiveSid = null;
         this._dapAutoAdvance = false;
-        this._dapShowPortal = true;
+        this._dapShowPortal = false;
         this._dapStopAutoTimer();
         var self = this;
         var records = (this._dapDeliveryFilteredCache || this._deliveryActivityData.filter(function(r) {
@@ -19311,7 +19352,7 @@ const LayerManager = {
         this._dapMcFilter = '';
         this._dapActiveSid = null;
         this._dapAutoAdvance = false;
-        this._dapShowPortal = true;
+        this._dapShowPortal = false;
         this._dapStopAutoTimer();
         this._syncDapViewMode();
         var countEl = document.getElementById('dap-count');
@@ -21391,6 +21432,7 @@ const SpatialRouter = {
     deliveryMarkerLayer: null,
     deliveryPortalLayer: null,
     deliveryShowPortal: false,
+    deliveryBatchDisplayLayer: null,
     _deliverySquares: [],
     _deliveryDrawPoints: [],
     _restorePager: false,
@@ -24717,8 +24759,6 @@ const routeObj = {
         this.deliveryContext = null;
         this.updateDeliveryModeChip();
         document.getElementById('delivery-stats').style.display = 'none';
-        const dl = document.getElementById('delivery-route-list');
-        if (dl) dl.innerHTML = '';
 
         // Populate MC/UC dropdown for this city
         if (!city) {
@@ -24823,14 +24863,19 @@ const routeObj = {
         const spinner = document.getElementById('delivery-loading');
         if (spinner) spinner.style.display = 'flex';
 
-        await this._loadDeliveryMarkers(city, mc, month);
-
+        // Set the delivery context BEFORE loading so the internal silhouette/label
+        // renders use the newly selected MC/UC (not the previous one)
         this.deliveryContext = {
             month: this.deliveryMonth,
             city: this.deliveryCity,
             mc: this.deliveryMc,
-            statusMap: new Map(this.deliverySequence.map(s => [String(s.id), s.status]))
+            statusMap: new Map()
         };
+
+        await this._loadDeliveryMarkers(city, mc, month);
+
+        // Fill the status map now that the delivery sequence is loaded
+        if (this.deliveryContext) this.deliveryContext.statusMap = new Map(this.deliverySequence.map(s => [String(s.id), s.status]));
     },
 
     startDeliveryDraw() {
@@ -24878,8 +24923,12 @@ const routeObj = {
         document.getElementById('btn-delivery-finish').style.display = 'none';
         document.getElementById('btn-delivery-cancel').style.display = 'none';
 
-        // Count markers inside polygon
-        const inside = this.deliverySequence.filter(s => this._pointInPolygon([s.lat, s.lng], this.deliveryDrawnPolygon));
+        // Count markers inside polygon (excluding those already captured by earlier routes)
+        const taken = this._deliveryTakenSids();
+        const inside = this.deliverySequence.filter(s => {
+            if (!this._pointInPolygon([s.lat, s.lng], this.deliveryDrawnPolygon)) return false;
+            return !taken.has(String(s.id).replace(/\.0$/, '').trim());
+        });
         if (App.showToast) App.showToast(`Polygon contains ${inside.length} markers. Click Save to store.`);
     },
 
@@ -24920,7 +24969,12 @@ const routeObj = {
         }
 
         const polygon = this.deliveryDrawnPolygon;
-        const captured = this.deliverySequence.filter(s => this._pointInPolygon([s.lat, s.lng], polygon));
+        // Only keep houses that aren't already captured by an earlier saved route
+        const taken = this._deliveryTakenSids();
+        const captured = this.deliverySequence.filter(s => {
+            if (!this._pointInPolygon([s.lat, s.lng], polygon)) return false;
+            return !taken.has(String(s.id).replace(/\.0$/, '').trim());
+        });
         if (!captured.length) {
             if (App.showToast) App.showToast("No markers inside polygon.");
             return;
@@ -24960,6 +25014,10 @@ const routeObj = {
         }
         if (this.deliveryPortalLayer) State.map.removeLayer(this.deliveryPortalLayer);
         this.deliveryPortalLayer = null;
+        if (this.deliveryBatchDisplayLayer) {
+            State.map.removeLayer(this.deliveryBatchDisplayLayer);
+            this.deliveryBatchDisplayLayer = null;
+        }
         this.deliveryShowPortal = false;
         this._clearDeliveryHighlight();
         this.deliverySequence = [];
@@ -24977,8 +25035,6 @@ const routeObj = {
         this._syncPortalToggleButtons();
         const stats = document.getElementById('delivery-stats');
         if (stats) stats.style.display = 'none';
-        const dl = document.getElementById('delivery-route-list');
-        if (dl) dl.innerHTML = '';
     },
 
     updateDeliveryModeChip() {
@@ -25079,6 +25135,10 @@ const routeObj = {
         if (this.deliveryPortalLayer) {
             State.map.removeLayer(this.deliveryPortalLayer);
             this.deliveryPortalLayer = null;
+        }
+        if (this.deliveryBatchDisplayLayer) {
+            State.map.removeLayer(this.deliveryBatchDisplayLayer);
+            this.deliveryBatchDisplayLayer = null;
         }
         this.deliveryShowPortal = false;
         this.deliverySequence = [];
@@ -25222,14 +25282,17 @@ const routeObj = {
         };
 
         let poolSids = [];
+        // Exclude houses already captured by earlier routes (the oldest route keeps them)
+        const taken = this._deliveryTakenSids(route);
+        const isTaken = (sid) => taken.has(String(sid).replace(/\.0$/, '').trim());
         if (this.deliverySequence && this.deliverySequence.length > 0) {
-            poolSids = this.deliverySequence.filter(s => inPolygon(s)).map(s => String(s.id).replace(/\.0$/, '').trim());
+            poolSids = this.deliverySequence.filter(s => inPolygon(s)).map(s => String(s.id).replace(/\.0$/, '').trim()).filter(sid => !isTaken(sid));
         }
         if (!poolSids.length && capturedData && capturedData.length > 0) {
-            poolSids = capturedData.map(p => String(p.id || p.surveyId).replace(/\.0$/, '').trim());
+            poolSids = capturedData.map(p => String(p.id || p.surveyId).replace(/\.0$/, '').trim()).filter(sid => !isTaken(sid));
         }
         if (!poolSids.length) {
-            poolSids = [...sids];
+            poolSids = sids.filter(sid => !isTaken(sid));
         }
 
         this.capturedIDs = poolSids;
@@ -25244,7 +25307,7 @@ const routeObj = {
                 if (pt) this.deliveryCoordMap.set(clean, { lat: pt.lat, lng: pt.lng, status: (this.deliveryContext.statusMap && this.deliveryContext.statusMap.get(clean)) || 'undelivered', name: pt.name || '' });
             }
         });
-        this.sequence = seq.map((s, i) => ({ id: sids[i], lat: s.lat, lng: s.lng, name: s.name, status: s.status }));
+        this.sequence = seq.map((s, i) => ({ id: sids[i], lat: s.lat, lng: s.lng, name: s.name, status: s.status })).filter(s => !isTaken(s.id));
         this.activeDisplayRoutes = [this.editingDeliveryRouteName];
         if (route.route_data.polygon) {
             this.activePolygon = L.polygon(route.route_data.polygon, { color: '#3b82f6', fillOpacity: 0.1, weight: 2 });
@@ -25265,15 +25328,25 @@ const routeObj = {
         }, 400);
     },
 
-    _deliveryTakenSids() {
+    _deliveryTakenSids(refRoute) {
         const taken = new Set();
         if (!State.deliveryRoutes || !this.deliveryContext) return taken;
         const mc = this.deliveryContext.mc;
         const month = this.deliveryContext.month;
+        // A house belongs to the earliest-saved route that captured it. When a
+        // reference route is given (editing), only exclude houses from routes
+        // created BEFORE it. For a new route (no ref), every existing route is
+        // "older", so all their houses are excluded.
+        const refHasDate = !!(refRoute && refRoute.created_at);
+        const refCreated = refHasDate ? new Date(refRoute.created_at).getTime() : Infinity;
         State.deliveryRoutes.forEach(r => {
             if (r.mc_uc !== mc) return;
             if (month && r.delivery_month !== month) return;
             if (this.editingDeliveryRouteId && String(r.id) === String(this.editingDeliveryRouteId)) return;
+            if (refHasDate) {
+                const rCreated = r.created_at ? new Date(r.created_at).getTime() : -Infinity;
+                if (!(rCreated < refCreated)) return;
+            }
             const seq = (r.route_data && r.route_data.sequence) || [];
             seq.forEach(s => {
                 const sid = String(s.surveyId || s.id).replace(/\.0$/, '').trim();
@@ -25452,6 +25525,63 @@ const routeObj = {
         }
     },
 
+    toggleDeliveryDisplayAll(checked) {
+        document.querySelectorAll('.delivery-display-selector').forEach(cb => cb.checked = checked);
+    },
+
+    batchLoadDeliveryDisplay() {
+        if (this.deliveryBatchDisplayLayer) {
+            State.map.removeLayer(this.deliveryBatchDisplayLayer);
+            this.deliveryBatchDisplayLayer = null;
+        }
+        const selected = Array.from(document.querySelectorAll('.delivery-display-selector:checked'));
+        if (!selected.length) {
+            if (App.showToast) App.showToast("No routes selected for reference.");
+            return;
+        }
+        const routes = selected.map(cb => State.deliveryRoutes.find(r => String(r.id) === String(cb.value))).filter(Boolean);
+        if (!routes.length) return;
+
+        this.deliveryBatchDisplayLayer = L.layerGroup().addTo(State.map);
+        const colors = ['#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316', '#3b82f6'];
+        routes.forEach((r, i) => {
+            const color = colors[i % colors.length];
+            const rd = r.route_data || {};
+            const poly = rd.polygon;
+            const seq = rd.sequence || [];
+            if (poly && poly.length >= 3) {
+                L.polygon(poly, { color, weight: 2, dashArray: '4,4', fillColor: color, fillOpacity: 0.06, interactive: false, pane: 'routingPane' }).addTo(this.deliveryBatchDisplayLayer);
+            }
+            if (seq && seq.length > 1) {
+                L.polyline(seq.map(s => [s.lat, s.lng]), { color, weight: 2, dashArray: '4,4', opacity: 0.7, interactive: false, pane: 'routingPane' }).addTo(this.deliveryBatchDisplayLayer);
+            }
+            // Route name label anchored at the middle of the route's houses
+            let anchor = seq && seq.length > 0 ? this._pointsCenter(seq.map(s => [s.lat, s.lng])) : null;
+            if (!anchor && poly && poly.length >= 3) anchor = this._pointsCenter(poly);
+            if (anchor) {
+                const name = String(r.route_name || 'Route');
+                const short = name.length > 22 ? name.slice(0, 21) + '\u2026' : name;
+                L.marker(anchor, {
+                    icon: L.divIcon({
+                        className: 'delivery-silhouette-label',
+                        html: `<div class="delivery-route-label" style="border-color:${color}; color:${color};">${short}</div>`
+                    }),
+                    interactive: false,
+                    pane: 'routingPane'
+                }).addTo(this.deliveryBatchDisplayLayer);
+            }
+        });
+        this.activeDisplayRoutes = routes.map(r => r.route_name || 'Route');
+        if (App.showToast) App.showToast(`Reference: ${routes.length} route(s) shown.`);
+    },
+
+    clearDeliveryBatchDisplay() {
+        if (this.deliveryBatchDisplayLayer) {
+            State.map.removeLayer(this.deliveryBatchDisplayLayer);
+            this.deliveryBatchDisplayLayer = null;
+        }
+    },
+
     renderDeliverySavedList() {
         const container = document.getElementById('delivery-route-list');
         if (!container) return;
@@ -25466,24 +25596,26 @@ const routeObj = {
         const grouped = {};
         routes.forEach(r => {
             const area = this.cleanMCName(r.mc_uc || 'Unknown');
-            if (!grouped[area]) grouped[area] = [];
-            grouped[area].push(r);
+            if (!grouped[area]) grouped[area] = { routes: [], pts: 0 };
+            grouped[area].routes.push(r);
+            grouped[area].pts += (r.route_data && r.route_data.sequence) ? r.route_data.sequence.length : 0;
         });
 
         const sortedAreas = Object.keys(grouped).sort((a, b) => this.naturalCompare(a, b));
         sortedAreas.forEach(area => {
-            const grp = grouped[area].sort((a, b) => String(b.delivery_month || '').localeCompare(String(a.delivery_month || '')));
-            const month = (grp[0] && grp[0].delivery_month) || '';
+            const grp = grouped[area];
+            const grpRoutes = grp.routes.sort((a, b) => String(b.delivery_month || '').localeCompare(String(a.delivery_month || '')));
+            const month = (grpRoutes[0] && grpRoutes[0].delivery_month) || '';
             const isCollapsed = State.deliveryRouteCollapsedGroups.has(area);
 
             const hdr = document.createElement('div');
             hdr.style.cssText = 'padding:6px 8px; font-weight:800; font-size:11px; text-transform:uppercase; color:#1d4ed8; background:#eff6ff; border-radius:6px; margin:8px 0 4px 0; letter-spacing:0.5px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;';
             hdr.onclick = (e) => { e.stopPropagation(); this.toggleDeliveryMCGroup(area); };
-            hdr.innerHTML = `<span>${area} <span style="color:#1d4ed8; font-weight:bold; margin-left:6px; font-size:10px;">(${grp.length} routes)</span><span style="font-size:9px; color:#94a3b8; margin-left:6px;">${month || '—'}</span></span> <span class="material-icons-round" style="font-size:14px;">${isCollapsed ? 'expand_more' : 'expand_less'}</span>`;
+            hdr.innerHTML = `<span>${area} <span style="color:#1d4ed8; font-weight:bold; margin-left:6px; font-size:10px;">(${grpRoutes.length} routes, ${grp.pts} pts)</span><span style="font-size:9px; color:#94a3b8; margin-left:6px;">${month || '—'}</span></span> <span class="material-icons-round" style="font-size:14px;">${isCollapsed ? 'expand_more' : 'expand_less'}</span>`;
             container.appendChild(hdr);
             if (isCollapsed) return;
 
-            grp.forEach((r, idx) => {
+            grpRoutes.forEach((r, idx) => {
                 const seq = r.route_data?.sequence || [];
                 const comp = r.composition || {};
                 const rMonth = r.delivery_month || '—';
@@ -25494,6 +25626,10 @@ const routeObj = {
                 d.title = `${comp.delivered || 0}d · ${comp.unsent || 0}u · ${comp.undelivered || 0}ud`;
                 d.innerHTML = `
                 <div style="display:flex; align-items:center; gap:6px;">
+                    <label title="Show as reference on map" onclick="event.stopPropagation()" style="display:flex; align-items:center; gap:2px; cursor:pointer; flex-shrink:0;">
+                        <span class="material-icons-round" style="font-size:12px; color:#16a34a;">visibility</span>
+                        <input type="checkbox" class="delivery-display-selector" value="${r.id}" onclick="event.stopPropagation()" />
+                    </label>
                     <div style="width:22px; height:22px; background:#f5f3ff; color:#7c3aed; border-radius:4px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:10px; flex-shrink:0;">${idx + 1}</div>
                     <div style="flex:1; min-width:0;">
                         <div style="font-weight:700; font-size:10px; color:${nameColor}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${r.route_name || 'Route ' + (idx + 1)}</div>
