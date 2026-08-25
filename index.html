@@ -9657,7 +9657,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.08.25.1308</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.08.25.1708</span>
             </div>
         </div>
         
@@ -11274,7 +11274,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.08.25.1308";
+window.DATA_VERSION = "v2026.08.25.1708";
 window.DATA_CHUNKS_COUNT = 13;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -13191,21 +13191,7 @@ const ListView = {
         const isRight = v ? v.is_right === true : false;
         const isDeliv = v ? v.is_delivered === true : false;
 
-        // Verified context string (Street, Seq, Side)
-        let verifiedInfoHtml = '';
-        const activeIntel = p || v;
         const hasPending = !!staging; // Defined solely by presence in unified state
-        
-        if (activeIntel) {
-            const sideStr = activeIntel.is_right === true ? 'Right' : (activeIntel.is_right === false ? 'Left' : '-');
-            verifiedInfoHtml = `
-                <div style="margin-top:4px; display:flex; align-items:center; gap:6px; font-size:10px; font-weight:800; color:#10b981; background:#f0fdf4; padding:2px 8px; border-radius:6px; border:1px solid #dcfce7; width:fit-content;">
-                    <span class="material-icons-round" style="font-size:12px;">verified</span>
-                    ${activeIntel.street_no || 'C'} • Seq ${activeIntel.sequence_no || 0} • ${sideStr}
-                    ${activeIntel.is_delivered ? ' • <span style="color:#059669">Delivered</span>' : ''}
-                </div>
-            `;
-        }
 
         el.innerHTML = `
                 <div class="card-header" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding: 10px 0 8px 0;">
@@ -13245,7 +13231,6 @@ const ListView = {
                             <span>Waiting for GPS</span>
                         </button>
                     </div>
-                    <div id="verifier-info-${r[0]}" style="display:none; align-items:center; gap:4px; font-weight:800; font-size:10px; color:#64748b; margin-top:6px; padding:0 4px; white-space:normal; overflow-wrap:break-word;"></div>
                 </div>
 
                 <div style="background:#fff; border:1px solid #f1f5f9; border-radius:12px; padding:12px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
@@ -13274,8 +13259,6 @@ const ListView = {
                         
                         <!-- Physical Address -->
                         <div style="font-size:11px; color:#64748b; font-weight:600; line-height:1.4;">${decodePII(r[5]) || 'No physical address found'}</div>
-
-                        ${verifiedInfoHtml}
                         
                         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:4px;">
                             <div onclick="BillVerifier.open('${r[15]}')" style="display:flex; align-items:center; gap:4px; font-weight:800; font-size:10px; color:#2563eb; background:#eff6ff; padding:2px 8px; border-radius:6px; cursor:pointer;">
@@ -13450,20 +13433,16 @@ const ListView = {
         }
 
         if (cachedInfo) {
-            const verifierInfo = document.getElementById(`verifier-info-${sid}`);
-            if (verifierInfo) {
-                verifierInfo.style.display = 'flex';
-                verifierInfo.innerHTML = `<span class="material-icons-round" style="font-size:14px; color:#16a34a;">verified</span> <span style="color:#16a34a;">Verified by: ${cachedInfo.verified_by || 'Field Staff'}</span>`;
-            }
-
-            // Sync Delivery UI — check cache FIRST (has effective status + staff name)
+            // Sync Delivery UI — check cache FIRST (has effective status + staff name + date)
             var delStaffName = '';
+            var delDate = '';
             var didUpdate = false;
             if (window.DeliveryModule && window.DeliveryModule._deliveryCache) {
                 const cached = window.DeliveryModule._deliveryCache.get(sidStr);
                 if (cached) {
                     delStaffName = cached.staffName || '';
-                    this.updateDeliveryUI(sid, cached.status, delStaffName);
+                    delDate = cached.deliveredAt || '';
+                    this.updateDeliveryUI(sid, cached.status, delStaffName, delDate);
                     didUpdate = true;
                 }
             }
@@ -13471,7 +13450,7 @@ const ListView = {
                 // Fallback: ALL_VERIFIED_DATA (only 'delivered', no staff name)
                 const houseRecord = window.ALL_VERIFIED_DATA.find(v => String(v.survey_id) === sidStr);
                 if (houseRecord && houseRecord.is_delivered) {
-                    this.updateDeliveryUI(sid, 'delivered', delStaffName);
+                    this.updateDeliveryUI(sid, 'delivered', delStaffName, '');
                 }
             }
 
@@ -13492,7 +13471,7 @@ const ListView = {
             const cached = window.DeliveryModule._deliveryCache.get(sidStr);
             if (cached) {
                 staffName = cached.staffName || '';
-                this.updateDeliveryUI(sid, cached.status, staffName);
+                this.updateDeliveryUI(sid, cached.status, staffName, cached.deliveredAt || '');
                 return;
             }
         }
@@ -13570,8 +13549,19 @@ const ListView = {
         if (window.ListView) ListView.toggleActionPanel(sid, true);
     },
 
-    _updateBadgeOnly(badge, status, nameSuffix) {
+    _fmtDeliveryTime(iso) {
+        if (!iso) return '';
+        try {
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '';
+            return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) + ' ' +
+                   d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        } catch (e) { return ''; }
+    },
+
+    _updateBadgeOnly(badge, status, nameSuffix, dateStr) {
         if (!badge) return;
+        const when = dateStr ? ' ' + dateStr : '';
         if (status === 'delivered') {
             badge.style.display = 'inline-flex';
             badge.style.alignItems = 'center';
@@ -13582,7 +13572,7 @@ const ListView = {
             badge.style.fontWeight = '800';
             badge.style.padding = '2px 8px';
             badge.style.borderRadius = '10px';
-            badge.innerHTML = `<span class="material-icons-round" style="font-size:12px;">check_circle</span> Delivered` + nameSuffix;
+            badge.innerHTML = `<span class="material-icons-round" style="font-size:12px;">check_circle</span> Delivered${when}${nameSuffix}`;
         } else if (status === 'unsent') {
             badge.style.display = 'inline-flex';
             badge.style.alignItems = 'center';
@@ -13593,16 +13583,17 @@ const ListView = {
             badge.style.fontWeight = '800';
             badge.style.padding = '2px 8px';
             badge.style.borderRadius = '10px';
-            badge.innerHTML = `<span class="material-icons-round" style="font-size:12px;">warning</span> Unsent` + nameSuffix;
+            badge.innerHTML = `<span class="material-icons-round" style="font-size:12px;">warning</span> Unsent${when}${nameSuffix}`;
         } else {
             badge.style.display = 'none';
         }
     },
 
-    updateDeliveryUI(sid, status, staffName) {
+    updateDeliveryUI(sid, status, staffName, deliveredAt) {
         const badge = document.getElementById(`delivery-strip-badge-${sid}`);
-        var nameSuffix = staffName ? ' by ' + staffName : '';
-        this._updateBadgeOnly(badge, status, nameSuffix);
+        const dateStr = this._fmtDeliveryTime(deliveredAt);
+        var nameSuffix = staffName ? ' · ' + staffName : '';
+        this._updateBadgeOnly(badge, status, nameSuffix, dateStr);
 
         // Update Mark Delivered toolbar button
         var markBtn = document.getElementById('btn-mark-delivered-' + sid);
@@ -18474,7 +18465,7 @@ const LayerManager = {
                     if (window.DeliveryModule && window.DeliveryModule._deliveryCache) {
                         data.forEach(function(r) {
                             var eff = r.distance_to_target && Number(r.distance_to_target) > 50 ? 'unsent' : (r.status || 'delivered');
-                            window.DeliveryModule._deliveryCache.set(String(r.survey_id), { status: eff, staffName: r.staff_name || r.staff_email || '' });
+                            window.DeliveryModule._deliveryCache.set(String(r.survey_id), { status: eff, staffName: r.staff_name || r.staff_email || '', deliveredAt: r.delivered_at || '' });
                         });
                     }
                 }
@@ -26300,7 +26291,7 @@ window.DeliveryModule = {
                     var staffName = '';
                     if (d.staff_name) staffName = d.staff_name;
                     else if (d.staff_email) staffName = d.staff_email.split('@')[0];
-                    return [String(d.survey_id), { status: effectiveStatus, staffName: staffName }];
+                    return [String(d.survey_id), { status: effectiveStatus, staffName: staffName, deliveredAt: d.delivered_at || '' }];
                 }));
                 console.log(`[DeliveryModule] Delivery cache restored from IndexedDB: ${this._deliveryCache.size} records`);
             } else {
@@ -26347,7 +26338,7 @@ window.DeliveryModule = {
                 var staffName = '';
                 if (d.staff_name) staffName = d.staff_name;
                 else if (d.staff_email) staffName = d.staff_email.split('@')[0];
-                this._deliveryCache.set(String(d.survey_id), { status: effectiveStatus, staffName: staffName });
+                this._deliveryCache.set(String(d.survey_id), { status: effectiveStatus, staffName: staffName, deliveredAt: d.delivered_at || '' });
             });
 
             if (merged.length > 0 && typeof _dbSetCache === 'function') {
@@ -26506,11 +26497,11 @@ window.DeliveryModule = {
             if (!staffNameForUI) staffNameForUI = email.split('@')[0] || email;
 
             if (this._deliveryCache) {
-                this._deliveryCache.set(sidStr, { status: effectiveForUI, staffName: staffNameForUI });
+                this._deliveryCache.set(sidStr, { status: effectiveForUI, staffName: staffNameForUI, deliveredAt: payload.delivered_at || '' });
             }
 
             if (window.ListView && typeof ListView.updateDeliveryUI === 'function') {
-                ListView.updateDeliveryUI(sid, effectiveForUI, staffNameForUI);
+                ListView.updateDeliveryUI(sid, effectiveForUI, staffNameForUI, payload.delivered_at);
                 ListView._updateGPSStripUI('ready');
             }
 
@@ -26634,10 +26625,32 @@ window.StaffPerformanceModal = {
         if (window.RAW_DATA) {
             window.RAW_DATA.forEach(r => {
                 if (State.hideZubairSids && window.ZUBAIR_SIDS && window.ZUBAIR_SIDS.has(String(r[0]))) return;
-                m.set(String(r[0]), { city: r[11] || '', mc: r[12] || '', portal: { lat: r[1], lng: r[2] } });
+                m.set(String(r[0]), { city: r[11] || '', mc: r[12] || '', portal: { lat: r[1], lng: r[2] }, surveyDate: r[7] || '' });
             });
         }
         this._sidToLoc = m;
+    },
+
+    // Houses surveyed after the 15th of the current billing month won't have a
+    // bill this month (their first PDF bill arrives next month), so they are
+    // excluded from the billing-month totals.
+    _billingCutoffDate() {
+        const bm = String(window.ACTIVE_BILLING_MONTH || '').trim().toLowerCase();
+        const match = bm.match(/^([a-z]{3})(\d{4})$/);
+        if (!match) return null;
+        const months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+        const mo = months[match[1]];
+        if (!mo) return null;
+        return `${match[2]}-${String(mo).padStart(2, '0')}-15`;
+    },
+
+    _isBillingHouse(loc) {
+        if (!loc || !loc.surveyDate) return true;
+        const cutoff = this._billingCutoffDate();
+        if (!cutoff) return true;
+        const d = String(loc.surveyDate).trim();
+        if (!d || d === '-') return true;
+        return d <= cutoff;
     },
 
     _loadStaff() {
@@ -27328,6 +27341,7 @@ window.StaffPerformanceModal = {
         const cityMap = new Map();
         this._sidToLoc.forEach((loc, sid) => {
             if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
+            if (!this._isBillingHouse(loc)) return;
             const city = loc.city || '—';
             if (!cityMap.has(city)) {
                 cityMap.set(city, {
@@ -27382,6 +27396,7 @@ window.StaffPerformanceModal = {
         // Count houses per MC from RAW_DATA
         this._sidToLoc.forEach((loc, sid) => {
             if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
+            if (!this._isBillingHouse(loc)) return;
             const cityEntry = cityMap.get(loc.city);
             if (!cityEntry) return;
             const short = this._shortMC(loc.mc);
@@ -27398,6 +27413,7 @@ window.StaffPerformanceModal = {
         // Compute undelivered per MC
         this._sidToLoc.forEach((loc, sid) => {
             if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
+            if (!this._isBillingHouse(loc)) return;
             const cityEntry = cityMap.get(loc.city);
             if (!cityEntry) return;
             const short = this._shortMC(loc.mc);
@@ -27662,6 +27678,7 @@ window.StaffPerformanceModal = {
         let idx = 0;
         this._sidToLoc.forEach((loc, sid) => {
             if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
+            if (!this._isBillingHouse(loc)) return;
             if (this._deliveredSIDs.has(sid)) return;
             idx++;
             const rec = window.SID_MAP ? window.SID_MAP.get(sid) : null;
