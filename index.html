@@ -3782,6 +3782,100 @@ body {
         color: var(--primary);
 }
 
+/* ListView History Popup */
+#lv-history-popup {
+        animation: slideIn 0.18s ease-out;
+}
+
+/* Portal images grid in full-detail modal */
+.history-portal-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+}
+
+.history-portal-img {
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        border-radius: 10px;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+        transition: transform 0.2s;
+        touch-action: manipulation;
+}
+
+.history-portal-img:hover {
+        transform: translateY(-2px);
+}
+
+@media print {
+        @page history {
+                size: A5 landscape;
+                margin: 8mm;
+        }
+        body > *:not(#modal-history) {
+                display: none !important;
+        }
+        #modal-history {
+                display: block !important;
+                page: history;
+        }
+        #modal-history-overlay {
+                position: static !important;
+                background: white !important;
+                padding: 0 !important;
+        }
+        #modal-history-box {
+                max-width: 100% !important;
+                max-height: none !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                overflow: visible !important;
+                height: auto !important;
+                min-height: 100vh !important;
+                display: flex !important;
+                flex-direction: column !important;
+        }
+        #modal-history-header,
+        #btn-history-print,
+        .lv-toolbar {
+                display: none !important;
+        }
+        #modal-history-body {
+                overflow: visible !important;
+                padding: 8px !important;
+                flex: 1 1 auto !important;
+                display: flex !important;
+                flex-direction: column !important;
+        }
+        #modal-history-body .history-portal-section {
+                flex: 1 1 auto !important;
+                min-height: 80px !important;
+                display: flex !important;
+                flex-direction: column !important;
+        }
+        .history-portal-grid {
+                height: 100% !important;
+                flex: 1 1 auto !important;
+                grid-template-columns: repeat(3, 1fr) !important;
+                grid-auto-rows: 1fr !important;
+                gap: 8px !important;
+        }
+        .history-portal-img {
+                width: 100% !important;
+                height: 100% !important;
+                min-height: 80px !important;
+                object-fit: cover !important;
+                border-radius: 6px !important;
+        }
+        #modal-history-body table th,
+        #modal-history-body table td {
+                font-size: 9px !important;
+                padding: 5px 8px !important;
+        }
+}
+
 /* Fullscreen List View */
 
 #list-view-stage {
@@ -9220,6 +9314,20 @@ input[type=number] {
 }
 
 /* Delivery Activity Panel */
+#btn-delivery-filter-dom,
+#btn-delivery-filter-com {
+    border: 1px solid #fbbf24;
+    background: #fffbeb;
+    color: #92400e;
+}
+
+#btn-delivery-filter-dom.active,
+#btn-delivery-filter-com.active {
+    background: #ecfdf5;
+    border-color: #22c55e;
+    color: #15803d;
+}
+
 #delivery-activity-panel {
     position: fixed;
     top: 60px;
@@ -9657,7 +9765,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.08.25.1708</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.08.31.1344</span>
             </div>
         </div>
         
@@ -10318,12 +10426,18 @@ input[type=number] {
                                 <span style="margin:0 6px;">·</span>
                                 <span id="delivery-composition"></span>
                             </div>
-                            <div style="display:flex; gap:4px; margin-top:6px;">
+                            <div style="display:flex; gap:4px; margin-top:6px; align-items:center;">
                                 <button onclick="SpatialRouter.clearDeliverySelection()" class="routing-tool-btn gated-tool" id="btn-delivery-clear" title="Clear delivery selection" style="color:#ef4444;">
                                     <span class="material-icons-round">layers_clear</span>
                                 </button>
                                 <button onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryPortalMarkers()" class="routing-tool-btn gated-tool" id="btn-delivery-portal" title="Show portal marker for selected delivery stop" style="color:#94a3b8;">
                                     <span class="material-icons-round">location_searching</span>
+                                </button>
+                                <button id="btn-delivery-filter-dom" class="active" onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryFilter('dom')" style="height:32px; padding:0 10px; border-radius:6px; font-size:9px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:3px; transition:all 0.15s; white-space:nowrap;">
+                                    <span class="material-icons-round" style="font-size:14px;">home</span> Domestic
+                                </button>
+                                <button id="btn-delivery-filter-com" class="active" onclick="event.stopPropagation(); SpatialRouter.toggleDeliveryFilter('com')" style="height:32px; padding:0 10px; border-radius:6px; font-size:9px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:3px; transition:all 0.15s; white-space:nowrap;">
+                                    <span class="material-icons-round" style="font-size:14px;">business</span> Commercial
                                 </button>
                                 <div style="flex:1;"></div>
                                 <button onclick="SpatialRouter.refreshDeliveryData()" class="routing-tool-btn" id="btn-delivery-refresh" title="Refresh delivery data from server">
@@ -10338,6 +10452,9 @@ input[type=number] {
                                 </button>
                                 <button onclick="event.stopPropagation(); SpatialRouter.clearDeliveryBatchDisplay()" style="padding:3px 8px; background:white; border:1px solid #fca5a5; border-radius:4px; font-size:9px; font-weight:800; color:#ef4444; cursor:pointer; display:flex; align-items:center; gap:3px;" title="Clear reference routes from map">
                                     <span class="material-icons-round" style="font-size:12px;">layers_clear</span> Clean
+                                </button>
+                                <button onclick="event.stopPropagation(); SpatialRouter.exportDeliveryRoutes()" style="padding:3px 8px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; font-size:9px; font-weight:800; color:#2563eb; cursor:pointer; display:flex; align-items:center; gap:3px;" title="Export all delivery routes as CSV (route order)">
+                                    <span class="material-icons-round" style="font-size:12px;">file_download</span> Export
                                 </button>
                             </div>
                         </div>
@@ -11124,7 +11241,6 @@ async function loadData() {
             (async () => { const r = await fetch(`zubair_sids.json${vStr}`); return r.json(); })(),
             (async () => { try { const r = await fetch(`corrected_coords.json${vStr}`); return await r.json(); } catch (e) { return {}; } })()
         ]);
-
         const rawData = [].concat(...dataChunks);
 
         // NON-BLOCKING: Process records in background batches to prevent UI freeze
@@ -11274,8 +11390,9 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.08.25.1708";
+window.DATA_VERSION = "v2026.08.31.1344";
 window.DATA_CHUNKS_COUNT = 13;
+window.DELIVERY_HISTORY_PARTS_COUNT = 1;
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
 
@@ -13269,6 +13386,10 @@ const ListView = {
                                 <span class="material-icons-round" style="font-size:12px;">${r[3] === 1 ? 'business' : 'home'}</span>
                                 ${r[3] === 1 ? 'Commercial' : 'Domestic'} | ${r[14] || 'N/A'} | <b style="color:var(--primary);">${shortMC}</b>
                             </div>
+                            <button type="button" id="btn-history-${r[0]}" onclick="ListView.openHistory(event, '${r[0]}')" title="Delivery & Payment History"
+                                    style="margin-left:auto; background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; border-radius:10px; width:28px; height:28px; flex-shrink:0; display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; z-index:1000;">
+                                <span class="material-icons-round" style="font-size:15px;">history</span>
+                            </button>
                         </div>
 
                     </div>
@@ -14251,6 +14372,239 @@ const ListView = {
 
         // Enable Mark Delivered when GPS is ready (if not already delivered)
         this._updateDeliveryButtonState(r[0]);
+    },
+
+    // ─── Delivery & Payment History ──────────────────────────────
+    // Lazy-loads delivery history JSON parts only on first use (no startup cost).
+
+    async _ensureDeliveryHistory() {
+        if (window.DELIVERY_HISTORY) return window.DELIVERY_HISTORY;
+        const parts = window.DELIVERY_HISTORY_PARTS_COUNT || 0;
+        const vStr = window.DATA_VERSION ? `?v=${window.DATA_VERSION}` : '';
+        const merged = new Map();
+        for (let i = 1; i <= parts; i++) {
+            try {
+                const res = await fetch(`delivery_history_part${i}.json${vStr}`);
+                const chunk = await res.json();
+                Object.keys(chunk).forEach(sid => merged.set(sid, chunk[sid]));
+            } catch (e) {
+                console.warn("[History] Failed to load delivery_history_part" + i, e);
+            }
+        }
+        window.DELIVERY_HISTORY = merged;
+        return merged;
+    },
+
+    _getPaymentRecords(sid) {
+        const key = String(sid).replace(/\.0$/, '').trim();
+        return (window.PAID_DATA || []).filter(r => String(r[1]).replace(/\.0$/, '').trim() === key);
+    },
+
+    _fmtMoney(n) {
+        const v = parseFloat(n);
+        return isNaN(v) ? '-' : `Rs. ${v.toLocaleString()}`;
+    },
+
+    async openHistory(evt, sid) {
+        // Toggle off if already open
+        const existing = document.getElementById('lv-history-popup');
+        if (existing && existing.dataset.sid === String(sid)) {
+            existing.remove();
+            return;
+        }
+        if (existing) existing.remove();
+        if (evt) {
+            evt.stopPropagation();
+        }
+
+        // Use the clicked button directly (no ID lookup that could silently fail)
+        const btn = (evt && evt.currentTarget) || document.getElementById('btn-history-' + sid);
+        if (!btn) return;
+        const rect = btn.getBoundingClientRect();
+
+        // Show a loading mini-popup, then fill in once data is ready
+        const popup = document.createElement('div');
+        popup.id = 'lv-history-popup';
+        popup.dataset.sid = String(sid);
+        popup.style.cssText = `position:fixed; z-index:25000; background:white; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 16px 40px rgba(0,0,0,0.18); min-width:290px; max-width:340px; max-height:420px; overflow:auto; padding:0; font-family:'Inter',sans-serif;`;
+        document.body.appendChild(popup);
+
+        // Position near the button (right-aligned), below it
+        const popRect = popup.getBoundingClientRect();
+        let left = rect.right - popRect.width;
+        let top = rect.bottom + 8;
+        if (left < 8) left = 8;
+        if (top + popRect.height > window.innerHeight - 8) top = rect.top - popRect.height - 8;
+        popup.style.left = left + 'px';
+        popup.style.top = top + 'px';
+
+        popup.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #f1f5f9; background:#f8fafc; border-radius:14px 14px 0 0;">
+                <div style="font-weight:800; font-size:12px; color:#1e293b; display:flex; align-items:center; gap:6px;">
+                    <span class="material-icons-round" style="font-size:15px; color:#16a34a;">history</span> #${sid}
+                </div>
+                <button onclick="document.getElementById('lv-history-popup')?.remove()" style="background:none; border:none; cursor:pointer; color:#94a3b8; padding:0; display:flex;">
+                    <span class="material-icons-round" style="font-size:16px;">close</span>
+                </button>
+            </div>
+            <div style="padding:10px 12px; text-align:center; color:#94a3b8; font-size:12px; font-weight:700;">
+                <span class="material-icons-round spinning" style="font-size:20px; display:block; margin:6px auto;">autorenew</span>
+                Loading history...
+            </div>
+        `;
+
+        const record = window.SID_MAP ? window.SID_MAP.get(String(sid).replace(/\.0$/, '').trim()) : null;
+        const name = record ? (record[4] || '') : '';
+
+        const deliveryMap = await this._ensureDeliveryHistory();
+        const delivery = deliveryMap.get(String(sid).replace(/\.0$/, '').trim()) || [];
+        const payment = this._getPaymentRecords(sid);
+
+        const deliverySorted = delivery.slice().sort((a, b) => (b.d || '').localeCompare(a.d || ''));
+        const paymentSorted = payment.slice().sort((a, b) => (b[11] || '').localeCompare(a[11] || ''));
+
+        const deliveryRows = deliverySorted.slice(0, 3).map(r =>
+            `<div style="display:flex; justify-content:space-between; gap:8px; padding:5px 0; border-bottom:1px solid #f8fafc; font-size:11px;">
+                <span style="color:#64748b; font-weight:700; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${r.m || '—'} · ${r.d || ''} ${r.t || ''}</span>
+                <span style="font-weight:800; color:${r.st === 'Delivered' ? '#16a34a' : '#ef4444'}; flex-shrink:0;">${r.st || '—'}</span>
+            </div>`).join('') || '<div style="padding:8px 0; color:#94a3b8; font-size:11px; font-weight:700;">No delivery records</div>';
+
+        const paymentRows = paymentSorted.slice(0, 3).map(r =>
+            `<div style="display:flex; justify-content:space-between; gap:8px; padding:5px 0; border-bottom:1px solid #f8fafc; font-size:11px;">
+                <span style="color:#64748b; font-weight:700;">${r[4] || '—'} · ${r[11] || ''}</span>
+                <span style="font-weight:800; color:#16a34a; flex-shrink:0;">${this._fmtMoney(r[12])}</span>
+            </div>`).join('') || '<div style="padding:8px 0; color:#94a3b8; font-size:11px; font-weight:700;">No payment records</div>';
+
+        popup.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #f1f5f9; background:#f8fafc; border-radius:14px 14px 0 0;">
+                <div style="font-weight:800; font-size:12px; color:#1e293b; display:flex; align-items:center; gap:6px;">
+                    <span class="material-icons-round" style="font-size:15px; color:#16a34a;">history</span> #${sid}
+                </div>
+                <button onclick="document.getElementById('lv-history-popup')?.remove()" style="background:none; border:none; cursor:pointer; color:#94a3b8; padding:0; display:flex;">
+                    <span class="material-icons-round" style="font-size:16px;">close</span>
+                </button>
+            </div>
+            <div style="padding:10px 14px;">
+                ${name ? `<div style="font-weight:850; font-size:13px; color:#1e293b; margin-bottom:8px;">${name}</div>` : ''}
+                <div style="font-weight:800; font-size:10px; color:#16a34a; letter-spacing:0.5px; margin-bottom:4px;">DELIVERY HISTORY</div>
+                ${deliveryRows}
+                <div style="font-weight:800; font-size:10px; color:#2563eb; letter-spacing:0.5px; margin:10px 0 4px;">PAYMENT HISTORY</div>
+                ${paymentRows}
+                <button onclick="ListView.openHistoryFull('${sid}')" style="width:100%; margin-top:10px; padding:8px; border:none; border-radius:8px; background:#0f172a; color:white; font-size:11px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+                    <span class="material-icons-round" style="font-size:14px;">open_in_full</span> Show Full Detail
+                </button>
+            </div>
+        `;
+    },
+
+    openHistoryFull(sid) {
+        const existing = document.getElementById('modal-history');
+        if (existing) existing.remove();
+        const popup = document.getElementById('lv-history-popup');
+        if (popup) popup.remove();
+
+        const key = String(sid).replace(/\.0$/, '').trim();
+        const record = window.SID_MAP ? window.SID_MAP.get(key) : null;
+        const name = record ? (record[4] || '') : '';
+        const address = record ? (record[5] || '') : '';
+
+        const deliveryMap = window.DELIVERY_HISTORY || new Map();
+        const delivery = deliveryMap.get(key) || [];
+        const payment = this._getPaymentRecords(sid);
+
+        const deliverySorted = delivery.slice().sort((a, b) => (b.d || '').localeCompare(a.d || ''));
+        const paymentSorted = payment.slice().sort((a, b) => (b[11] || '').localeCompare(a[11] || ''));
+
+        const deliveryRows = deliverySorted.map(r =>
+            `<tr style="border-bottom:1px solid #f1f5f9;">
+                <td style="padding:7px 10px; font-weight:800; color:#475569; font-size:11px;">${r.m || '—'}</td>
+                <td style="padding:7px 10px; font-weight:600; color:#64748b; font-size:11px;">${r.d || '—'} ${r.t || ''}</td>
+                <td style="padding:7px 10px; font-weight:700; color:#475569; font-size:11px;">${r.s || '—'}</td>
+                <td style="padding:7px 10px; font-weight:800; color:${r.st === 'Delivered' ? '#16a34a' : '#ef4444'}; font-size:11px;">${r.st || '—'}</td>
+                <td style="padding:7px 10px; font-weight:600; color:#94a3b8; font-size:11px; text-align:right;">${r.dist ? r.dist + 'm' : '—'}</td>
+            </tr>`).join('') || '<tr><td colspan="5" style="padding:30px; text-align:center; color:#94a3b8; font-weight:700;">No delivery records</td></tr>';
+
+        const paymentRows = paymentSorted.map(r =>
+            `<tr style="border-bottom:1px solid #f1f5f9;">
+                <td style="padding:7px 10px; font-weight:800; color:#475569; font-size:11px;">${r[4] || '—'}</td>
+                <td style="padding:7px 10px; font-family:monospace; font-weight:700; color:#475569; font-size:11px;">${r[2] || '—'}</td>
+                <td style="padding:7px 10px; font-weight:800; color:#16a34a; font-size:11px;">${this._fmtMoney(r[12])}</td>
+                <td style="padding:7px 10px; font-weight:600; color:#64748b; font-size:11px;">${r[11] || '—'}</td>
+                <td style="padding:7px 10px; font-weight:600; color:#94a3b8; font-size:11px;">${r[7] || '—'}</td>
+            </tr>`).join('') || '<tr><td colspan="5" style="padding:30px; text-align:center; color:#94a3b8; font-weight:700;">No payment records</td></tr>';
+
+        // Portal images from the survey record (r[9] is an array of image URLs)
+        const portalImages = (record && Array.isArray(record[9]) ? record[9] : []).filter(Boolean);
+        const portalImagesHtml = portalImages.length
+            ? portalImages.map(url =>
+                `<img src="${url}" class="history-portal-img" onclick="Gallery.open('${url}', '${sid}')" alt="Portal image">`
+              ).join('')
+            : '<div style="padding:8px 0; color:#94a3b8; font-size:11px; font-weight:700;">No portal images</div>';
+
+        const modal = document.createElement('div');
+        modal.id = 'modal-history';
+        modal.innerHTML = `
+            <div id="modal-history-overlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:29000; display:flex; align-items:center; justify-content:center; padding:16px;" onclick="if(event.target===this) ListView.closeHistoryModal()">
+                <div id="modal-history-box" style="background:white; border-radius:16px; width:100%; max-width:640px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 25px 60px rgba(0,0,0,0.3);">
+                    <div id="modal-history-header" style="padding:14px 18px; border-bottom:1px solid #e2e8f0; background:#fafafa; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                        <div>
+                            <div style="font-weight:900; font-size:15px; color:#1e293b;">#${sid} ${name ? '· ' + name : ''}</div>
+                            ${address ? `<div style="font-size:11px; color:#64748b; font-weight:600; margin-top:2px;">${address}</div>` : ''}
+                        </div>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <button onclick="ListView.printHistory()" id="btn-history-print" title="Print" style="background:#0f172a; color:white; border:none; border-radius:8px; padding:6px 10px; font-size:11px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:4px;">
+                                <span class="material-icons-round" style="font-size:14px;">print</span> Print
+                            </button>
+                            <button onclick="ListView.closeHistoryModal()" style="background:#f1f5f9; border:none; border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b;">
+                                <span class="material-icons-round" style="font-size:17px;">close</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="modal-history-body" style="overflow:auto; padding:16px 18px;">
+                        <div style="font-weight:800; font-size:11px; color:#16a34a; letter-spacing:0.5px; margin-bottom:6px;">DELIVERY HISTORY <span style="color:#94a3b8; font-weight:700;">(${deliverySorted.length})</span></div>
+                        <table style="width:100%; border-collapse:collapse; background:white; border-radius:10px; overflow:hidden; border:1px solid #f1f5f9;">
+                            <thead>
+                                <tr style="background:#f8fafc;">
+                                    <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8;">MONTH</th>
+                                    <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8;">DATE & TIME</th>
+                                    <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8;">STAFF</th>
+                                    <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8;">STATUS</th>
+                                    <th style="padding:8px 10px; text-align:right; font-size:10px; font-weight:800; color:#94a3b8;">DIST</th>
+                                </tr>
+                            </thead>
+                            <tbody>${deliveryRows}</tbody>
+                        </table>
+                        <div style="font-weight:800; font-size:11px; color:#2563eb; letter-spacing:0.5px; margin:16px 0 6px;">PAYMENT HISTORY <span style="color:#94a3b8; font-weight:700;">(${paymentSorted.length})</span></div>
+                        <table style="width:100%; border-collapse:collapse; background:white; border-radius:10px; overflow:hidden; border:1px solid #f1f5f9;">
+                            <thead>
+                                <tr style="background:#f8fafc;">
+                                    <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8;">MONTH</th>
+                                    <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8;">PSID</th>
+                                    <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8;">AMOUNT</th>
+                                    <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8;">PAID DATE</th>
+                                    <th style="padding:8px 10px; text-align:left; font-size:10px; font-weight:800; color:#94a3b8;">CATEGORY</th>
+                                </tr>
+                            </thead>
+                            <tbody>${paymentRows}</tbody>
+                        </table>
+                        <div class="history-portal-section">
+                            <div style="font-weight:800; font-size:11px; color:#9333ea; letter-spacing:0.5px; margin:16px 0 6px;">PORTAL IMAGES <span style="color:#94a3b8; font-weight:700;">(${portalImages.length})</span></div>
+                            <div class="history-portal-grid">${portalImagesHtml}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    },
+
+    printHistory() {
+        try { window.print(); } catch (e) { console.warn("Print failed:", e); }
+    },
+
+    closeHistoryModal() {
+        const modal = document.getElementById('modal-history');
+        if (modal) modal.remove();
     }
 };
 
@@ -14262,6 +14616,14 @@ document.addEventListener('mousedown', (e) => {
         if (!dd.contains(e.target) && (!btn || !btn.contains(e.target))) {
             ListView.toggleSortDropdown(false);
         }
+    }
+});
+
+// Global click listener to close history popup when clicking outside
+document.addEventListener('mousedown', (e) => {
+    const popup = document.getElementById('lv-history-popup');
+    if (popup && !popup.contains(e.target) && !e.target.closest('#btn-history-' + popup.dataset.sid)) {
+        popup.remove();
     }
 });
 
@@ -18382,6 +18744,30 @@ const LayerManager = {
         };
         try {
             if (!incremental) {
+                // EGRESS: Restore from per-month IndexedDB cache first.
+                // Older months are immutable, so cached data is always valid.
+                // Current month gets a light incremental refresh below.
+                try {
+                    var cachedDap = await _dbGetCache('dap:' + this._deliveryActivityMonth);
+                    if (cachedDap && cachedDap.main && Array.isArray(cachedDap.main) && cachedDap.main.length) {
+                        this._deliveryActivityData = cachedDap.main;
+                        this._deliveryActivityStaffData = cachedDap.staff || [];
+                        this._deliveryActivityCount = cachedDap.count || 0;
+                        this._deliveryActivityDeliveredCount = cachedDap.deliveredCount || 0;
+                        this._deliveryActivityUnsentCount = cachedDap.unsentCount || 0;
+                        this._deliveryActivityStaffCount = cachedDap.staffCount || 0;
+                        this._deliveryActivityMonthCached = this._deliveryActivityMonth;
+                        this._updateDeliveryActivityPanel(this._deliveryActivityData);
+                        this._updateLastUpdated();
+                        // Current month only: incremental refresh to catch today's new records
+                        if (this._deliveryActivityMonth === window.ACTIVE_BILLING_MONTH) {
+                            this._fetchDeliveryActivityData(true);
+                        }
+                        if (dapIcon) dapIcon.classList.remove('spinning');
+                        return;
+                    }
+                } catch (e) { /* fall through to full fetch */ }
+
                 function countQ(extraFilter) {
                     var q = window._supabase.from('delivery_log')
                         .select('survey_id', { count: 'exact' })
@@ -18409,41 +18795,59 @@ const LayerManager = {
                 this._deliveryActivityUnsentCount = results[2].count || 0;
                 var staffEmails = (results[3].data || []).map(function(r) { return r.staff_email; }).filter(Boolean);
                 this._deliveryActivityStaffCount = new Set(staffEmails).size;
-                var allStaffRows = [];
-                var pageFrom = 0;
+                // Show loading state in the two lists during the full fetch
+                var staffListEl = document.getElementById('dap-staff-list');
+                var recentListEl = document.getElementById('dap-recent-list');
+                var dapSpinner = '<div style="text-align:center; padding:24px;"><span class="material-icons-round spinning" style="font-size:22px; color:#8b5cf6;">refresh</span><div style="font-size:10px; color:#94a3b8; font-weight:700; margin-top:6px;">Loading...</div></div>';
+                if (staffListEl) staffListEl.innerHTML = dapSpinner;
+                if (recentListEl) recentListEl.innerHTML = dapSpinner;
+
+                // Parallel paginated helper (batched concurrency to avoid request bursts)
                 var step = 1000;
-                var hasMore = true;
-                while (hasMore) {
-                    var staffPage = await dayFilter(window._supabase.from('delivery_log')
-                        .select('staff_email, status, survey_id, distance_to_target')
-                        .eq('bill_month', this._deliveryActivityMonth)
-                        .order('delivered_at', { ascending: false })
-                        .range(pageFrom, pageFrom + step - 1));
-                    var pageData = staffPage.data || [];
-                    allStaffRows = allStaffRows.concat(pageData);
-                    pageFrom += step;
-                    if (!pageData.length || pageData.length < step) hasMore = false;
-                }
-                this._deliveryActivityStaffData = allStaffRows;
-                this._deliveryActivityData = null;
-                var mainFrom = 0;
-                var mainStep = 1000;
-                var mainHasMore = true;
-                while (mainHasMore) {
-                    var mainPage = await window._supabase.from('delivery_log')
-                        .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
-                        .eq('bill_month', this._deliveryActivityMonth)
-                        .order('delivered_at', { ascending: false })
-                        .range(mainFrom, mainFrom + mainStep - 1);
-                    var mainPageData = mainPage.data || [];
-                    if (!this._deliveryActivityData) {
-                        this._deliveryActivityData = mainPageData;
-                    } else {
-                        this._deliveryActivityData = this._deliveryActivityData.concat(mainPageData);
+                var CONCURRENCY = 10;
+                async function fetchPagesInBatches(buildQuery, pageCount) {
+                    var all = [];
+                    var start = 0;
+                    while (start < pageCount) {
+                        var batch = [];
+                        for (var i = start; i < Math.min(start + CONCURRENCY, pageCount); i++) {
+                            batch.push(buildQuery(i));
+                        }
+                        var results = await Promise.all(batch);
+                        results.forEach(function(r) { all = all.concat(r.data || []); });
+                        start += CONCURRENCY;
                     }
-                    mainFrom += mainStep;
-                    if (!mainPageData.length || mainPageData.length < mainStep) mainHasMore = false;
+                    return all;
                 }
+
+                // PARALLEL: fetch staff rows (paginated)
+                var staffCountRes = await dayFilter(window._supabase.from('delivery_log')
+                    .select('survey_id', { count: 'exact', head: true })
+                    .eq('bill_month', self._deliveryActivityMonth));
+                var staffPages = Math.ceil((staffCountRes.count || 0) / step);
+                var allStaffRows = await fetchPagesInBatches(function(p) {
+                    return dayFilter(window._supabase.from('delivery_log')
+                        .select('staff_email, status, survey_id, distance_to_target')
+                        .eq('bill_month', self._deliveryActivityMonth)
+                        .order('delivered_at', { ascending: false })
+                        .range(p * step, p * step + step - 1));
+                }, staffPages);
+                self._deliveryActivityStaffData = allStaffRows;
+                self._deliveryActivityData = null;
+
+                // PARALLEL: fetch main record rows (paginated)
+                var mainCountRes = await dayFilter(window._supabase.from('delivery_log')
+                    .select('survey_id', { count: 'exact', head: true })
+                    .eq('bill_month', self._deliveryActivityMonth));
+                var mainPages = Math.ceil((mainCountRes.count || 0) / step);
+                var mainData = await fetchPagesInBatches(function(p) {
+                    return dayFilter(window._supabase.from('delivery_log')
+                        .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
+                        .eq('bill_month', self._deliveryActivityMonth)
+                        .order('delivered_at', { ascending: false })
+                        .range(p * step, p * step + step - 1));
+                }, mainPages);
+                self._deliveryActivityData = mainData;
             } else {
                 var q = window._supabase.from('delivery_log')
                     .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
@@ -18475,6 +18879,17 @@ const LayerManager = {
             this._deliveryActivityLastFetch = now.toISOString();
             if (this._deliveryActivityData) this._updateDeliveryActivityPanel(this._deliveryActivityData);
             this._updateLastUpdated();
+            // EGRESS: Persist to per-month IndexedDB cache so the next open skips the full fetch
+            if (typeof _dbSetCache === 'function' && this._deliveryActivityData && this._deliveryActivityData.length) {
+                _dbSetCache('dap:' + this._deliveryActivityMonth, {
+                    main: this._deliveryActivityData,
+                    staff: this._deliveryActivityStaffData || [],
+                    count: this._deliveryActivityCount || 0,
+                    deliveredCount: this._deliveryActivityDeliveredCount || 0,
+                    unsentCount: this._deliveryActivityUnsentCount || 0,
+                    staffCount: this._deliveryActivityStaffCount || 0
+                }).catch(function() {});
+            }
         } catch (e) { console.error('[DeliveryActivity] Fetch error:', e); }
         if (dapIcon) dapIcon.classList.remove('spinning');
     },
@@ -19815,7 +20230,7 @@ const Settings = {
 
         // 1. Initial Load: Check IndexedDB for existing pins
         if (!window.ALL_VERIFIED_DATA || window.ALL_VERIFIED_DATA.length === 0) {
-            const stored = await _dbGetCache(window.ACTIVE_BILLING_MONTH);
+            const stored = await _dbGetCache('verified:' + window.ACTIVE_BILLING_MONTH);
             if (stored) {
                 try {
                     window.ALL_VERIFIED_DATA = stored;
@@ -19883,7 +20298,7 @@ const Settings = {
                 });
                 
                 // Persist to IndexedDB
-                await _dbSetCache(window.ACTIVE_BILLING_MONTH, window.ALL_VERIFIED_DATA);
+                await _dbSetCache('verified:' + window.ACTIVE_BILLING_MONTH, window.ALL_VERIFIED_DATA);
                 console.log(`[Sync] Success! Added ${uniqueNew.length} new records.`);
             } else {
                 console.log("[Sync] Already up to date.");
@@ -20345,7 +20760,7 @@ const Settings = {
             // CRITICAL: Update local cache manually since Delta Sync doesn't detect deletions
             if (window.ALL_VERIFIED_DATA) {
                 window.ALL_VERIFIED_DATA = window.ALL_VERIFIED_DATA.filter(v => String(v.survey_id) !== String(sid));
-                await _dbSetCache(window.ACTIVE_BILLING_MONTH, window.ALL_VERIFIED_DATA);
+                await _dbSetCache('verified:' + window.ACTIVE_BILLING_MONTH, window.ALL_VERIFIED_DATA);
             }
 
             if (window.SpatialRouter && SpatialRouter.verifiedSIDs) {
@@ -21424,6 +21839,10 @@ const SpatialRouter = {
     deliveryPortalLayer: null,
     deliveryShowPortal: false,
     deliveryBatchDisplayLayer: null,
+    _deliveryFilterDom: true,
+    _deliveryFilterCom: true,
+    _deliveryMarkerList: [],
+    _deliveryCounts: { dom: { total: 0, delivered: 0, unsent: 0, undelivered: 0 }, com: { total: 0, delivered: 0, unsent: 0, undelivered: 0 } },
     _deliverySquares: [],
     _deliveryDrawPoints: [],
     _restorePager: false,
@@ -21767,7 +22186,7 @@ const SpatialRouter = {
             window.ALL_VERIFIED_DATA = window.ALL_VERIFIED_DATA.filter(v => String(v.survey_id) !== sidStr);
             window.ALL_VERIFIED_DATA.push({...payload});
             if (typeof _dbSetCache === 'function') {
-                _dbSetCache(window.ACTIVE_BILLING_MONTH, window.ALL_VERIFIED_DATA).catch(() => {});
+                _dbSetCache('verified:' + window.ACTIVE_BILLING_MONTH, window.ALL_VERIFIED_DATA).catch(() => {});
             }
             console.log("[SaveIntel] Local cache updated with", payload.survey_id);
 
@@ -21847,7 +22266,7 @@ const SpatialRouter = {
             if (data && Array.isArray(data)) {
                 window.ALL_VERIFIED_DATA = data;
                 if (typeof _dbSetCache === 'function') {
-                    _dbSetCache(window.ACTIVE_BILLING_MONTH, data).catch(() => {});
+                    _dbSetCache('verified:' + window.ACTIVE_BILLING_MONTH, data).catch(() => {});
                 }
                 console.log("[VerifiedData] Refreshed local cache with", data.length, "records");
             }
@@ -24693,6 +25112,10 @@ const routeObj = {
             }
             State.deliveryRoutes = all;
 
+            // Natural sort by route name so every renderer shows R_1, R_2, ... R_11
+            // regardless of delivery_month inconsistencies.
+            State.deliveryRoutes.sort((a, b) => this.naturalCompare(a.route_name || '', b.route_name || ''));
+
             // Default: collapse all MC groups so the sidebar stays compact with many MCs
             State.deliveryRouteCollapsedGroups = new Set(all.map(r => this.cleanMCName(r.mc_uc || 'Unknown')));
 
@@ -24744,6 +25167,10 @@ const routeObj = {
             this.deliverySilhouetteLayer = null;
         }
         this.deliverySequence = [];
+        this._deliveryMarkerList = [];
+        this._deliveryFilterDom = true;
+        this._deliveryFilterCom = true;
+        this._syncDeliveryFilterUI();
         this.deliveryCoordMap = new Map();
         this.deliveryMc = '';
         this.deliverySidSet = null;
@@ -24766,6 +25193,16 @@ const routeObj = {
         if (this.deliveryMarkerLayer) State.map.removeLayer(this.deliveryMarkerLayer);
         this.deliveryMarkerLayer = L.layerGroup().addTo(State.map);
         this.deliverySequence = [];
+        this._deliveryMarkerList = [];
+
+        // Domestic/Commercial category per SID (from RAW_DATA: r[3] === 1 => Commercial)
+        const catMap = new Map();
+        (window.RAW_DATA || []).forEach(r => {
+            if (r[11] === city && r[12] === mc) {
+                catMap.set(String(r[0]).replace(/\.0$/, '').trim(), Number(r[3]) === 1 ? 1 : 0);
+            }
+        });
+        const catOf = (sid) => catMap.get(String(sid).replace(/\.0$/, '').trim()) || 0;
 
         const sids = (window.RAW_DATA || []).filter(r => {
             if (State.hideZubairSids && window.ZUBAIR_SIDS?.has(String(r[0]))) return false;
@@ -24799,9 +25236,11 @@ const routeObj = {
         markerData.forEach(m => {
             deliveredSids.add(m.sid);
             const color = m.status === 'delivered' ? '#22c55e' : '#ef4444';
-            L.circleMarker([m.lat, m.lng], { radius: 5, fillColor: color, color: 'rgba(0,0,0,0.6)', weight: 1, fillOpacity: 0.6, interactive: false, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
+            const marker = L.circleMarker([m.lat, m.lng], { radius: 5, fillColor: color, color: 'rgba(0,0,0,0.6)', weight: 1, fillOpacity: 0.6, interactive: false, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
+            const cat = catOf(m.sid);
+            this._deliveryMarkerList.push({ marker, category: cat });
             this.deliverySequence.push({ id: m.sid, lat: m.lat, lng: m.lng, status: m.status });
-            this.deliveryCoordMap.set(String(m.sid).replace(/\.0$/, '').trim(), { lat: m.lat, lng: m.lng, status: m.status });
+            this.deliveryCoordMap.set(String(m.sid).replace(/\.0$/, '').trim(), { lat: m.lat, lng: m.lng, status: m.status, category: cat });
         });
 
         let undeliveredCount = 0;
@@ -24809,9 +25248,11 @@ const routeObj = {
             if (deliveredSids.has(sid)) return;
             const row = window.SID_MAP.get(sid);
             if (row && row[1] && row[2]) {
-                L.circleMarker([parseFloat(row[1]), parseFloat(row[2])], { radius: 5, fillColor: '#3b82f6', color: 'rgba(0,0,0,0.6)', weight: 1, fillOpacity: 0.6, interactive: false, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
+                const marker = L.circleMarker([parseFloat(row[1]), parseFloat(row[2])], { radius: 5, fillColor: '#3b82f6', color: 'rgba(0,0,0,0.6)', weight: 1, fillOpacity: 0.6, interactive: false, pane: 'routingPane' }).addTo(this.deliveryMarkerLayer);
+                const cat = catOf(sid);
+                this._deliveryMarkerList.push({ marker, category: cat });
                 this.deliverySequence.push({ id: sid, lat: parseFloat(row[1]), lng: parseFloat(row[2]), status: 'undelivered' });
-                this.deliveryCoordMap.set(String(sid).replace(/\.0$/, '').trim(), { lat: parseFloat(row[1]), lng: parseFloat(row[2]), status: 'undelivered' });
+                this.deliveryCoordMap.set(String(sid).replace(/\.0$/, '').trim(), { lat: parseFloat(row[1]), lng: parseFloat(row[2]), status: 'undelivered', category: cat });
                 undeliveredCount++;
             }
         });
@@ -24819,10 +25260,25 @@ const routeObj = {
         const spinner = document.getElementById('delivery-loading');
         if (spinner) spinner.style.display = 'none';
 
+        // Build per-category counts from the category map + delivery status
+        this._deliveryCounts = { dom: { total: 0, delivered: 0, unsent: 0, undelivered: 0 }, com: { total: 0, delivered: 0, unsent: 0, undelivered: 0 } };
+        const statusOf = {};
+        markerData.forEach(m => { statusOf[String(m.sid).replace(/\.0$/, '').trim()] = m.status; });
+        sids.forEach(sid => {
+            const clean = String(sid).replace(/\.0$/, '').trim();
+            const key = catOf(sid) === 1 ? 'com' : 'dom';
+            this._deliveryCounts[key].total++;
+            if (deliveredSids.has(sid)) {
+                if (statusOf[clean] === 'delivered') this._deliveryCounts[key].delivered++;
+                else this._deliveryCounts[key].unsent++;
+            } else {
+                this._deliveryCounts[key].undelivered++;
+            }
+        });
+
         const stats = document.getElementById('delivery-stats');
         if (stats) stats.style.display = 'block';
-        document.getElementById('delivery-marker-count').textContent = `${sids.length} houses`;
-        document.getElementById('delivery-composition').textContent = `🟢${delivered} delivered · 🔴${unsent} unsent · 🔵${undeliveredCount} undelivered`;
+        this._updateDeliveryStats();
 
         this.deliverySidSet = new Set(sids);
 
@@ -24830,10 +25286,49 @@ const routeObj = {
         const cleanSids = new Set(sids.map(s => String(s).replace(/\.0$/, '').trim()));
         State.filtered = (window.RAW_DATA || []).filter(r => cleanSids.has(String(r[0])));
 
+        this._applyDeliveryFilter();
+        this._syncDeliveryFilterUI();
         this.renderDeliveryRouteSilhouettes();
         this.updateDeliveryModeChip();
         this._updatePortalMarkers();
         this._syncPortalToggleButtons();
+    },
+
+    _applyDeliveryFilter() {
+        this._deliveryMarkerList.forEach(({ marker, category }) => {
+            const show = category === 1 ? this._deliveryFilterCom : this._deliveryFilterDom;
+            marker.setStyle(show
+                ? { fillOpacity: 0.6, opacity: 0.6, weight: 1 }
+                : { fillOpacity: 0, opacity: 0 });
+        });
+    },
+
+    toggleDeliveryFilter(category) {
+        if (category === 'dom') this._deliveryFilterDom = !this._deliveryFilterDom;
+        else if (category === 'com') this._deliveryFilterCom = !this._deliveryFilterCom;
+        this._syncDeliveryFilterUI();
+        this._applyDeliveryFilter();
+        this._updateDeliveryStats();
+    },
+
+    _updateDeliveryStats() {
+        const countEl = document.getElementById('delivery-marker-count');
+        const compEl = document.getElementById('delivery-composition');
+        if (!countEl || !compEl) return;
+        const c = this._deliveryCounts;
+        // Combine the currently-on categories
+        let t = 0, d = 0, u = 0, ud = 0;
+        if (this._deliveryFilterDom) { t += c.dom.total; d += c.dom.delivered; u += c.dom.unsent; ud += c.dom.undelivered; }
+        if (this._deliveryFilterCom) { t += c.com.total; d += c.com.delivered; u += c.com.unsent; ud += c.com.undelivered; }
+        countEl.textContent = `${t} houses`;
+        compEl.textContent = `🟢${d} delivered · 🔴${u} unsent · 🔵${ud} undelivered`;
+    },
+
+    _syncDeliveryFilterUI() {
+        const domBtn = document.getElementById('btn-delivery-filter-dom');
+        const comBtn = document.getElementById('btn-delivery-filter-com');
+        if (domBtn) domBtn.classList.toggle('active', this._deliveryFilterDom);
+        if (comBtn) comBtn.classList.toggle('active', this._deliveryFilterCom);
     },
 
     async onDeliveryFilterChange() {
@@ -25012,6 +25507,10 @@ const routeObj = {
         this.deliveryShowPortal = false;
         this._clearDeliveryHighlight();
         this.deliverySequence = [];
+        this._deliveryMarkerList = [];
+        this._deliveryFilterDom = true;
+        this._deliveryFilterCom = true;
+        this._syncDeliveryFilterUI();
         this.deliveryCoordMap = new Map();
         this.cancelDeliveryDraw();
         document.getElementById('delivery-city-select').value = '';
@@ -25133,6 +25632,10 @@ const routeObj = {
         }
         this.deliveryShowPortal = false;
         this.deliverySequence = [];
+        this._deliveryMarkerList = [];
+        this._deliveryFilterDom = true;
+        this._deliveryFilterCom = true;
+        this._syncDeliveryFilterUI();
         this.deliveryCoordMap = new Map();
         this.deliverySidSet = null;
         this.deliveryContext = null;
@@ -25445,6 +25948,7 @@ const routeObj = {
             side.appendChild(hdr);
             if (isCollapsed) return;
 
+            grp.routes.sort((a, b) => this.naturalCompare(a.route_name || '', b.route_name || ''));
             grp.routes.forEach((route, idx) => {
                 const ptCount = (route.route_data && route.route_data.sequence) ? route.route_data.sequence.length : 0;
                 const comp = route.composition || {};
@@ -25573,6 +26077,69 @@ const routeObj = {
         }
     },
 
+    exportDeliveryRoutes() {
+        const routes = State.deliveryRoutes || [];
+        if (!routes.length) { if (App.showToast) App.showToast("No delivery routes to export."); return; }
+
+        const isMapReady = window.SID_MAP instanceof Map;
+        const allPoints = [];
+
+        routes.forEach(r => {
+            const area = this.cleanMCName(r.mc_uc || 'Unknown');
+            let city = '';
+            const seq = (r.route_data && r.route_data.sequence) || [];
+            if (seq.length && isMapReady) {
+                const firstRow = window.SID_MAP.get(String(seq[0].surveyId || seq[0].id));
+                if (firstRow && firstRow[11]) city = firstRow[11];
+            }
+            seq.forEach((p, i) => {
+                const sid = String(p.surveyId || p.id);
+                let name = p.name || '';
+                if (!name && isMapReady) {
+                    const row = window.SID_MAP.get(sid);
+                    if (row) name = decodePII(row[4]) || '';
+                }
+                allPoints.push({
+                    city: city,
+                    area: area,
+                    deliveryMonth: r.delivery_month || '',
+                    billMonth: (typeof ACTIVE_BILLING_MONTH !== 'undefined' ? ACTIVE_BILLING_MONTH : '') || '',
+                    routeSeq: i + 1,
+                    routeName: r.route_name || 'Untitled',
+                    sid: sid,
+                    name: name,
+                    lat: p.lat,
+                    lng: p.lng,
+                    status: p.status || ''
+                });
+            });
+        });
+
+        // Sort by MC/UC → Route Name → Route Seq (stable within route)
+        allPoints.sort((a, b) => {
+            const areaCmp = this.naturalCompare(a.area, b.area);
+            if (areaCmp !== 0) return areaCmp;
+            const routeCmp = this.naturalCompare(a.routeName, b.routeName);
+            if (routeCmp !== 0) return routeCmp;
+            return a.routeSeq - b.routeSeq;
+        });
+
+        let csv = "Global Seq,Route Seq,Route Name,Survey ID,Name,MC/UC,City,Delivery Month,Bill Month,Lat,Lng,Status\n";
+        let globalSeq = 1;
+        allPoints.forEach(pt => {
+            csv += `${globalSeq},${pt.routeSeq},"${pt.routeName}","${pt.sid}","${pt.name}","${pt.area}","${pt.city}","${pt.deliveryMonth}","${pt.billMonth}",${pt.lat},${pt.lng},"${pt.status}"\n`;
+            globalSeq++;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Delivery_Routes_Export_${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        if (App.showToast) App.showToast(`Exported ${routes.length} delivery routes (${allPoints.length} stops).`);
+    },
+
     renderDeliverySavedList() {
         const container = document.getElementById('delivery-route-list');
         if (!container) return;
@@ -25595,7 +26162,7 @@ const routeObj = {
         const sortedAreas = Object.keys(grouped).sort((a, b) => this.naturalCompare(a, b));
         sortedAreas.forEach(area => {
             const grp = grouped[area];
-            const grpRoutes = grp.routes.sort((a, b) => String(b.delivery_month || '').localeCompare(String(a.delivery_month || '')));
+            const grpRoutes = grp.routes.sort((a, b) => this.naturalCompare(a.route_name || '', b.route_name || ''));
             const month = (grpRoutes[0] && grpRoutes[0].delivery_month) || '';
             const isCollapsed = State.deliveryRouteCollapsedGroups.has(area);
 
@@ -26283,7 +26850,7 @@ window.DeliveryModule = {
             // 1. Try IndexedDB cache first (avoids re-fetching all rows on every app open)
             var cachedData = null;
             if (!force && typeof _dbGetCache === 'function') {
-                cachedData = await _dbGetCache(billMonth);
+                cachedData = await _dbGetCache('delivery:' + billMonth);
             }
             if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
                 this._deliveryCache = new Map(cachedData.map(d => {
@@ -26350,7 +26917,7 @@ window.DeliveryModule = {
                     staff_name: d.staff_name,
                     delivered_at: d.delivered_at
                 }));
-                await _dbSetCache(billMonth, compact);
+                await _dbSetCache('delivery:' + billMonth, compact);
             }
             console.log(`[DeliveryModule] Delivery cache synced: ${this._deliveryCache.size} records (delta ${newData.length})`);
         } catch (e) {
@@ -26696,7 +27263,9 @@ window.StaffPerformanceModal = {
     _applyMonthFilter() {
         const sel = document.getElementById('spm-month-select');
         if (sel) this._selectedMonth = sel.value;
-        this._refreshData(true);
+        // Force refresh for current month (small, changes often); use cache for historical months
+        const isCurrent = this._selectedMonth === (window.ACTIVE_BILLING_MONTH || '');
+        this._refreshData(isCurrent);
     },
 
     _staffName(email, staff_name) {
@@ -26711,19 +27280,51 @@ window.StaffPerformanceModal = {
         if (!window._supabase || !this._selectedMonth) return;
         if (!force && this._cachedMonth === this._selectedMonth && this._cachedRecords) return;
         const billMonth = this._selectedMonth;
+        // EGRESS: Restore from per-month IndexedDB cache first.
+        // Older months are immutable, so cached data is always valid.
+        if (!force) {
+            try {
+                const cached = await _dbGetCache('spm:' + billMonth);
+                if (cached && Array.isArray(cached) && cached.length) {
+                    this._cachedRecords = cached;
+                    this._cachedMonth = billMonth;
+                    this._deliveredSIDs = new Set(cached.map(d => String(d.survey_id)));
+                    return;
+                }
+            } catch (e) { /* fall through to full fetch */ }
+        }
+        // Parallel paginated fetch (batched concurrency; same egress as before)
+        const step = 1000;
+        const CONCURRENCY = 10;
+        const countRes = await window._supabase
+            .from('delivery_log')
+            .select('survey_id', { count: 'exact', head: true })
+            .eq('bill_month', billMonth);
+        const pageCount = Math.ceil((countRes.count || 0) / step);
         const allData = [];
-        let from = 0, step = 1000;
-        while (true) {
-            const { data } = await window._supabase
+        async function fetchPages(buildQuery, pages) {
+            const collected = [];
+            let start = 0;
+            while (start < pages) {
+                const batch = [];
+                for (let i = start; i < Math.min(start + CONCURRENCY, pages); i++) {
+                    batch.push(buildQuery(i));
+                }
+                const results = await Promise.all(batch);
+                results.forEach(r => { if (r.data && r.data.length) collected.push(...r.data); });
+                start += CONCURRENCY;
+            }
+            return collected;
+        }
+        const pageData = await fetchPages(function(p) {
+            return window._supabase
                 .from('delivery_log')
                 .select('survey_id, status, delivered_at, staff_email, staff_name, distance_to_target, capture_gps_lat, capture_gps_lng, target_lat, target_lng')
                 .eq('bill_month', billMonth)
                 .order('delivered_at', { ascending: true })
-                .range(from, from + step - 1);
-            if (!data || data.length === 0) break;
-            allData.push(...data);
-            from += step;
-        }
+                .range(p * step, p * step + step - 1);
+        }, pageCount);
+        allData.push(...pageData);
         if (!this._sidToLoc) this._buildSidToLoc();
         allData.forEach(d => {
             const loc = this._sidToLoc.get(String(d.survey_id)) || {};
@@ -26739,6 +27340,10 @@ window.StaffPerformanceModal = {
         this._cachedRecords = allData;
         this._cachedMonth = billMonth;
         this._deliveredSIDs = new Set(allData.map(d => String(d.survey_id)));
+        // EGRESS: Persist to per-month IndexedDB cache so re-opens skip the full fetch
+        if (typeof _dbSetCache === 'function' && allData.length) {
+            _dbSetCache('spm:' + billMonth, allData).catch(function() {});
+        }
     },
 
     async _fetchDeliveryData(forceRefresh) {
