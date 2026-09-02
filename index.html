@@ -29,6 +29,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
     
@@ -8084,6 +8085,59 @@ details summary::-webkit-details-marker {
         }
 }
 
+/* Sidebar Sub-Groups (Boundary Layers -> MC/UC + Staff) */
+.sidebar-sub-group {
+        display: flex;
+        flex-direction: column;
+}
+
+.sidebar-sub-header {
+        transition: background 0.2s;
+}
+
+.sidebar-sub-header:hover {
+        background: #f1f5f9 !important;
+}
+
+.sidebar-sub-group.open .sidebar-sub-chevron {
+        transform: rotate(180deg);
+}
+
+.sidebar-sub-chevron {
+        transition: transform 0.2s;
+}
+
+.sidebar-sub-content {
+        overflow: hidden;
+}
+
+/* Staff day label on delivery path maps */
+.staff-day-label {
+        background: rgba(255,255,255,0.92);
+        border: 1px solid rgba(0,0,0,0.15);
+        border-radius: 4px;
+        color: #1e293b;
+        font-size: 8px;
+        font-weight: 800;
+        text-align: center;
+        line-height: 12px;
+        font-family: 'Inter', sans-serif;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        white-space: nowrap;
+}
+
+/* Staff color dot — keep a perfect circle despite .multi-option span flex:1 */
+.staff-color-dot {
+        width: 10px !important;
+        height: 10px !important;
+        min-width: 10px;
+        max-width: 10px;
+        flex: 0 0 auto !important;
+        border-radius: 50% !important;
+        pointer-events: none;
+        flex-shrink: 0;
+}
+
 /* === 03_markers.css === */
 .leaflet-container img.leaflet-tile {
         outline: 1px solid transparent;
@@ -9765,7 +9819,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.08.31.1344</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.09.02.1658</span>
             </div>
         </div>
         
@@ -9988,8 +10042,31 @@ input[type=number] {
                     </button>
                 </div>
                 <div class="filter-content" style="padding: 12px; display:flex; flex-direction:column; gap:8px;">
-                    <div id="sidebar-kml-container" style="display:flex; flex-direction:column; gap:8px; max-height: 250px; overflow-y: auto; padding-right: 4px;">
-                        <div style="padding:10px; text-align:center; color:#94a3b8; font-size:11px;">Loading boundary data...</div>
+                    <!-- MC/UC Boundaries sub-section -->
+                    <div class="sidebar-sub-group">
+                        <div class="sidebar-sub-header" onclick="LayerManager.toggleBoundarySub('mcuc')" style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:10px 12px; border-radius:10px; background:#f8fafc; border:1px solid #e2e8f0;">
+                            <span class="material-icons-round" style="color:#3b82f6; font-size:18px;">layers</span>
+                            <span style="flex:1; font-size:11px; font-weight:700; color:#334155;">MC/UC Boundaries</span>
+                            <i class="material-icons-round sidebar-sub-chevron" style="font-size:16px; color:#94a3b8;">expand_more</i>
+                        </div>
+                        <div class="sidebar-sub-content" id="sub-mcuc" style="display:none; padding:10px 0 0;">
+                            <div id="sidebar-kml-container" style="display:flex; flex-direction:column; gap:8px; max-height: 250px; overflow-y: auto; padding-right: 4px;">
+                                <div style="padding:10px; text-align:center; color:#94a3b8; font-size:11px;">Loading boundary data...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Staff Delivery Zones sub-section -->
+                    <div class="sidebar-sub-group">
+                        <div class="sidebar-sub-header" onclick="LayerManager.toggleBoundarySub('staff')" style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:10px 12px; border-radius:10px; background:#f8fafc; border:1px solid #e2e8f0;">
+                            <span class="material-icons-round" style="color:#8b5cf6; font-size:18px;">local_shipping</span>
+                            <span style="flex:1; font-size:11px; font-weight:700; color:#334155;">Staff Delivery Zones</span>
+                            <i class="material-icons-round sidebar-sub-chevron" style="font-size:16px; color:#94a3b8;">expand_more</i>
+                        </div>
+                        <div class="sidebar-sub-content" id="sub-staff" style="display:none; padding:10px 0 0;">
+                            <div id="sidebar-staff-container" style="display:flex; flex-direction:column; gap:8px; padding-right: 4px;">
+                                <div style="padding:10px; text-align:center; color:#94a3b8; font-size:11px;">Loading staff...</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -11034,19 +11111,21 @@ async function fetchAppSettings() {
         const { data, error } = await window._supabase
             .from('app_settings')
             .select('key, value')
-            .in('key', ['active_billing_month', 'data_version', 'hide_zubair_sids']);
+            .in('key', ['active_billing_month', 'data_version', 'hide_zubair_sids', 'delivery_sequence_month']);
 
         if (error) throw error;
         if (data) {
             const billing = data.find(d => d.key === 'active_billing_month');
             const version = data.find(d => d.key === 'data_version');
             const hideZubair = data.find(d => d.key === 'hide_zubair_sids');
+            const seqMonth = data.find(d => d.key === 'delivery_sequence_month');
             
             if (billing) window.ACTIVE_BILLING_MONTH = billing.value;
             if (version) window.DATA_VERSION = version.value;
             if (hideZubair) State.hideZubairSids = String(hideZubair.value) === 'true';
+            if (seqMonth && seqMonth.value) window.DELIVERY_SEQUENCE_MONTH = seqMonth.value;
             
-            console.log("App Settings:", { billing: window.ACTIVE_BILLING_MONTH, version: window.DATA_VERSION, hideZubairSids: State.hideZubairSids });
+            console.log("App Settings:", { billing: window.ACTIVE_BILLING_MONTH, version: window.DATA_VERSION, hideZubairSids: State.hideZubairSids, deliverySequenceMonth: window.DELIVERY_SEQUENCE_MONTH });
         } else {
             console.warn("active_billing_month not found in app_settings, falling back to default.");
             window.ACTIVE_BILLING_MONTH = 'feb2026'; // Fallback
@@ -11055,6 +11134,33 @@ async function fetchAppSettings() {
         console.error("Failed to fetch app settings:", e);
         window.ACTIVE_BILLING_MONTH = 'feb2026'; // Emergency Fallback
     }
+
+    // Resolve the delivery sequence month:
+    // prefer the saved setting, else default to the active billing month
+    // if that has data, otherwise the latest available sequence month.
+    var months = window.DELIVERY_SEQUENCE_MONTHS || {};
+    var saved = window.DELIVERY_SEQUENCE_MONTH || '';
+    var active = window.ACTIVE_BILLING_MONTH || '';
+    var available = Object.keys(months);
+    if (available.indexOf(saved) < 0) {
+        if (available.indexOf(active) >= 0) {
+            window.DELIVERY_SEQUENCE_MONTH = active;
+        } else if (available.length) {
+            // Sort month keys chronologically (e.g. jan, feb, mar...)
+            var monthIdx = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+            available.sort(function(a,b){
+                var ma = a.match(/^([a-z]+)(\d+)$/);
+                var mb = b.match(/^([a-z]+)(\d+)$/);
+                if (!ma || !mb) return a < b ? -1 : a > b ? 1 : 0;
+                if (ma[2] !== mb[2]) return parseInt(ma[2],10) - parseInt(mb[2],10);
+                return monthIdx.indexOf(ma[1]) - monthIdx.indexOf(mb[1]);
+            });
+            window.DELIVERY_SEQUENCE_MONTH = available.slice(-1)[0];
+        } else {
+            window.DELIVERY_SEQUENCE_MONTH = active || '';
+        }
+    }
+    console.log("[App] Delivery sequence month:", window.DELIVERY_SEQUENCE_MONTH);
 }
 
 // Supabase Config
@@ -11390,9 +11496,10 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.08.31.1344";
+window.DATA_VERSION = "v2026.09.02.1658";
 window.DATA_CHUNKS_COUNT = 13;
-window.DELIVERY_HISTORY_PARTS_COUNT = 1;
+window.DELIVERY_SEQUENCE_MONTHS = {"jul2026": 1};
+window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
 
@@ -11831,6 +11938,11 @@ const App = {
         State.map.getPane('routingMarkerPane').style.zIndex = 660;
         State.map.getPane('routingMarkerPane').style.pointerEvents = 'none';
 
+        // Create a dedicated pane for Staff delivery direction arrows (above lines, below router markers)
+        State.map.createPane('staffArrowPane');
+        State.map.getPane('staffArrowPane').style.zIndex = 655;
+        State.map.getPane('staffArrowPane').style.pointerEvents = 'none';
+
         State.layers = {
             roads: L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
                 maxZoom: 20,
@@ -11857,9 +11969,24 @@ const App = {
         this.setLayer(isRoads ? 'sat' : 'roads');
     },
 
-    // Undelivered Toggle - Show only records with no delivery_log entry
+    // Undelivered Toggle - Show only records with no delivery_log entry.
+    // Excludes houses surveyed after the 15th of the billing month (no PDF bill yet).
     _undeliveredActive: false,
     _undeliveredSIDs: null,
+    _undeliveredRestore: null,
+
+    // Returns the cutoff date string (YYYY-MM-15) for the current billing month,
+    // or null if the month can't be parsed. Houses surveyed after this date
+    // don't have a PDF bill until next month.
+    _billingCutoffDate() {
+        const bm = String(window.ACTIVE_BILLING_MONTH || '').trim().toLowerCase();
+        const match = bm.match(/^([a-z]{3})(\d{4})$/);
+        if (!match) return null;
+        const months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+        const mo = months[match[1]];
+        if (!mo) return null;
+        return `${match[2]}-${String(mo).padStart(2, '0')}-15`;
+    },
 
     async toggleUndeliveredFilter() {
         const btn = document.getElementById('btn-undelivered-toggle');
@@ -11868,7 +11995,8 @@ const App = {
             btn.classList.toggle('active', this._undeliveredActive);
         }
         if (!this._undeliveredActive) {
-            State.filtered = [...State.masterFiltered];
+            State.filtered = this._undeliveredRestore ? [...this._undeliveredRestore] : [...State.masterFiltered];
+            this._undeliveredRestore = null;
             ListView.render();
             if (App.showToast) App.showToast('Undelivered filter removed');
             App.render(null);
@@ -11883,22 +12011,39 @@ const App = {
             }
             const allData = [];
             let from = 0, step = 1000;
-            while (true) {
-                const { data } = await window._supabase
-                    .from('delivery_log')
-                    .select('survey_id')
-                    .eq('bill_month', window.ACTIVE_BILLING_MONTH)
-                    .range(from, from + step - 1);
-                if (!data || data.length === 0) break;
-                allData.push(...data);
-                from += step;
+            try {
+                while (true) {
+                    const { data } = await window._supabase
+                        .from('delivery_log')
+                        .select('survey_id')
+                        .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                        .range(from, from + step - 1);
+                    if (!data || data.length === 0) break;
+                    allData.push(...data);
+                    from += step;
+                }
+            } catch (e) {
+                console.warn("[Undelivered] Supabase query failed:", e);
+                if (App.showToast) App.showToast('Failed to fetch delivery data');
+                this._undeliveredActive = false;
+                if (btn) btn.classList.remove('active');
+                return;
             }
             this._undeliveredSIDs = new Set(allData.map(d => String(d.survey_id)));
         }
+        // Save the pre-filter list so toggling off restores correctly
+        this._undeliveredRestore = [...State.filtered];
+        const cutoff = this._billingCutoffDate();
         State.filtered = (State.masterFiltered || window.RAW_DATA || []).filter(r => {
-            return !this._undeliveredSIDs.has(String(r[0]));
+            // Exclude already-delivered records
+            if (this._undeliveredSIDs.has(String(r[0]))) return false;
+            // Exclude records surveyed after the 15th (no PDF bill this month)
+            if (cutoff) {
+                const d = r[7];
+                if (d && d !== '-' && d !== '0000-00-00' && d > cutoff) return false;
+            }
+            return true;
         });
-        State.masterFiltered = [...State.filtered];
         State.currentIdx = 0;
         ListView.render();
         App.render(null);
@@ -12805,6 +12950,11 @@ closeNearbyMarkersPopup() {
                     }
                 }
             }
+        }
+
+        // Refresh staff boundary polygons when filter changes
+        if (window.LayerManager && typeof LayerManager._refreshActiveStaffBoundaries === 'function') {
+            LayerManager._refreshActiveStaffBoundaries();
         }
 
         // Session persistence disabled per user request to prioritize stability
@@ -13896,16 +14046,43 @@ const ListView = {
     toggleSortDropdown(forceState = null) {
         const dd = document.getElementById('lv-sort-dropdown');
         if (!dd) return;
-        
+
+        const buildSeq = () => {
+            const mcCodes = window._activeMcCodes();
+            const staff = window._filterStaffByMc(window._staffArray(), mcCodes);
+            const seqHtml = staff.length > 0 ? `
+                <div style="padding:8px 16px 4px; font-size:9px; font-weight:800; color:#94a3b8; letter-spacing:0.5px;">── DELIVERY SEQUENCE ──</div>
+                <div onclick="ListView.sort('seq-all'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Seq: All Staff</div>
+                ${staff.map(s => `<div onclick="ListView.sort('seq-${s.name}'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Seq: ${s.name}</div>`).join('')}
+            ` : '<div style="padding:8px 16px; font-size:10px; color:#94a3b8; font-weight:700;">No staff in delivery sheet</div>';
+            const existing = dd.querySelector('.lv-seq-section');
+            if (existing) existing.remove();
+            const section = document.createElement('div');
+            section.className = 'lv-seq-section';
+            section.dataset.staffCount = String(staff.length);
+            section.innerHTML = seqHtml;
+            dd.appendChild(section);
+        };
+
+        // Lazy-load staff index on first open; rebuild section once loaded
+        if (!window.DELIVERY_STAFF) {
+            this._ensureDeliveryStaff().then(() => {
+                buildSeq();
+            });
+        }
+        buildSeq();
+
         if (forceState !== null) {
             dd.style.display = forceState ? 'block' : 'none';
         } else {
-            const isHidden = dd.style.display === 'none';
-            dd.style.display = isHidden ? 'block' : 'none';
+            dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
         }
     },
 
     sort(criteria) {
+        // If a per-staff filter was active, restore the full list before re-sorting
+        this._restorePreStaffFilter();
+
         if (criteria === 'id-desc') State.filtered.sort((a, b) => b[0] - a[0]);
         else if (criteria === 'id-asc') State.filtered.sort((a, b) => a[0] - b[0]);
         else if (criteria === 'status-paid') {
@@ -13939,10 +14116,86 @@ const ListView = {
                 return tB - tA;
             });
 
+        } else if (criteria === 'seq-all') {
+            // Restore any active per-staff filter back to the full list first
+            this._restorePreStaffFilter();
+            const self = this;
+            // Ensure delivery history is loaded before sorting by sequence
+            this._ensureDeliveryHistory().then(() => {
+                // Sort by global CSV row index (si) — groups by staff in sheet order
+                const seqOf = (sid) => {
+                    const rec = self._getDeliveryRecord(sid);
+                    return rec && rec.si != null ? rec.si : Number.MAX_SAFE_INTEGER;
+                };
+                State.filtered.sort((a, b) => {
+                    const siA = seqOf(String(a[0]).replace(/\.0$/, '').trim());
+                    const siB = seqOf(String(b[0]).replace(/\.0$/, '').trim());
+                    return siA - siB;
+                });
+                self._staffSortActive = false;
+                State.currentIdx = 0;
+                self.render();
+                const dd = document.getElementById('lv-sort-dropdown');
+                if (dd) dd.style.display = 'none';
+            });
+            return;
+        } else if (criteria.startsWith('seq-')) {
+            const staffName = criteria.slice(4);
+            const self = this;
+            this._ensureDeliveryHistory().then(() => {
+                self._applyStaffFilter(staffName);
+                State.currentIdx = 0;
+                self.render();
+                const dd = document.getElementById('lv-sort-dropdown');
+                if (dd) dd.style.display = 'none';
+            });
+            return;
         }
         State.currentIdx = 0;
         this.render();
         document.getElementById('lv-sort-dropdown').style.display = 'none';
+    },
+
+    // ─── Per-Staff Delivery Sequence ──────────────────────────────
+    _getDeliveryRecord(sid) {
+        const key = String(sid).replace(/\.0$/, '').trim();
+        const map = window.DELIVERY_HISTORY;
+        if (!map) return null;
+        const recs = map.get(key);
+        return recs && recs.length ? recs[0] : null;
+    },
+
+    _staffSnapshot: null,
+    _staffSortActive: false,
+
+    _restorePreStaffFilter() {
+        if (this._staffSortActive && this._staffSnapshot) {
+            State.filtered = this._staffSnapshot;
+        }
+        this._staffSnapshot = null;
+        this._staffSortActive = false;
+    },
+
+    _applyStaffFilter(staffName) {
+        // Snapshot the full filtered list once (restore when leaving staff mode)
+        if (!this._staffSortActive) {
+            this._staffSnapshot = State.filtered.length <= 10000 ? [...State.filtered] : null;
+        }
+        this._staffSortActive = true;
+        const staffLower = String(staffName).toLowerCase();
+        const self = this;
+        State.filtered = State.filtered.filter(r => {
+            const rec = self._getDeliveryRecord(String(r[0]).replace(/\.0$/, '').trim());
+            return rec && String(rec.s).toLowerCase() === staffLower;
+        });
+        // Sort by per-staff S.No (sn)
+        State.filtered.sort((a, b) => {
+            const snA = self._getDeliveryRecord(String(a[0]).replace(/\.0$/, '').trim());
+            const snB = self._getDeliveryRecord(String(b[0]).replace(/\.0$/, '').trim());
+            const aNum = snA && snA.sn != null ? Number(snA.sn) : Number.MAX_SAFE_INTEGER;
+            const bNum = snB && snB.sn != null ? Number(snB.sn) : Number.MAX_SAFE_INTEGER;
+            return aNum - bNum;
+        });
     },
 
     filterUndelivered() {
@@ -14375,24 +14628,81 @@ const ListView = {
     },
 
     // ─── Delivery & Payment History ──────────────────────────────
-    // Lazy-loads delivery history JSON parts only on first use (no startup cost).
+    // Lazy-loads the selected sequence month's delivery JSON parts only on
+    // first use (no startup cost). window.DELIVERY_SEQUENCE_MONTH determines
+    // which month's route drives sorting + staff boundaries.
 
     async _ensureDeliveryHistory() {
         if (window.DELIVERY_HISTORY) return window.DELIVERY_HISTORY;
-        const parts = window.DELIVERY_HISTORY_PARTS_COUNT || 0;
+        const month = window.DELIVERY_SEQUENCE_MONTH || '';
+        const parts = (window.DELIVERY_SEQUENCE_MONTHS || {})[month] || 0;
         const vStr = window.DATA_VERSION ? `?v=${window.DATA_VERSION}` : '';
         const merged = new Map();
         for (let i = 1; i <= parts; i++) {
             try {
-                const res = await fetch(`delivery_history_part${i}.json${vStr}`);
+                const res = await fetch(`delivery_sequence_${month}_part${i}.json${vStr}`);
                 const chunk = await res.json();
                 Object.keys(chunk).forEach(sid => merged.set(sid, chunk[sid]));
             } catch (e) {
-                console.warn("[History] Failed to load delivery_history_part" + i, e);
+                console.warn("[History] Failed to load delivery_sequence_" + month + "_part" + i, e);
             }
         }
         window.DELIVERY_HISTORY = merged;
         return merged;
+    },
+
+    // Loads EVERY available month's delivery JSON parts and merges them into
+    // one map. Used only by the history modal (always shows all months,
+    // independent of the delivery sequence month setting).
+    async _ensureAllDeliveryHistory() {
+        if (window.DELIVERY_HISTORY_ALL) return window.DELIVERY_HISTORY_ALL;
+        const months = window.DELIVERY_SEQUENCE_MONTHS || {};
+        const vStr = window.DATA_VERSION ? `?v=${window.DATA_VERSION}` : '';
+        const merged = new Map();
+        for (const month of Object.keys(months)) {
+            for (let i = 1; i <= months[month]; i++) {
+                try {
+                    const res = await fetch(`delivery_sequence_${month}_part${i}.json${vStr}`);
+                    const chunk = await res.json();
+                    Object.keys(chunk).forEach(sid => merged.set(sid, chunk[sid]));
+                } catch (e) {
+                    console.warn("[History] Failed to load delivery_sequence_" + month + "_part" + i, e);
+                }
+            }
+        }
+        window.DELIVERY_HISTORY_ALL = merged;
+        return merged;
+    },
+
+    // ─── Delivery Staff loader (lazy, per selected sequence month) ──
+    async _ensureDeliveryStaff() {
+        if (window.DELIVERY_STAFF) return window.DELIVERY_STAFF;
+        const month = window.DELIVERY_SEQUENCE_MONTH || '';
+        const vStr = window.DATA_VERSION ? `?v=${window.DATA_VERSION}` : '';
+        try {
+            const res = await fetch(`delivery_staff_${month}.json${vStr}`);
+            window.DELIVERY_STAFF = await res.json();
+            return window.DELIVERY_STAFF;
+        } catch (e) { console.warn("[Staff] Failed to load delivery staff:", e); return []; }
+    },
+
+    // Switches the delivery sequence month, clears cached data, and reloads.
+    // Used when an admin changes the setting. Preserves the history modal's
+    // all-months cache (DELIVERY_HISTORY_ALL stays valid across months).
+    async switchSequenceMonth(newMonth) {
+        if (!newMonth) return;
+        window.DELIVERY_SEQUENCE_MONTH = newMonth;
+        window.DELIVERY_HISTORY = null;
+        window.DELIVERY_STAFF = null;
+        if (typeof LayerManager !== 'undefined') {
+            // Clear old staff boundary layers and active state
+            if (LayerManager._staffBoundaryLayer) {
+                LayerManager._staffBoundaryLayer.clearLayers();
+            }
+            LayerManager._staffBoundaryActive = {};
+            LayerManager._staffExpanded = {};
+            await LayerManager.renderSidebarStaff();
+        }
     },
 
     _getPaymentRecords(sid) {
@@ -14456,7 +14766,7 @@ const ListView = {
         const record = window.SID_MAP ? window.SID_MAP.get(String(sid).replace(/\.0$/, '').trim()) : null;
         const name = record ? (record[4] || '') : '';
 
-        const deliveryMap = await this._ensureDeliveryHistory();
+        const deliveryMap = await this._ensureAllDeliveryHistory();
         const delivery = deliveryMap.get(String(sid).replace(/\.0$/, '').trim()) || [];
         const payment = this._getPaymentRecords(sid);
 
@@ -14497,7 +14807,7 @@ const ListView = {
         `;
     },
 
-    openHistoryFull(sid) {
+    async openHistoryFull(sid) {
         const existing = document.getElementById('modal-history');
         if (existing) existing.remove();
         const popup = document.getElementById('lv-history-popup');
@@ -14508,7 +14818,7 @@ const ListView = {
         const name = record ? (record[4] || '') : '';
         const address = record ? (record[5] || '') : '';
 
-        const deliveryMap = window.DELIVERY_HISTORY || new Map();
+        const deliveryMap = await this._ensureAllDeliveryHistory();
         const delivery = deliveryMap.get(key) || [];
         const payment = this._getPaymentRecords(sid);
 
@@ -14628,6 +14938,42 @@ document.addEventListener('mousedown', (e) => {
 });
 
 window.ListView = ListView;
+window._ensureDeliveryStaff = () => ListView._ensureDeliveryStaff();
+
+// Shared helpers for per-staff delivery sequence
+window._activeMcCodes = function() {
+    if (!window.App || !App.getSelected) return null;
+    var selected = App.getSelected('f-mc');
+    if (!selected || selected.length === 0) return null;
+    return selected.map(function(full) {
+        var m = String(full).match(/(MC|UC)[-\s]*(\d+)/i);
+        return m ? m[1].toUpperCase() + '-' + m[2] : String(full);
+    });
+};
+
+window._staffArray = function() {
+    var data = window.DELIVERY_STAFF;
+    if (!data) return [];
+    return Object.keys(data).map(function(name) {
+        return { name: name, color: data[name].color, total: data[name].total, mcucs: data[name].mcucs };
+    });
+};
+
+window._filterStaffByMc = function(staffArr, mcCodes) {
+    if (!mcCodes || mcCodes.length === 0) return staffArr;
+    return staffArr.filter(function(s) {
+        return Object.keys(s.mcucs).some(function(mc) { return mcCodes.indexOf(mc) >= 0; });
+    });
+};
+
+window._staffCountForMc = function(staffEntry, mcCodes) {
+    if (!mcCodes || mcCodes.length === 0) return staffEntry.total;
+    var sum = 0;
+    mcCodes.forEach(function(mc) {
+        if (staffEntry.mcucs[mc]) sum += staffEntry.mcucs[mc].count;
+    });
+    return sum > 0 ? sum : staffEntry.total;
+};
 
 
 
@@ -17273,6 +17619,15 @@ const LayerManager = {
                     </div>`;
         }
         else if (this.activeTab === '⚙️ App Config') {
+            // Build Delivery Sequence Month dropdown options from available months
+            const seqMonths = window.DELIVERY_SEQUENCE_MONTHS || {};
+            const seqKeys = Object.keys(seqMonths);
+            const seqOptions = seqKeys.length
+                ? seqKeys.map(mk =>
+                    `<option value="${mk}" ${mk === window.DELIVERY_SEQUENCE_MONTH ? 'selected' : ''}>${mk}</option>`
+                  ).join('')
+                : '<option value="">No sequence months available</option>';
+
             contentHtml += `
                     <div style="padding:4px;">
                         <div style="background:#fff; border:1px solid #f1f5f9; border-radius:16px; padding:20px;">
@@ -17281,6 +17636,16 @@ const LayerManager = {
                                 style="width:100%; padding:14px; border-radius:12px; border:1px solid #e2e8f0; font-size:16px; font-weight:700; margin-bottom:16px; outline:none;">
                             <button id="btn-save-billing" onclick="Settings.updateBillingMonth()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#2563eb; color:white; border:none; padding:15px; border-radius:12px; font-weight:800;">
                                 <span class="material-icons-round">cloud_done</span> Save to Cloud
+                            </button>
+                        </div>
+                        <div style="margin-top:16px; background:#fff; border:1px solid #f1f5f9; border-radius:16px; padding:20px;">
+                            <label style="font-weight:800; font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:8px;">Delivery Sequence Month</label>
+                            <div style="font-size:10px; color:#64748b; font-weight:600; margin-bottom:10px; line-height:1.5;">Which month's route drives the list sorting and staff delivery zones.</div>
+                            <select id="select-sequence-month" style="width:100%; padding:12px; border-radius:10px; border:1px solid #e2e8f0; font-size:15px; font-weight:700; margin-bottom:12px; outline:none; background:white;">
+                                ${seqOptions}
+                            </select>
+                            <button id="btn-save-sequence" onclick="Settings.updateSequenceMonth()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#0f172a; color:white; border:none; padding:14px; border-radius:12px; font-weight:800;">
+                                <span class="material-icons-round">route</span> Apply Sequence Month
                             </button>
                         </div>
                         <div style="margin-top:20px; padding:20px; background:#fff1f2; border:1px solid #fecaca; border-radius:16px;">
@@ -17627,6 +17992,207 @@ const LayerManager = {
         if (settingsModal && settingsModal.style.display === 'block') {
             this.renderSettingsUI();
         }
+    },
+
+    // ─── Boundary Layers Sub-Groups ──────────────────────────────
+    toggleBoundarySub(id) {
+        const group = document.querySelector(`#sub-${id}`);
+        if (!group) return;
+        const isOpen = group.style.display !== 'none';
+        group.style.display = isOpen ? 'none' : 'block';
+        const wrapper = group.closest('.sidebar-sub-group');
+        if (wrapper) wrapper.classList.toggle('open', !isOpen);
+        if (!isOpen && id === 'staff') {
+            this.renderSidebarStaff();
+        }
+    },
+
+    // ─── Staff Delivery Zones Sub-List ──────────────────────────
+    // _staffBoundaryActive: { staffName: { mcKey: bool } } — tracks which MC/UC
+    //   paths are shown on the map. Master toggle (no mcKey) flips all MC/UCs.
+    // _staffExpanded: { staffName: bool } — tracks sidebar collapse state.
+
+    toggleStaffExpand(name) {
+        if (!this._staffExpanded) this._staffExpanded = {};
+        this._staffExpanded[name] = !this._staffExpanded[name];
+        this.renderSidebarStaff();
+    },
+
+    async renderSidebarStaff() {
+        const container = document.getElementById('sidebar-staff-container');
+        if (!container) return;
+        let staffArr = [];
+        if (typeof window._ensureDeliveryStaff === 'function') {
+            await window._ensureDeliveryStaff();
+        }
+        if (window.DELIVERY_STAFF) {
+            const mcCodes = (typeof window._activeMcCodes === 'function') ? window._activeMcCodes() : null;
+            staffArr = typeof window._staffArray === 'function' ? window._staffArray() : [];
+            if (mcCodes && mcCodes.length) {
+                staffArr = window._filterStaffByMc(staffArr, mcCodes);
+            }
+        }
+        if (!staffArr.length) {
+            container.innerHTML = '<div style="padding:10px; text-align:center; color:#94a3b8; font-size:11px;">No staff in delivery sheet</div>';
+            return;
+        }
+        this._staffBoundaryActive = this._staffBoundaryActive || {};
+        this._staffExpanded = this._staffExpanded || {};
+        const sidebarMCs = (typeof window._activeMcCodes === 'function') ? window._activeMcCodes() : null;
+
+        container.innerHTML = staffArr.map(s => {
+            const total = (typeof window._staffCountForMc === 'function') ? window._staffCountForMc(s, sidebarMCs) : s.total;
+            const isExpanded = this._staffExpanded[s.name];
+            // Determine which MC/UCs to show in the sub-list (filtered by sidebar MC filter)
+            const mcList = Object.keys(s.mcucs).filter(mc => {
+                if (!sidebarMCs || !sidebarMCs.length) return true;
+                return sidebarMCs.indexOf(mc) >= 0;
+            });
+            const anyActive = mcList.some(mc => this._staffBoundaryActive[s.name] && this._staffBoundaryActive[s.name][mc]);
+
+            const subHtml = mcList.length > 0 ? mcList.map(mc => {
+                const mcActive = this._staffBoundaryActive[s.name] && this._staffBoundaryActive[s.name][mc];
+                const mcCount = s.mcucs[mc] ? s.mcucs[mc].count : 0;
+                const escName = s.name.replace(/'/g, "\\'");
+                return `<div onclick="LayerManager.toggleStaffBoundary('${escName}','${mc}')"
+                     style="margin:0; padding:6px 10px 6px 28px; background:${mcActive ? '#f0fdf4' : '#f8fafc'}; border:1px solid ${mcActive ? '#86efac' : '#e2e8f0'}; border-radius:8px; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:11px;">
+                    <input type="checkbox" ${mcActive ? 'checked' : ''} style="pointer-events:none; width:13px; height:13px;">
+                    <span style="font-weight:700; color:#334155; flex:1;">${mc}</span>
+                    <span style="font-weight:700; color:#94a3b8; font-size:10px;">${mcCount}</span>
+                </div>`;
+            }).join('') : '';
+
+            const escName = s.name.replace(/'/g, "\\'");
+            return `<div style="margin:0; padding:0; background:transparent; border:none; border-radius:10px; overflow:hidden;">
+                <div onclick="LayerManager.toggleStaffBoundary('${escName}')"
+                     style="margin:0; padding:10px; background:${anyActive ? '#f0fdf4' : '#f8fafc'}; border:1px solid ${anyActive ? s.color : '#e2e8f0'}; border-radius:10px; display:flex; align-items:center; gap:10px; cursor:pointer;">
+                    <input type="checkbox" ${anyActive ? 'checked' : ''} style="pointer-events:none; width:18px; height:18px; border-radius:5px; border:2px solid #cbd5e1; accent-color:var(--primary); margin:0;">
+                    <span class="staff-color-dot" style="background:${s.color};"></span>
+                    <span style="font-size:12px; font-weight:700; color:#334155; flex:1;">${s.name}</span>
+                    <span style="font-size:9px; color:#94a3b8; font-weight:700;">${total}</span>
+                    <span onclick="event.stopPropagation(); LayerManager.toggleStaffExpand('${escName}')"
+                          style="cursor:pointer; display:flex; align-items:center; pointer-events:auto; color:#94a3b8; transition:transform 0.2s; ${isExpanded ? 'transform:rotate(180deg);' : ''}">
+                        <span class="material-icons-round" style="font-size:16px;">expand_more</span>
+                    </span>
+                </div>
+                ${subHtml ? `<div style="display:${isExpanded ? 'flex' : 'none'}; flex-direction:column; gap:4px; padding:6px 0 6px 0;">
+                    ${subHtml}
+                </div>` : ''}
+            </div>`;
+        }).join('');
+    },
+
+    // Dash patterns cycled per day so overlapping days are distinguishable
+    _STAFF_DAY_DASH: ['', '6 4', '2 4', '8 4 2 4'],
+
+    _drawStaffPaths(layer, staff, mcCodes) {
+        var mcKeys = Object.keys(staff.mcucs);
+        if (mcCodes && mcCodes.length) {
+            mcKeys = mcKeys.filter(function(mc) { return mcCodes.indexOf(mc) >= 0; });
+        }
+        mcKeys.forEach(function(mc) {
+            var mcData = staff.mcucs[mc];
+            if (!mcData || !mcData.days) return;
+            mcData.days.forEach(function(day, dayIdx) {
+                var path = day.path;
+                if (!path || path.length < 2) return;
+                var dash = LayerManager._STAFF_DAY_DASH[dayIdx % LayerManager._STAFF_DAY_DASH.length];
+                // Day's delivery route line (time-sorted)
+                var pl = L.polyline(path, { color: day.shade || staff.color, weight: 2, opacity: 0.7, dashArray: dash, pane: 'routingPane', interactive: false }).addTo(layer);
+                // Direction arrows along the line (auto-rotated to follow the route)
+                try {
+                    var arrowGroup = L.layerGroup({ pane: 'staffArrowPane' }).addTo(layer);
+                    L.polylineDecorator(pl, {
+                        patterns: [
+                            { offset: '5%', repeat: '120m', symbol: L.Symbol.arrowHead({ pixelSize: 10, pathOptions: { fillColor: '#fde047', color: '#111827', weight: 1.5, fillOpacity: 1, pane: 'staffArrowPane' } }) }
+                        ]
+                    }).addTo(arrowGroup);
+                } catch (e) {
+                    console.warn("[StaffPaths] Decorator failed:", e);
+                }
+                // Start marker (filled circle)
+                L.circleMarker(path[0], { radius: 6, color: '#fff', weight: 1.5, fillColor: day.shade || staff.color, fillOpacity: 1, pane: 'routingPane', interactive: false }).addTo(layer);
+                // End marker (filled dark circle)
+                L.circleMarker(path[path.length - 1], { radius: 6, color: '#fff', weight: 1.5, fillColor: '#111827', fillOpacity: 1, pane: 'routingPane', interactive: false }).addTo(layer);
+                // Date label at start point (black text, readable against any color)
+                L.marker(path[0], {
+                    icon: L.divIcon({ className: 'staff-day-label', html: `<div style="color:#1e293b;">Start ${day.date.slice(5)}</div>`, iconSize: [54, 14], iconAnchor: [27, 18] }),
+                    pane: 'routingPane', interactive: false
+                }).addTo(layer);
+                // Date label at end point (black text, readable against any color)
+                L.marker(path[path.length - 1], {
+                    icon: L.divIcon({ className: 'staff-day-label', html: `<div style="color:#1e293b;">End ${day.date.slice(5)}</div>`, iconSize: [54, 14], iconAnchor: [27, 18] }),
+                    pane: 'routingPane', interactive: false
+                }).addTo(layer);
+            });
+        });
+    },
+
+    toggleStaffBoundary(name, mcKey) {
+        if (!window.DELIVERY_STAFF) return;
+        const staff = window.DELIVERY_STAFF[name];
+        if (!staff) return;
+        if (!this._staffBoundaryActive) this._staffBoundaryActive = {};
+        if (!this._staffBoundaryActive[name]) this._staffBoundaryActive[name] = {};
+
+        if (mcKey) {
+            // Toggle a single MC/UC
+            this._staffBoundaryActive[name][mcKey] = !this._staffBoundaryActive[name][mcKey];
+        } else {
+            // Master toggle: flip all MC/UCs for this staff
+            const anyOn = Object.keys(staff.mcucs).some(mc => this._staffBoundaryActive[name][mc]);
+            Object.keys(staff.mcucs).forEach(mc => {
+                this._staffBoundaryActive[name][mc] = !anyOn;
+            });
+        }
+
+        this._redrawActiveStaffBoundaries();
+        this.renderSidebarStaff();
+    },
+
+    _redrawActiveStaffBoundaries() {
+        if (this._staffBoundaryLayer) {
+            State.map.removeLayer(this._staffBoundaryLayer);
+            this._staffBoundaryLayer = null;
+        }
+        if (!this._staffBoundaryActive) return;
+        const sidebarMCs = (typeof window._activeMcCodes === 'function') ? window._activeMcCodes() : null;
+        // Collect (staff, mc) pairs that are active
+        const byStaff = {};
+        Object.keys(this._staffBoundaryActive).forEach(n => {
+            const s = window.DELIVERY_STAFF[n];
+            if (!s) return;
+            Object.keys(s.mcucs).forEach(mc => {
+                if (!this._staffBoundaryActive[n][mc]) return;
+                // Apply sidebar MC filter
+                if (sidebarMCs && sidebarMCs.length && sidebarMCs.indexOf(mc) < 0) return;
+                if (!byStaff[n]) byStaff[n] = { staff: s, mcs: [] };
+                byStaff[n].mcs.push(mc);
+            });
+        });
+        const entries = Object.values(byStaff);
+        if (!entries.length) return;
+        this._staffBoundaryLayer = L.layerGroup().addTo(State.map);
+        entries.forEach(function(entry) {
+            LayerManager._drawStaffPaths(LayerManager._staffBoundaryLayer, entry.staff, entry.mcs);
+        });
+    },
+
+    _refreshActiveStaffBoundaries() {
+        // Redraw active staff boundary paths after filter change (e.g. MC/UC sidebar filter)
+        this.renderSidebarStaff();
+        this._redrawActiveStaffBoundaries();
+    },
+
+    clearStaffBoundaries() {
+        if (this._staffBoundaryLayer) {
+            State.map.removeLayer(this._staffBoundaryLayer);
+            this._staffBoundaryLayer = null;
+        }
+        this._staffBoundaryActive = {};
+        this._staffExpanded = {};
+        const container = document.getElementById('sidebar-staff-container');
+        if (container) this.renderSidebarStaff();
     },
 
     renderDeliveryLogTab() {
@@ -18617,7 +19183,7 @@ const LayerManager = {
                     '<select id="dap-city" onchange="LayerManager._deliveryActivityFilterChange()" style="flex:0 0 auto; min-width:110px; padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; font-size:11px; font-weight:600; color:#1e293b; background:white; outline:none; font-family:inherit;">' +
                         '<option value="all">All Cities</option>' +
                     '</select>' +
-                    '<button onclick="LayerManager._fetchDeliveryActivityData(false)" style="padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Refresh data">' +
+                    '<button onclick="LayerManager._fetchDeliveryActivityData(false, true)" style="padding:6px 8px; border-radius:8px; border:1px solid #e2e8f0; background:white; cursor:pointer; display:flex; align-items:center; justify-content:center;" title="Refresh data">' +
                         '<span class="material-icons-round" id="dap-refresh-icon" style="font-size:16px;">refresh</span>' +
                     '</button>' +
                 '</div>' +
@@ -18731,7 +19297,7 @@ const LayerManager = {
         function stopResizeTouch() { isResizing = false; document.removeEventListener('touchmove', onResizeTouch); document.removeEventListener('touchend', stopResizeTouch); }
     },
 
-    async _fetchDeliveryActivityData(incremental) {
+    async _fetchDeliveryActivityData(incremental, force) {
         if (!window._supabase || !this._deliveryActivityMonth) return;
         if (incremental && this._deliveryActivityMonth !== window.ACTIVE_BILLING_MONTH) return;
         var dapIcon = document.getElementById('dap-refresh-icon');
@@ -18744,29 +19310,31 @@ const LayerManager = {
         };
         try {
             if (!incremental) {
-                // EGRESS: Restore from per-month IndexedDB cache first.
+                // EGRESS: Restore from per-month IndexedDB cache first (skip if force=true).
                 // Older months are immutable, so cached data is always valid.
                 // Current month gets a light incremental refresh below.
-                try {
-                    var cachedDap = await _dbGetCache('dap:' + this._deliveryActivityMonth);
-                    if (cachedDap && cachedDap.main && Array.isArray(cachedDap.main) && cachedDap.main.length) {
-                        this._deliveryActivityData = cachedDap.main;
-                        this._deliveryActivityStaffData = cachedDap.staff || [];
-                        this._deliveryActivityCount = cachedDap.count || 0;
-                        this._deliveryActivityDeliveredCount = cachedDap.deliveredCount || 0;
-                        this._deliveryActivityUnsentCount = cachedDap.unsentCount || 0;
-                        this._deliveryActivityStaffCount = cachedDap.staffCount || 0;
-                        this._deliveryActivityMonthCached = this._deliveryActivityMonth;
-                        this._updateDeliveryActivityPanel(this._deliveryActivityData);
-                        this._updateLastUpdated();
-                        // Current month only: incremental refresh to catch today's new records
-                        if (this._deliveryActivityMonth === window.ACTIVE_BILLING_MONTH) {
-                            this._fetchDeliveryActivityData(true);
+                if (!force) {
+                    try {
+                        var cachedDap = await _dbGetCache('dap:' + this._deliveryActivityMonth);
+                        if (cachedDap && cachedDap.main && Array.isArray(cachedDap.main) && cachedDap.main.length) {
+                            this._deliveryActivityData = cachedDap.main;
+                            this._deliveryActivityStaffData = cachedDap.staff || [];
+                            this._deliveryActivityCount = cachedDap.count || 0;
+                            this._deliveryActivityDeliveredCount = cachedDap.deliveredCount || 0;
+                            this._deliveryActivityUnsentCount = cachedDap.unsentCount || 0;
+                            this._deliveryActivityStaffCount = cachedDap.staffCount || 0;
+                            this._deliveryActivityMonthCached = this._deliveryActivityMonth;
+                            this._updateDeliveryActivityPanel(this._deliveryActivityData);
+                            this._updateLastUpdated();
+                            // Current month only: incremental refresh to catch today's new records
+                            if (this._deliveryActivityMonth === window.ACTIVE_BILLING_MONTH) {
+                                this._fetchDeliveryActivityData(true);
+                            }
+                            if (dapIcon) dapIcon.classList.remove('spinning');
+                            return;
                         }
-                        if (dapIcon) dapIcon.classList.remove('spinning');
-                        return;
-                    }
-                } catch (e) { /* fall through to full fetch */ }
+                    } catch (e) { /* fall through to full fetch */ }
+                }
 
                 function countQ(extraFilter) {
                     var q = window._supabase.from('delivery_log')
@@ -20724,6 +21292,12 @@ const Settings = {
                 await DeliveryModule.loadDeliveryCache();
             }
 
+            // Invalidate undelivered filter cache so it re-fetches for the new billing month
+            if (window.App) {
+                App._undeliveredSIDs = null;
+                App._undeliveredRestore = null;
+            }
+
             if (typeof LayerManager !== 'undefined') {
                 LayerManager.showToast("Billing cycle updated to " + newMonth + " ✨");
                 LayerManager.renderSettingsUI();
@@ -20742,6 +21316,74 @@ const Settings = {
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<span class="material-icons-round">cloud_done</span> Save to Cloud';
+        }
+    },
+
+    async updateSequenceMonth() {
+        if (!window._supabase) {
+            console.error("[Settings] No Supabase client!");
+            return App.showToast("Supabase not connected.");
+        }
+        const selectEl = document.getElementById('select-sequence-month');
+        const btn = document.getElementById('btn-save-sequence');
+        if (!selectEl || !btn) return;
+        const newMonth = selectEl.value;
+        if (!newMonth) return App.showToast("No delivery sequence month selected.");
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons-round spinning">refresh</span> Applying...';
+
+        try {
+            const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase request timed out')), ms));
+
+            console.log("[Settings] Querying app_settings for delivery_sequence_month...");
+            const { data: rows, error: selErr } = await Promise.race([
+                window._supabase.from('app_settings').select('key').eq('key', 'delivery_sequence_month').limit(1),
+                timeout(15000)
+            ]);
+
+            if (selErr) {
+                console.warn("[Settings] Select app_settings failed:", selErr);
+            }
+
+            const existing = rows && rows.length > 0 ? rows[0] : null;
+
+            let error;
+            if (existing) {
+                const result = await Promise.race([
+                    window._supabase.from('app_settings').update({ value: newMonth, updated_at: new Date().toISOString() }).eq('key', 'delivery_sequence_month'),
+                    timeout(15000)
+                ]);
+                error = result.error;
+                if (error) console.error("[Settings] Update failed:", error);
+            } else {
+                const result = await Promise.race([
+                    window._supabase.from('app_settings').insert({ key: 'delivery_sequence_month', value: newMonth, updated_at: new Date().toISOString() }),
+                    timeout(15000)
+                ]);
+                error = result.error;
+                if (error) console.error("[Settings] Insert failed:", error);
+            }
+
+            if (error) throw error;
+
+            window.DELIVERY_SEQUENCE_MONTH = newMonth;
+
+            if (window.ListView && typeof ListView.switchSequenceMonth === 'function') {
+                await ListView.switchSequenceMonth(newMonth);
+            }
+
+            if (typeof LayerManager !== 'undefined') {
+                LayerManager.showToast("Delivery sequence month set to " + newMonth + " ✨");
+                LayerManager.renderSettingsUI();
+            }
+        } catch (e) {
+            console.error("Failed to update delivery sequence month:", e);
+            const errorMsg = e.message || "Cloud rejected";
+            if (typeof LayerManager !== 'undefined') LayerManager.showToast("Error: " + errorMsg);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-icons-round">route</span> Apply Sequence Month';
         }
     },
 
