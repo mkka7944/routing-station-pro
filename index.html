@@ -9819,7 +9819,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.09.02.1658</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.09.03.1259</span>
             </div>
         </div>
         
@@ -11120,7 +11120,7 @@ async function fetchAppSettings() {
             const hideZubair = data.find(d => d.key === 'hide_zubair_sids');
             const seqMonth = data.find(d => d.key === 'delivery_sequence_month');
             
-            if (billing) window.ACTIVE_BILLING_MONTH = billing.value;
+            if (billing) window.ACTIVE_BILLING_MONTH = String(billing.value).toLowerCase();
             if (version) window.DATA_VERSION = version.value;
             if (hideZubair) State.hideZubairSids = String(hideZubair.value) === 'true';
             if (seqMonth && seqMonth.value) window.DELIVERY_SEQUENCE_MONTH = seqMonth.value;
@@ -11339,13 +11339,15 @@ async function loadData() {
             dataPromises.push(fetchJSON(`data_part${i}.json${vStr}`, `Survey Records (Part ${i}/${chunkCount})`));
         }
 
-        const [dataChunks, paidData, hierarchyData, geoLayers, zubairData, correctedCoords] = await Promise.all([
+        const [dataChunks, paidData, hierarchyData, geoLayers, zubairData, correctedCoords, lifecycleData, availMonthsData] = await Promise.all([
             Promise.all(dataPromises),
             fetchJSON(`paid_data.json${vStr}`, 'Payment Data'),
             fetchJSON(`hierarchy.json${vStr}`, 'Locations'),
             fetchJSON(`geo_layers.json${vStr}`, 'Map Layers'),
             (async () => { const r = await fetch(`zubair_sids.json${vStr}`); return r.json(); })(),
-            (async () => { try { const r = await fetch(`corrected_coords.json${vStr}`); return await r.json(); } catch (e) { return {}; } })()
+            (async () => { try { const r = await fetch(`corrected_coords.json${vStr}`); return await r.json(); } catch (e) { return {}; } })(),
+            (async () => { try { const r = await fetch(`lifecycle_bills.json${vStr}`); return await r.json(); } catch (e) { return {}; } })(),
+            (async () => { try { const r = await fetch(`available_months.json${vStr}`); return await r.json(); } catch (e) { return []; } })()
         ]);
         const rawData = [].concat(...dataChunks);
 
@@ -11390,6 +11392,8 @@ async function loadData() {
         window.GEO_LAYERS = geoLayers;
         window.ZUBAIR_SIDS = new Set(zubairData.map(String));
         window.CORRECTED_COORDS = correctedCoords || {};
+        window.LIFECYCLE_BILLS = lifecycleData || {};
+        window.AVAILABLE_MONTHS = (availMonthsData && typeof availMonthsData === 'object') ? availMonthsData : {};
 
         status.innerText = 'Starting Application...';
         setTimeout(() => {
@@ -11496,9 +11500,9 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.09.02.1658";
+window.DATA_VERSION = "v2026.09.03.1259";
 window.DATA_CHUNKS_COUNT = 13;
-window.DELIVERY_SEQUENCE_MONTHS = {"jul2026": 1};
+window.DELIVERY_SEQUENCE_MONTHS = {"jul2026": {"parts": 1, "houses": 80473}};
 window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -11970,23 +11974,10 @@ const App = {
     },
 
     // Undelivered Toggle - Show only records with no delivery_log entry.
-    // Excludes houses surveyed after the 15th of the billing month (no PDF bill yet).
+    // Bill-active universe comes from lifecycle data (PDF issued, not deleted).
     _undeliveredActive: false,
     _undeliveredSIDs: null,
     _undeliveredRestore: null,
-
-    // Returns the cutoff date string (YYYY-MM-15) for the current billing month,
-    // or null if the month can't be parsed. Houses surveyed after this date
-    // don't have a PDF bill until next month.
-    _billingCutoffDate() {
-        const bm = String(window.ACTIVE_BILLING_MONTH || '').trim().toLowerCase();
-        const match = bm.match(/^([a-z]{3})(\d{4})$/);
-        if (!match) return null;
-        const months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
-        const mo = months[match[1]];
-        if (!mo) return null;
-        return `${match[2]}-${String(mo).padStart(2, '0')}-15`;
-    },
 
     async toggleUndeliveredFilter() {
         const btn = document.getElementById('btn-undelivered-toggle');
@@ -12016,7 +12007,7 @@ const App = {
                     const { data } = await window._supabase
                         .from('delivery_log')
                         .select('survey_id')
-                        .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                        .ilike('bill_month', window.ACTIVE_BILLING_MONTH)
                         .range(from, from + step - 1);
                     if (!data || data.length === 0) break;
                     allData.push(...data);
@@ -12033,15 +12024,20 @@ const App = {
         }
         // Save the pre-filter list so toggling off restores correctly
         this._undeliveredRestore = [...State.filtered];
-        const cutoff = this._billingCutoffDate();
+        // Bill-active universe: only houses that have a printed PDF bill this
+        // month (from lifecycle data). Falls back to all survey houses if the
+        // lifecycle data is not available for the billing month.
+        let lifecycleSet = null;
+        if (window.LIFECYCLE_BILLS) {
+            const key = String(window.ACTIVE_BILLING_MONTH || '').toLowerCase();
+            const arr = window.LIFECYCLE_BILLS[key];
+            if (arr && arr.length) lifecycleSet = new Set(arr.map(String));
+        }
         State.filtered = (State.masterFiltered || window.RAW_DATA || []).filter(r => {
             // Exclude already-delivered records
             if (this._undeliveredSIDs.has(String(r[0]))) return false;
-            // Exclude records surveyed after the 15th (no PDF bill this month)
-            if (cutoff) {
-                const d = r[7];
-                if (d && d !== '-' && d !== '0000-00-00' && d > cutoff) return false;
-            }
+            // Exclude houses with no printed bill this month
+            if (lifecycleSet && !lifecycleSet.has(String(r[0]))) return false;
             return true;
         });
         State.currentIdx = 0;
@@ -13787,7 +13783,7 @@ const ListView = {
             const { data, error } = await window._supabase
                 .from('verified_houses')
                 .select('survey_id, verified_by, verified_at, latitude, longitude, street_no, sequence_no, is_right, is_delivered')
-                .eq('billing_month', window.ACTIVE_BILLING_MONTH)
+                .ilike('billing_month', window.ACTIVE_BILLING_MONTH)
                 .in('survey_id', missingSIDs);
 
             if (error) throw error;
@@ -14635,7 +14631,8 @@ const ListView = {
     async _ensureDeliveryHistory() {
         if (window.DELIVERY_HISTORY) return window.DELIVERY_HISTORY;
         const month = window.DELIVERY_SEQUENCE_MONTH || '';
-        const parts = (window.DELIVERY_SEQUENCE_MONTHS || {})[month] || 0;
+        const info = (window.DELIVERY_SEQUENCE_MONTHS || {})[month];
+        const parts = (info && typeof info === 'object') ? (info.parts || 0) : (info || 0);
         const vStr = window.DATA_VERSION ? `?v=${window.DATA_VERSION}` : '';
         const merged = new Map();
         for (let i = 1; i <= parts; i++) {
@@ -14660,7 +14657,9 @@ const ListView = {
         const vStr = window.DATA_VERSION ? `?v=${window.DATA_VERSION}` : '';
         const merged = new Map();
         for (const month of Object.keys(months)) {
-            for (let i = 1; i <= months[month]; i++) {
+            const info = months[month];
+            const parts = (info && typeof info === 'object') ? (info.parts || 0) : (info || 0);
+            for (let i = 1; i <= parts; i++) {
                 try {
                     const res = await fetch(`delivery_sequence_${month}_part${i}.json${vStr}`);
                     const chunk = await res.json();
@@ -18230,7 +18229,7 @@ const LayerManager = {
             var { data } = await window._supabase
                 .from('delivery_log')
                 .select('staff_email')
-                .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                .ilike('bill_month', window.ACTIVE_BILLING_MONTH)
                 .not('staff_email', 'is', null)
                 .range(from, from + step - 1);
             if (!data || data.length === 0) break;
@@ -18332,7 +18331,7 @@ const LayerManager = {
 
         var _dlMonth = this._deliveryLogMonth;
         function applyFilters(q) {
-            q = q.eq('bill_month', _dlMonth);
+            q = q.ilike('bill_month', _dlMonth);
             if (statusFilter === 'unsent') {
                 q = q.or('status.eq.unsent,distance_to_target.gt.50');
             } else if (statusFilter) {
@@ -18366,7 +18365,7 @@ const LayerManager = {
         try {
             var todayQ = window._supabase.from('delivery_log')
                 .select('survey_id', { count: 'exact' })
-                .eq('bill_month', _dlMonth)
+                .ilike('bill_month', _dlMonth)
                 .gte('delivered_at', todayStart)
                 .limit(1);
             if (statusFilter === 'unsent') {
@@ -18440,7 +18439,7 @@ const LayerManager = {
             while (staffHasMore) {
                 var staffPageQuery = window._supabase.from('delivery_log')
                     .select('staff_email')
-                    .eq('bill_month', _dlMonth)
+                    .ilike('bill_month', _dlMonth)
                     .not('staff_email', 'is', null)
                     .range(staffFrom, staffFrom + staffStep - 1);
                 if (!allTime) {
@@ -19339,7 +19338,7 @@ const LayerManager = {
                 function countQ(extraFilter) {
                     var q = window._supabase.from('delivery_log')
                         .select('survey_id', { count: 'exact' })
-                        .eq('bill_month', self._deliveryActivityMonth)
+                        .ilike('bill_month', self._deliveryActivityMonth)
                         .limit(1);
                     q = dayFilter(q);
                     if (extraFilter) q = q.eq('status', extraFilter);
@@ -19351,12 +19350,12 @@ const LayerManager = {
                     countQ('delivered'),
                     dayFilter(window._supabase.from('delivery_log')
                         .select('survey_id', { count: 'exact' })
-                        .eq('bill_month', this._deliveryActivityMonth)
+                        .ilike('bill_month', this._deliveryActivityMonth)
                         .or('status.eq.unsent,distance_to_target.gt.50')
                         .limit(1)),
                     dayFilter(window._supabase.from('delivery_log')
                         .select('staff_email')
-                        .eq('bill_month', this._deliveryActivityMonth))
+                        .ilike('bill_month', this._deliveryActivityMonth))
                 ]);
                 this._deliveryActivityCount = results[0].count || 0;
                 this._deliveryActivityDeliveredCount = results[1].count || 0;
@@ -19391,12 +19390,12 @@ const LayerManager = {
                 // PARALLEL: fetch staff rows (paginated)
                 var staffCountRes = await dayFilter(window._supabase.from('delivery_log')
                     .select('survey_id', { count: 'exact', head: true })
-                    .eq('bill_month', self._deliveryActivityMonth));
+                    .ilike('bill_month', self._deliveryActivityMonth));
                 var staffPages = Math.ceil((staffCountRes.count || 0) / step);
                 var allStaffRows = await fetchPagesInBatches(function(p) {
                     return dayFilter(window._supabase.from('delivery_log')
                         .select('staff_email, status, survey_id, distance_to_target')
-                        .eq('bill_month', self._deliveryActivityMonth)
+                        .ilike('bill_month', self._deliveryActivityMonth)
                         .order('delivered_at', { ascending: false })
                         .range(p * step, p * step + step - 1));
                 }, staffPages);
@@ -19406,12 +19405,12 @@ const LayerManager = {
                 // PARALLEL: fetch main record rows (paginated)
                 var mainCountRes = await dayFilter(window._supabase.from('delivery_log')
                     .select('survey_id', { count: 'exact', head: true })
-                    .eq('bill_month', self._deliveryActivityMonth));
+                    .ilike('bill_month', self._deliveryActivityMonth));
                 var mainPages = Math.ceil((mainCountRes.count || 0) / step);
                 var mainData = await fetchPagesInBatches(function(p) {
                     return dayFilter(window._supabase.from('delivery_log')
                         .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
-                        .eq('bill_month', self._deliveryActivityMonth)
+                        .ilike('bill_month', self._deliveryActivityMonth)
                         .order('delivered_at', { ascending: false })
                         .range(p * step, p * step + step - 1));
                 }, mainPages);
@@ -19419,7 +19418,7 @@ const LayerManager = {
             } else {
                 var q = window._supabase.from('delivery_log')
                     .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
-                    .eq('bill_month', this._deliveryActivityMonth)
+                    .ilike('bill_month', this._deliveryActivityMonth)
                     .order('delivered_at', { ascending: false });
                 q = dayFilter(q);
                 if (this._deliveryActivityLastFetch) q = q.gt('delivered_at', this._deliveryActivityLastFetch);
@@ -20440,7 +20439,7 @@ const LayerManager = {
                 var { error } = await window._supabase.from('delivery_log')
                     .delete()
                     .in('survey_id', ids)
-                    .eq('bill_month', self._deliveryLogMonth);
+                    .ilike('bill_month', self._deliveryLogMonth);
                 if (error) throw error;
 
                 // Clear from delivery cache
@@ -20493,27 +20492,17 @@ const LayerManager = {
 };
 
 window._availableMonthsCache = null;
-window._fetchAvailableMonths = async function() {
+window._fetchAvailableMonths = function() {
     if (window._availableMonthsCache) return window._availableMonthsCache;
-    if (!window._supabase) return [window.ACTIVE_BILLING_MONTH || ''];
-    const months = new Set();
-    let from = 0, step = 1000;
-    while (true) {
-        const { data } = await window._supabase.from('delivery_log').select('bill_month').range(from, from + step - 1);
-        if (!data || data.length === 0) break;
-        data.forEach(d => { if (d.bill_month) months.add(d.bill_month); });
-        from += step;
-    }
-    from = 0;
-    while (true) {
-        const { data } = await window._supabase.from('verified_houses').select('billing_month').range(from, from + step - 1);
-        if (!data || data.length === 0) break;
-        data.forEach(d => { if (d.billing_month) months.add(d.billing_month); });
-        from += step;
-    }
-    const sorted = [...months].sort().reverse();
-    if (window.ACTIVE_BILLING_MONTH && !sorted.includes(window.ACTIVE_BILLING_MONTH)) {
-        sorted.unshift(window.ACTIVE_BILLING_MONTH);
+    // Use the static delivery-month list built at deploy time (no Supabase scans).
+    let months = (window.AVAILABLE_MONTHS && Array.isArray(window.AVAILABLE_MONTHS))
+        ? window.AVAILABLE_MONTHS.slice()
+        : (window.AVAILABLE_MONTHS && typeof window.AVAILABLE_MONTHS === 'object'
+            ? Object.keys(window.AVAILABLE_MONTHS) : []);
+    const sorted = months.slice().sort().reverse();
+    if (window.ACTIVE_BILLING_MONTH &&
+        !sorted.some(function(m) { return String(m).toLowerCase() === String(window.ACTIVE_BILLING_MONTH).toLowerCase(); })) {
+        sorted.unshift(String(window.ACTIVE_BILLING_MONTH).toLowerCase());
     }
     window._availableMonthsCache = sorted;
     return sorted;
@@ -20840,7 +20829,7 @@ const Settings = {
                 const { data, error } = await window._supabase
                     .from('verified_houses')
                     .select('*')
-                    .eq('billing_month', window.ACTIVE_BILLING_MONTH)
+                    .ilike('billing_month', window.ACTIVE_BILLING_MONTH)
                     .gt('verified_at', latestTime)
                     .range(from, from + step - 1);
 
@@ -21395,7 +21384,7 @@ const Settings = {
                 .from('verified_houses')
                 .delete()
                 .eq('survey_id', sid)
-                .eq('billing_month', window.ACTIVE_BILLING_MONTH);
+                .ilike('billing_month', window.ACTIVE_BILLING_MONTH);
 
             if (error) throw error;
 
@@ -22811,7 +22800,7 @@ const SpatialRouter = {
                 .from('verified_houses')
                 .delete()
                 .eq('survey_id', sidStr)
-                .eq('billing_month', window.ACTIVE_BILLING_MONTH);
+                .ilike('billing_month', window.ACTIVE_BILLING_MONTH);
             console.log("[SaveIntel] Delete result:", delResult);
 
             console.log("[SaveIntel] Upserting new record...");
@@ -22898,7 +22887,7 @@ const SpatialRouter = {
             const { data, error } = await window._supabase
                 .from('verified_houses')
                 .select('*')
-                .eq('billing_month', window.ACTIVE_BILLING_MONTH);
+                .ilike('billing_month', window.ACTIVE_BILLING_MONTH);
             
             if (error) {
                 console.warn("[VerifiedData] Fetch error:", error);
@@ -22989,7 +22978,7 @@ const SpatialRouter = {
                 .from('verified_houses')
                 .delete()
                 .eq('survey_id', String(sid))
-                .eq('billing_month', ACTIVE_BILLING_MONTH);
+                .ilike('billing_month', ACTIVE_BILLING_MONTH);
 
             const { data, error } = await window._supabase.from('verified_houses').upsert([payload]);
 
@@ -25859,7 +25848,7 @@ const routeObj = {
             window._supabase
                 .from('delivery_log')
                 .select('survey_id, status, capture_gps_lat, capture_gps_lng, distance_to_target')
-                .eq('bill_month', month)
+                .ilike('bill_month', month)
                 .in('survey_id', chunk)
         );
         const results = await Promise.all(promises);
@@ -26332,7 +26321,7 @@ const routeObj = {
             window._supabase
                 .from('delivery_log')
                 .select('survey_id, status, distance_to_target')
-                .eq('bill_month', route.delivery_month)
+                .ilike('bill_month', route.delivery_month)
                 .in('survey_id', chunk)
         );
         const results = await Promise.all(promises);
@@ -27521,7 +27510,7 @@ window.DeliveryModule = {
                 var q = window._supabase
                     .from('delivery_log')
                     .select('survey_id, status, distance_to_target, staff_email, staff_name, delivered_at')
-                    .eq('bill_month', billMonth);
+                    .ilike('bill_month', billMonth);
                 if (cachedData && cachedData.length > 0) {
                     q = q.gt('delivered_at', latestTime);
                 }
@@ -27738,7 +27727,7 @@ window.DeliveryModule = {
                 .from('delivery_log')
                 .update({ gdrive_file_id: fileId })
                 .eq('survey_id', sid)
-                .eq('bill_month', billMonth);
+                .ilike('bill_month', billMonth);
         } catch (err) {
             console.error("[DeliveryModule] Failed to update file ID:", err);
         }
@@ -27749,8 +27738,8 @@ window.DeliveryModule = {
         try {
             let query = window._supabase
                 .from('delivery_log')
-                .select('*')
-                .eq('bill_month', window.ACTIVE_BILLING_MONTH)
+                .select('survey_id, status, delivered_at, staff_email, staff_name, consumer_name, distance_to_target, capture_gps_lat, capture_gps_lng, target_lat, target_lng')
+                .ilike('bill_month', window.ACTIVE_BILLING_MONTH)
                 .order('delivered_at', { ascending: false });
             if (filters.status) query = query.eq('status', filters.status);
             if (filters.search) {
@@ -27840,27 +27829,21 @@ window.StaffPerformanceModal = {
         this._sidToLoc = m;
     },
 
-    // Houses surveyed after the 15th of the current billing month won't have a
-    // bill this month (their first PDF bill arrives next month), so they are
-    // excluded from the billing-month totals.
-    _billingCutoffDate() {
-        const bm = String(window.ACTIVE_BILLING_MONTH || '').trim().toLowerCase();
-        const match = bm.match(/^([a-z]{3})(\d{4})$/);
-        if (!match) return null;
-        const months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
-        const mo = months[match[1]];
-        if (!mo) return null;
-        return `${match[2]}-${String(mo).padStart(2, '0')}-15`;
+    // Returns true if the house has a printed bill this month (from lifecycle
+    // data), or true if no lifecycle data is available for the selected month
+    // (falls back to including all survey houses).
+    _isBillActive(sid) {
+        if (!this._lifecycleCache && window.LIFECYCLE_BILLS) {
+            const key = String(this._selectedMonth || '').toLowerCase();
+            const arr = window.LIFECYCLE_BILLS[key];
+            this._lifecycleCache = arr && arr.length ? new Set(arr.map(String)) : null;
+        }
+        if (!this._lifecycleCache) return true;
+        return this._lifecycleCache.has(String(sid));
     },
 
-    _isBillingHouse(loc) {
-        if (!loc || !loc.surveyDate) return true;
-        const cutoff = this._billingCutoffDate();
-        if (!cutoff) return true;
-        const d = String(loc.surveyDate).trim();
-        if (!d || d === '-') return true;
-        return d <= cutoff;
-    },
+    // Resets the lifecycle cache when the selected month changes.
+    _resetLifecycleCache() { this._lifecycleCache = null; },
 
     _loadStaff() {
         const set = new Map();
@@ -27905,6 +27888,8 @@ window.StaffPerformanceModal = {
     _applyMonthFilter() {
         const sel = document.getElementById('spm-month-select');
         if (sel) this._selectedMonth = sel.value;
+        // Lifecycle bill set depends on the month — reset the cache
+        this._resetLifecycleCache();
         // Force refresh for current month (small, changes often); use cache for historical months
         const isCurrent = this._selectedMonth === (window.ACTIVE_BILLING_MONTH || '');
         this._refreshData(isCurrent);
@@ -27915,6 +27900,56 @@ window.StaffPerformanceModal = {
         if (!email) return 'Unknown';
         const found = this._staffOpts.find(s => s.email === email.toLowerCase());
         return found ? found.name : email.split('@')[0];
+    },
+
+    // ─── Shared enrichment helper ────────────────────────────
+    _enrichRecords(allData) {
+        if (!this._sidToLoc) this._buildSidToLoc();
+        allData.forEach(d => {
+            const loc = this._sidToLoc.get(String(d.survey_id)) || {};
+            d._city = loc.city || '—';
+            d._mc = loc.mc || '—';
+            d._shortMC = this._shortMC(d._mc);
+            d._effectiveStatus = (d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50)) ? 'unsent' : 'delivered';
+            if (d.target_lat == null && loc.portal && loc.portal.lat != null) {
+                d.target_lat = loc.portal.lat;
+                d.target_lng = loc.portal.lng;
+            }
+        });
+        return allData;
+    },
+
+    // Lazy-fills the GPS columns for records that lack them (delivery cache has
+    // no GPS). Only runs on CSV export, fetching just the missing columns for
+    // the filtered survey IDs in small chunks.
+    async _ensureGpsForExport(records) {
+        if (!window._supabase || !this._selectedMonth) return records;
+        const missing = records.filter(d => d.capture_gps_lat == null && d.capture_gps_lng == null);
+        if (missing.length === 0) return records;
+        const ids = missing.map(d => String(d.survey_id)).filter(Boolean);
+        if (ids.length === 0) return records;
+        const idSet = new Set(ids);
+        const step = 300;
+        for (let i = 0; i < ids.length; i += step) {
+            const chunk = ids.slice(i, i + step);
+            try {
+                const { data } = await window._supabase
+                    .from('delivery_log')
+                    .select('survey_id, capture_gps_lat, capture_gps_lng, target_lat, target_lng')
+                    .ilike('bill_month', this._selectedMonth)
+                    .in('survey_id', chunk);
+                (data || []).forEach(g => {
+                    const rec = records.find(d => String(d.survey_id) === String(g.survey_id));
+                    if (rec) {
+                        rec.capture_gps_lat = g.capture_gps_lat;
+                        rec.capture_gps_lng = g.capture_gps_lng;
+                        if (rec.target_lat == null) { rec.target_lat = g.target_lat; rec.target_lng = g.target_lng; }
+                        idSet.delete(String(g.survey_id));
+                    }
+                });
+            } catch (e) { console.warn("[StaffPerf] GPS enrich failed:", e); }
+        }
+        return records;
     },
 
     // ─── Fetch full month cache once, then filter in-memory ───
@@ -27933,6 +27968,19 @@ window.StaffPerformanceModal = {
                     this._deliveredSIDs = new Set(cached.map(d => String(d.survey_id)));
                     return;
                 }
+            } catch (e) { /* fall through */ }
+            // EGRESS: Reuse the delivery module's IndexedDB cache (avoids a duplicate
+            // full Supabase fetch). The delivery cache has 6 core columns (survey_id,
+            // status, distance_to_target, staff_email, staff_name, delivered_at) but
+            // no GPS columns — those are only needed for the CSV export helper.
+            try {
+                const deliveryCached = await _dbGetCache('delivery:' + billMonth);
+                if (deliveryCached && Array.isArray(deliveryCached) && deliveryCached.length) {
+                    this._cachedRecords = this._enrichRecords(deliveryCached);
+                    this._cachedMonth = billMonth;
+                    this._deliveredSIDs = new Set(deliveryCached.map(d => String(d.survey_id)));
+                    return;
+                }
             } catch (e) { /* fall through to full fetch */ }
         }
         // Parallel paginated fetch (batched concurrency; same egress as before)
@@ -27941,7 +27989,7 @@ window.StaffPerformanceModal = {
         const countRes = await window._supabase
             .from('delivery_log')
             .select('survey_id', { count: 'exact', head: true })
-            .eq('bill_month', billMonth);
+            .ilike('bill_month', billMonth);
         const pageCount = Math.ceil((countRes.count || 0) / step);
         const allData = [];
         async function fetchPages(buildQuery, pages) {
@@ -27962,24 +28010,12 @@ window.StaffPerformanceModal = {
             return window._supabase
                 .from('delivery_log')
                 .select('survey_id, status, delivered_at, staff_email, staff_name, distance_to_target, capture_gps_lat, capture_gps_lng, target_lat, target_lng')
-                .eq('bill_month', billMonth)
+                .ilike('bill_month', billMonth)
                 .order('delivered_at', { ascending: true })
                 .range(p * step, p * step + step - 1);
         }, pageCount);
         allData.push(...pageData);
-        if (!this._sidToLoc) this._buildSidToLoc();
-        allData.forEach(d => {
-            const loc = this._sidToLoc.get(String(d.survey_id)) || {};
-            d._city = loc.city || '—';
-            d._mc = loc.mc || '—';
-            d._shortMC = this._shortMC(d._mc);
-            d._effectiveStatus = (d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50)) ? 'unsent' : 'delivered';
-            if (d.target_lat == null && loc.portal && loc.portal.lat != null) {
-                d.target_lat = loc.portal.lat;
-                d.target_lng = loc.portal.lng;
-            }
-        });
-        this._cachedRecords = allData;
+        this._cachedRecords = this._enrichRecords(allData);
         this._cachedMonth = billMonth;
         this._deliveredSIDs = new Set(allData.map(d => String(d.survey_id)));
         // EGRESS: Persist to per-month IndexedDB cache so re-opens skip the full fetch
@@ -28588,7 +28624,7 @@ window.StaffPerformanceModal = {
         const cityMap = new Map();
         this._sidToLoc.forEach((loc, sid) => {
             if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
-            if (!this._isBillingHouse(loc)) return;
+            if (!this._isBillActive(sid)) return;
             const city = loc.city || '—';
             if (!cityMap.has(city)) {
                 cityMap.set(city, {
@@ -28643,7 +28679,7 @@ window.StaffPerformanceModal = {
         // Count houses per MC from RAW_DATA
         this._sidToLoc.forEach((loc, sid) => {
             if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
-            if (!this._isBillingHouse(loc)) return;
+            if (!this._isBillActive(sid)) return;
             const cityEntry = cityMap.get(loc.city);
             if (!cityEntry) return;
             const short = this._shortMC(loc.mc);
@@ -28660,7 +28696,7 @@ window.StaffPerformanceModal = {
         // Compute undelivered per MC
         this._sidToLoc.forEach((loc, sid) => {
             if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
-            if (!this._isBillingHouse(loc)) return;
+            if (!this._isBillActive(sid)) return;
             const cityEntry = cityMap.get(loc.city);
             if (!cityEntry) return;
             const short = this._shortMC(loc.mc);
@@ -28925,7 +28961,7 @@ window.StaffPerformanceModal = {
         let idx = 0;
         this._sidToLoc.forEach((loc, sid) => {
             if (this._selectedCity !== 'all' && loc.city !== this._selectedCity) return;
-            if (!this._isBillingHouse(loc)) return;
+            if (!this._isBillActive(sid)) return;
             if (this._deliveredSIDs.has(sid)) return;
             idx++;
             const rec = window.SID_MAP ? window.SID_MAP.get(sid) : null;
@@ -28958,7 +28994,7 @@ window.StaffPerformanceModal = {
         if (window.App && App.showToast) App.showToast('Undelivered CSV exported ✅');
     },
 
-    exportCSV() {
+    async exportCSV() {
         const isMc = this._activeTab === 'mc';
 
         if (isMc) {
@@ -28978,6 +29014,9 @@ window.StaffPerformanceModal = {
                 if (window.App && App.showToast) App.showToast('No data to export.');
                 return;
             }
+
+            // Delivery cache lacks GPS columns — fetch them on demand for export only
+            await this._ensureGpsForExport(filtered);
 
             filtered.sort((a, b) => {
                 const mcCmp = (a._shortMC || '').localeCompare(b._shortMC || '');
@@ -29180,7 +29219,7 @@ window.DeliveryForensics = {
             var { data } = await window._supabase
                 .from('delivery_log')
                 .select('survey_id, status, delivered_at, staff_email, staff_name, distance_to_target, capture_gps_lat, capture_gps_lng')
-                .eq('bill_month', billMonth)
+                .ilike('bill_month', billMonth)
                 .eq('staff_email', staffEmail)
                 .order('delivered_at', { ascending: true })
                 .range(from, from + step - 1);
@@ -29591,7 +29630,7 @@ window.onload = () => {
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js?v=8.1')
+            navigator.serviceWorker.register('./sw.js?v=8.2')
                 .then(registration => {
                     console.log('SW registered successfully:', registration.scope);
                 })

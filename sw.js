@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rsp-v9-cache';
+const CACHE_NAME = 'rsp-v10-cache';
 const PRECACHE_ASSETS = [
     './',
     './index.html',
