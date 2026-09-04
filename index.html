@@ -9819,7 +9819,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.09.03.1259</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.09.04.1304</span>
             </div>
         </div>
         
@@ -11500,7 +11500,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.09.03.1259";
+window.DATA_VERSION = "v2026.09.04.1304";
 window.DATA_CHUNKS_COUNT = 13;
 window.DELIVERY_SEQUENCE_MONTHS = {"jul2026": {"parts": 1, "houses": 80473}};
 window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
@@ -13211,12 +13211,15 @@ async function softRefresh() {
     try {
         if (typeof fetchAppSettings === 'function') await fetchAppSettings();
         if (window.DeliveryModule && DeliveryModule.loadDeliveryCache) await DeliveryModule.loadDeliveryCache();
-        if (window.Settings && Settings.fetchGlobalVerifications) await Settings.fetchGlobalVerifications(true);
+        // EGRESS: non-force — honours the 5-min / IndexedDB cache so a manual
+        // refresh does not re-pull the whole verified month every time.
+        if (window.Settings && Settings.fetchGlobalVerifications) await Settings.fetchGlobalVerifications(false);
         if (window.SpatialRouter) {
             if (SpatialRouter.loadRoutes) await SpatialRouter.loadRoutes();
             if (SpatialRouter.loadDeliveryRoutes) await SpatialRouter.loadDeliveryRoutes();
         }
-        if (window.DriveSync && DriveSync.fetchAllSyncedData) await DriveSync.fetchAllSyncedData();
+        // EGRESS: non-force — DriveSync now serves a 24h local cache.
+        if (window.DriveSync && DriveSync.fetchAllSyncedData) await DriveSync.fetchAllSyncedData(false);
         if (App && App.apply) { App.apply(true); App.render(); }
         if (window.ListView && ListView.render) ListView.render();
         if (App && App.showToast) App.showToast('Data refreshed ✓');
@@ -16280,12 +16283,55 @@ const DriveSync = {
 
     async fetchAllSyncedData(force = false) {
         if (!this.APP_URL) return;
-
-        // RELIABILITY CACHE: Use session memory if fresh
         const now = Date.now();
+
+        // EGRESS: drive_image_counts is effectively static (no new uploads).
+        // Restore from the persistent local cache first, and only hit Supabase
+        // when there is no usable cache or it is older than DRIVE_CACHE_MS.
+        const DRIVE_CACHE_MS = 24 * 60 * 60 * 1000; // 24h
+
+        const restoreFromLocal = () => {
+            try {
+                const raw = localStorage.getItem('drive_sync_cache');
+                if (!raw) return false;
+                const parsed = JSON.parse(raw);
+                if (!parsed || !parsed.data || typeof parsed.data !== 'object') return false;
+                State.syncedData = Object.assign(State.syncedData || {}, parsed.data);
+                if (parsed.total !== undefined) State.totalDriveImages = parsed.total;
+                this._lastSync = parsed.timestamp || 0;
+                return true;
+            } catch (e) { return false; }
+        };
+
+        // 1. Session memory fresh -> skip entirely
         if (!force && (now - this._lastSync < this._cacheExpiry) && Object.keys(State.syncedData || {}).length > 0) {
             console.log("[DriveSync] Using fresh session cache for Synced IDs");
             return;
+        }
+
+        // 2. Persistent local cache fresh -> restore and skip Supabase
+        if (!force && (now - this._lastSync >= this._cacheExpiry)) {
+            const localOk = restoreFromLocal();
+            if (localOk && (now - this._lastSync) < DRIVE_CACHE_MS && Object.keys(State.syncedData || {}).length > 0) {
+                console.log("[DriveSync] Using 24h local cache for Synced IDs (last:", new Date(this._lastSync).toLocaleString() + ")");
+                const badges = [
+                    document.getElementById('sync-server-badge'),
+                    document.getElementById('sync-server-badge-sidebar')
+                ].filter(b => b);
+                badges.forEach(b => {
+                    b.innerHTML = '<span class="material-icons-round" style="font-size:10px;">cached</span> <span style="font-size:8px;">🟢 CACHED</span>';
+                    b.style.background = '#f0fdf4';
+                    b.style.color = '#15803d';
+                    b.style.borderColor = '#bbf7d0';
+                    b.title = `Last sync: ${new Date(this._lastSync).toLocaleTimeString()}`;
+                    b.style.cursor = 'default';
+                });
+                if (document.getElementById('f-drive-only')) {
+                    State.driveOnlyFilter = document.getElementById('f-drive-only').checked;
+                }
+                if (typeof App !== 'undefined' && App.apply) App.apply();
+                return;
+            }
         }
 
         console.log(`[DriveSync] fetchAllSyncedData via Supabase started. force=${force}`);
@@ -16353,7 +16399,8 @@ const DriveSync = {
 
                 localStorage.setItem('drive_sync_cache', JSON.stringify({
                     timestamp: now,
-                    data: normalized
+                    data: normalized,
+                    total: State.totalDriveImages
                 }));
 
                 console.log(`[DriveSync] Supabase counts loaded: ${allData.length} records with images`);
@@ -27477,12 +27524,32 @@ window.DeliveryModule = {
     async loadDeliveryCache(force = false) {
         if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
         const billMonth = window.ACTIVE_BILLING_MONTH;
+        const SYNC_WINDOW_MS = 15 * 60 * 1000; // 15 min between network syncs
         try {
             // 1. Try IndexedDB cache first (avoids re-fetching all rows on every app open)
             var cachedData = null;
             if (!force && typeof _dbGetCache === 'function') {
                 cachedData = await _dbGetCache('delivery:' + billMonth);
             }
+
+            // EGRESS: if we already have the cache AND synced recently, skip the
+            // network round-trip entirely (badge stays fresh from the local copy).
+            // Force, or a cold device with no cache, still does a full sync.
+            if (!force && cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
+                try {
+                    var lastSync = await _dbGetCache('delsync:' + billMonth);
+                    if (lastSync && (Date.now() - Number(lastSync)) < SYNC_WINDOW_MS) {
+                        this._deliveryCache = new Map(cachedData.map(d => {
+                            var eff = d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50) ? 'unsent' : 'delivered';
+                            var nm = d.staff_name || (d.staff_email ? d.staff_email.split('@')[0] : '');
+                            return [String(d.survey_id), { status: eff, staffName: nm, deliveredAt: d.delivered_at || '' }];
+                        }));
+                        console.log(`[DeliveryModule] Delivery cache fresh (<15m) - skipped network sync (${this._deliveryCache.size} records)`);
+                        return;
+                    }
+                } catch (e) { /* fall through to delta sync */ }
+            }
+
             if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
                 this._deliveryCache = new Map(cachedData.map(d => {
                     var effectiveStatus = d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50) ? 'unsent' : 'delivered';
@@ -27549,6 +27616,15 @@ window.DeliveryModule = {
                     delivered_at: d.delivered_at
                 }));
                 await _dbSetCache('delivery:' + billMonth, compact);
+                // EGRESS: mark when this device last synced the month's deliveries
+                try {
+                    await _dbSetCache('delsync:' + billMonth, String(Date.now()));
+                } catch (e) { /* non-fatal */ }
+            } else if (merged.length === 0 && typeof _dbSetCache === 'function') {
+                // Even with no new rows, record the sync time so we skip repeats
+                try {
+                    await _dbSetCache('delsync:' + billMonth, String(Date.now()));
+                } catch (e) { /* non-fatal */ }
             }
             console.log(`[DeliveryModule] Delivery cache synced: ${this._deliveryCache.size} records (delta ${newData.length})`);
         } catch (e) {
