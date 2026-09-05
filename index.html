@@ -9819,7 +9819,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.09.04.1304</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.09.05.1011</span>
             </div>
         </div>
         
@@ -11088,6 +11088,288 @@ input[type=number] {
 
 <script>
     
+// === 00_supabase_accounts.js ===
+// === 00_supabase_accounts.js ===
+// Two-Account Egress Sharing for delivery_log (WP3)
+// Loaded before 01_auth.js so the secondary client is available everywhere.
+
+// ─── Account Config ─────────────────────────────────────────────────────────
+// Primary (First App)  — meter resets ~7th, current home of delivery_log
+const SUPABASE_ACCOUNTS = {
+    primary: {
+        id: 'primary',
+        label: 'First App',
+        url: 'https://ipegpbgcektdtbnfvhvc.supabase.co',
+        key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwZWdwYmdjZWt0ZHRibmZ2aHZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwOTYzNjMsImV4cCI6MjA4MDY3MjM2M30.FHe6qYLmqvvTjRbKQQqHWNpsDbCBCeT9hPMgnAyE2bE',
+        resetDay: 7
+    },
+    secondary: {
+        id: 'secondary',
+        label: 'Second App',
+        url: 'https://qrxbsoqepfaryolwcedk.supabase.co',
+        key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyeGJzb3FlcGZhcnlvbHdjZWRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NTI2OTYsImV4cCI6MjA5NTAyODY5Nn0.m7sayTVcxVCyQCn8r1TL4YtNkZDwV5IreFb7e8mQ4Tg',
+        resetDay: 22
+    }
+};
+
+// Currently active account for delivery_log traffic. Default = primary.
+// Updated from app_settings.delivery_account on boot, then by Settings UI.
+window.DELIVERY_ACCOUNT_ID = window.DELIVERY_ACCOUNT_ID || 'primary';
+window.DELIVERY_LAST_SYNC = window.DELIVERY_LAST_SYNC || null;  // ISO string or null
+
+// Create both clients once. window._supabase stays as the primary client
+// (used for app_settings, survey_units, verified_houses, etc.).
+window._supabase_primary = window._supabase_primary
+    || supabase.createClient(SUPABASE_ACCOUNTS.primary.url, SUPABASE_ACCOUNTS.primary.key);
+
+window._supabase_secondary = window._supabase_secondary
+    || supabase.createClient(SUPABASE_ACCOUNTS.secondary.url, SUPABASE_ACCOUNTS.secondary.key);
+
+// Backwards compatibility: window._supabase is the primary client.
+// Code that reads app_settings, user roles, etc. continues to work unchanged.
+if (typeof window._supabase === 'undefined' || !window._supabase) {
+    window._supabase = window._supabase_primary;
+}
+
+// ─── Delivery-Log Account Helpers ───────────────────────────────────────────
+// deliveryLogClient() returns the Supabase client whose delivery_log table
+// is currently "active" per the admin toggle. Use this for EVERY delivery_log
+// call: select, insert, update, upsert, delete, count, range, etc.
+window.deliveryLogClient = function deliveryLogClient() {
+    const id = window.DELIVERY_ACCOUNT_ID || 'primary';
+    if (id === 'secondary') return window._supabase_secondary;
+    return window._supabase_primary;
+};
+
+// deliveryLogAccount() returns the account metadata for the active account.
+window.deliveryLogAccount = function deliveryLogAccount() {
+    const id = window.DELIVERY_ACCOUNT_ID || 'primary';
+    return SUPABASE_ACCOUNTS[id] || SUPABASE_ACCOUNTS.primary;
+};
+
+// deliveryLogOtherAccount() returns the OTHER account (for sync target / display).
+window.deliveryLogOtherAccount = function deliveryLogOtherAccount() {
+    const id = window.DELIVERY_ACCOUNT_ID || 'primary';
+    return id === 'secondary' ? SUPABASE_ACCOUNTS.primary : SUPABASE_ACCOUNTS.secondary;
+};
+
+// Set the active account by id. Persists nothing by itself — the caller is
+// expected to write to app_settings.delivery_account as well.
+window.setDeliveryAccount = function setDeliveryAccount(id) {
+    if (!SUPABASE_ACCOUNTS[id]) {
+        console.warn('[DeliveryAccount] Unknown account id:', id);
+        return false;
+    }
+    window.DELIVERY_ACCOUNT_ID = id;
+    console.log('[DeliveryAccount] Switched to', SUPABASE_ACCOUNTS[id].label);
+    return true;
+};
+
+// Fetch the toggle from app_settings and apply it. Safe to call multiple times.
+// Called from 01_auth.js fetchAppSettings() so the value is current on boot.
+async function fetchDeliveryAccountSetting() {
+    if (!window._supabase_primary) return;
+    try {
+        const { data, error } = await window._supabase_primary
+            .from('app_settings')
+            .select('key, value')
+            .in('key', ['delivery_account', 'delivery_last_sync']);
+        if (error) {
+            console.warn('[DeliveryAccount] Failed to fetch toggle from app_settings:', error);
+            return;
+        }
+        if (data) {
+            const acct = data.find(d => d.key === 'delivery_account');
+            if (acct && SUPABASE_ACCOUNTS[acct.value]) {
+                window.DELIVERY_ACCOUNT_ID = acct.value;
+                console.log('[DeliveryAccount] Loaded from app_settings:', acct.value);
+            }
+            const lastSync = data.find(d => d.key === 'delivery_last_sync');
+            if (lastSync && lastSync.value) {
+                window.DELIVERY_LAST_SYNC = lastSync.value;
+            }
+        }
+    } catch (e) {
+        console.warn('[DeliveryAccount] Exception while fetching toggle:', e);
+    }
+}
+window.fetchDeliveryAccountSetting = fetchDeliveryAccountSetting;
+
+// Persist the toggle to app_settings (uses the same select-then-update/insert
+// pattern as Settings.updateBillingMonth in 16_settings.js, so it tolerates
+// the row not existing yet). Uses the primary client — app_settings lives there.
+async function saveDeliveryAccountSetting(id) {
+    if (!SUPABASE_ACCOUNTS[id]) {
+        throw new Error('Unknown account id: ' + id);
+    }
+    if (!window._supabase_primary) {
+        throw new Error('Primary Supabase client not available');
+    }
+    const { data: rows, error: selErr } = await window._supabase_primary
+        .from('app_settings')
+        .select('key')
+        .eq('key', 'delivery_account')
+        .limit(1);
+    if (selErr) console.warn('[DeliveryAccount] Select failed:', selErr);
+    const existing = rows && rows.length > 0 ? rows[0] : null;
+    const now = new Date().toISOString();
+    let error;
+    if (existing) {
+        const r = await window._supabase_primary
+            .from('app_settings')
+            .update({ value: id, updated_at: now })
+            .eq('key', 'delivery_account');
+        error = r.error;
+    } else {
+        const r = await window._supabase_primary
+            .from('app_settings')
+            .insert({ key: 'delivery_account', value: id, updated_at: now });
+        error = r.error;
+    }
+    if (error) throw error;
+    return true;
+}
+window.saveDeliveryAccountSetting = saveDeliveryAccountSetting;
+
+// Persist the last sync timestamp (called by the sync script via API, or
+// manually after running it). Optional convenience.
+async function saveDeliveryLastSync(isoTs) {
+    const ts = isoTs || new Date().toISOString();
+    window.DELIVERY_LAST_SYNC = ts;
+    if (!window._supabase_primary) return;
+    try {
+        const { data: rows } = await window._supabase_primary
+            .from('app_settings')
+            .select('key')
+            .eq('key', 'delivery_last_sync')
+            .limit(1);
+        const existing = rows && rows.length > 0 ? rows[0] : null;
+        if (existing) {
+            await window._supabase_primary
+                .from('app_settings')
+                .update({ value: ts, updated_at: new Date().toISOString() })
+                .eq('key', 'delivery_last_sync');
+        } else {
+            await window._supabase_primary
+                .from('app_settings')
+                .insert({ key: 'delivery_last_sync', value: ts, updated_at: new Date().toISOString() });
+        }
+    } catch (e) {
+        console.warn('[DeliveryAccount] Failed to save last sync:', e);
+    }
+}
+window.saveDeliveryLastSync = saveDeliveryLastSync;
+
+// ─── Public API: SupabaseAccounts ────────────────────────────────────────────
+// Single, shadow-proof entry point for the Settings UI. The buttons in the
+// ⚙️ App Config tab call SupabaseAccounts.toggle('primary' | 'secondary').
+// Defined here (not in 16_settings.js) so the global is owned by a file that
+// has no other object named "Settings" that could shadow it at click time.
+window.SupabaseAccounts = {
+    current() {
+        return window.DELIVERY_ACCOUNT_ID || 'primary';
+    },
+    active() {
+        return SUPABASE_ACCOUNTS[this.current()] || SUPABASE_ACCOUNTS.primary;
+    },
+    other() {
+        return SUPABASE_ACCOUNTS[this.current()] === SUPABASE_ACCOUNTS.secondary
+            ? SUPABASE_ACCOUNTS.primary
+            : SUPABASE_ACCOUNTS.secondary;
+    },
+    // Show a toast via App/LayerManager if available, otherwise log.
+    _toast(msg, kind) {
+        try {
+            if (window.App && typeof window.App.showToast === 'function') {
+                window.App.showToast(msg);
+                return;
+            }
+        } catch (e) {}
+        try {
+            if (window.LayerManager && typeof window.LayerManager.showToast === 'function') {
+                window.LayerManager.showToast(msg);
+                return;
+            }
+        } catch (e) {}
+        console.log('[DeliveryAccount]', msg);
+    },
+    // Re-paint the toggle card's text + button highlight without depending on
+    // any external Settings object. Safe to call any time.
+    renderInfo() {
+        try {
+            const el = document.getElementById('delivery-account-current');
+            const lastSyncEl = document.getElementById('delivery-last-sync');
+            const id = this.current();
+            const acct = SUPABASE_ACCOUNTS[id] || SUPABASE_ACCOUNTS.primary;
+            const other = this.other();
+            if (el) {
+                el.innerHTML = "Currently active: <b>" + acct.label + "</b> · resets ~" + acct.resetDay + "th · other: " + other.label;
+            }
+            if (lastSyncEl) {
+                if (window.DELIVERY_LAST_SYNC) {
+                    try {
+                        lastSyncEl.innerText = "Last sync: " + new Date(window.DELIVERY_LAST_SYNC).toLocaleString();
+                    } catch (e) {
+                        lastSyncEl.innerText = "Last sync: " + window.DELIVERY_LAST_SYNC;
+                    }
+                } else {
+                    lastSyncEl.innerText = "Last sync: —";
+                }
+            }
+            const btnP = document.getElementById('btn-set-primary');
+            const btnS = document.getElementById('btn-set-secondary');
+            if (btnP) btnP.style.background = id === 'primary' ? '#dbeafe' : '';
+            if (btnS) btnS.style.background = id === 'secondary' ? '#dbeafe' : '';
+        } catch (e) {
+            console.warn('[DeliveryAccount] renderInfo failed:', e);
+        }
+    },
+    // The button click handler. Bypasses confirm() if running headless.
+    async toggle(id) {
+        if (!SUPABASE_ACCOUNTS[id]) {
+            this._toast("Unknown delivery account: " + id);
+            return;
+        }
+        if (id === this.current()) {
+            this._toast("Already set to " + SUPABASE_ACCOUNTS[id].label);
+            return;
+        }
+        const acct = SUPABASE_ACCOUNTS[id];
+        const other = this.other();
+        const msg = "Switch delivery_log writes to " + acct.label + "?\n\n" +
+            "Only do this AFTER field deliveries have stopped for the day, " +
+            "and AFTER running the nightly sync script (--full) to keep both accounts in sync.\n\n" +
+            "Currently active: " + SUPABASE_ACCOUNTS[this.current()].label + "\n" +
+            "Will switch to: " + acct.label + " (meter resets ~" + acct.resetDay + "th)\n" +
+            "Other account (read-only for delivery_log): " + other.label;
+        // confirm() may be blocked in some embedded contexts; guard it.
+        let ok = true;
+        try { if (typeof window.confirm === 'function') ok = window.confirm(msg); } catch (e) { ok = true; }
+        if (!ok) return;
+
+        try {
+            if (typeof window.saveDeliveryAccountSetting === 'function') {
+                await window.saveDeliveryAccountSetting(id);
+            } else {
+                throw new Error('saveDeliveryAccountSetting is not available');
+            }
+            window.setDeliveryAccount(id);
+            this.renderInfo();
+            // Also try to re-render the whole Settings UI if LayerManager is around.
+            try {
+                if (window.LayerManager && typeof window.LayerManager.renderSettingsUI === 'function') {
+                    window.LayerManager.renderSettingsUI();
+                }
+            } catch (e) { /* non-fatal */ }
+            this._toast("Delivery log now writes to " + acct.label + " ✅");
+        } catch (e) {
+            console.error('[DeliveryAccount] Failed to set delivery account:', e);
+            this._toast("Failed to save: " + (e && e.message ? e.message : e));
+        }
+    }
+};
+
+
 // === 01_auth.js ===
 // === 01_auth.js ===
 // Authentication & Initialization Logic
@@ -11106,67 +11388,132 @@ window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before
 window.ACTIVE_BILLING_MONTH = 'loading...';
 window.DATA_VERSION = window.DATA_VERSION || 'v1'; // Use injected version if present
 
-async function fetchAppSettings() {
+// Pulls every app_setting row we care about in one round-trip and applies the
+// values to the in-memory globals. Idempotent and safe to call repeatedly
+// (used by the periodic poll below as well as the initial login).
+async function refreshAllAppSettings() {
     try {
         const { data, error } = await window._supabase
             .from('app_settings')
             .select('key, value')
-            .in('key', ['active_billing_month', 'data_version', 'hide_zubair_sids', 'delivery_sequence_month']);
+            .in('key', [
+                'active_billing_month',
+                'data_version',
+                'hide_zubair_sids',
+                'delivery_sequence_month',
+                'delivery_account',
+                'delivery_last_sync',
+            ]);
 
         if (error) throw error;
-        if (data) {
+        if (data && data.length) {
             const billing = data.find(d => d.key === 'active_billing_month');
             const version = data.find(d => d.key === 'data_version');
             const hideZubair = data.find(d => d.key === 'hide_zubair_sids');
             const seqMonth = data.find(d => d.key === 'delivery_sequence_month');
-            
-            if (billing) window.ACTIVE_BILLING_MONTH = String(billing.value).toLowerCase();
+
+            // active_billing_month: only overwrite if missing or empty, since the
+            // initial resolution path (below) sets sensible fallbacks and we
+            // don't want a periodic poll to clobber a still-valid value.
+            if (billing && billing.value) {
+                window.ACTIVE_BILLING_MONTH = String(billing.value).toLowerCase();
+            } else if (!window.ACTIVE_BILLING_MONTH || window.ACTIVE_BILLING_MONTH === 'loading...') {
+                window.ACTIVE_BILLING_MONTH = 'feb2026';
+            }
             if (version) window.DATA_VERSION = version.value;
             if (hideZubair) State.hideZubairSids = String(hideZubair.value) === 'true';
             if (seqMonth && seqMonth.value) window.DELIVERY_SEQUENCE_MONTH = seqMonth.value;
-            
-            console.log("App Settings:", { billing: window.ACTIVE_BILLING_MONTH, version: window.DATA_VERSION, hideZubairSids: State.hideZubairSids, deliverySequenceMonth: window.DELIVERY_SEQUENCE_MONTH });
-        } else {
-            console.warn("active_billing_month not found in app_settings, falling back to default.");
-            window.ACTIVE_BILLING_MONTH = 'feb2026'; // Fallback
         }
     } catch (e) {
-        console.error("Failed to fetch app settings:", e);
-        window.ACTIVE_BILLING_MONTH = 'feb2026'; // Emergency Fallback
-    }
-
-    // Resolve the delivery sequence month:
-    // prefer the saved setting, else default to the active billing month
-    // if that has data, otherwise the latest available sequence month.
-    var months = window.DELIVERY_SEQUENCE_MONTHS || {};
-    var saved = window.DELIVERY_SEQUENCE_MONTH || '';
-    var active = window.ACTIVE_BILLING_MONTH || '';
-    var available = Object.keys(months);
-    if (available.indexOf(saved) < 0) {
-        if (available.indexOf(active) >= 0) {
-            window.DELIVERY_SEQUENCE_MONTH = active;
-        } else if (available.length) {
-            // Sort month keys chronologically (e.g. jan, feb, mar...)
-            var monthIdx = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-            available.sort(function(a,b){
-                var ma = a.match(/^([a-z]+)(\d+)$/);
-                var mb = b.match(/^([a-z]+)(\d+)$/);
-                if (!ma || !mb) return a < b ? -1 : a > b ? 1 : 0;
-                if (ma[2] !== mb[2]) return parseInt(ma[2],10) - parseInt(mb[2],10);
-                return monthIdx.indexOf(ma[1]) - monthIdx.indexOf(mb[1]);
-            });
-            window.DELIVERY_SEQUENCE_MONTH = available.slice(-1)[0];
-        } else {
-            window.DELIVERY_SEQUENCE_MONTH = active || '';
+        // Quiet on poll failures; loud on first load via fetchAppSettings wrapper.
+        if (!window.__APP_SETTINGS_REFRESH_QUIET__) {
+            console.warn("[App] refreshAllAppSettings failed:", e);
         }
     }
-    console.log("[App] Delivery sequence month:", window.DELIVERY_SEQUENCE_MONTH);
+
+    // delivery_account toggle (owned by 00_supabase_accounts.js). Tolerant
+    // when the row doesn't exist yet.
+    if (typeof window.fetchDeliveryAccountSetting === 'function') {
+        try { await window.fetchDeliveryAccountSetting(); } catch (e) { /* tolerate */ }
+    }
+
+    // Re-paint the toggle card if Settings is open.
+    if (typeof window.SupabaseAccounts !== 'undefined' && typeof window.SupabaseAccounts.renderInfo === 'function') {
+        try { window.SupabaseAccounts.renderInfo(); } catch (e) { /* non-fatal */ }
+    }
+}
+window.refreshAllAppSettings = refreshAllAppSettings;
+
+// Periodic poll: re-read all settings (including the delivery_account toggle)
+// every 60 seconds. This is the permanent fix for cached-toggle / cached-role
+// problems — any change the admin makes in Settings takes effect on every
+// connected device within one minute, without re-login.
+function startSettingsAutoRefresh() {
+    if (window.__SETTINGS_AUTOREFRESH_STARTED__) return;
+    window.__SETTINGS_AUTOREFRESH_STARTED__ = true;
+    const INTERVAL_MS = 60 * 1000;
+    setInterval(async () => {
+        try {
+            await window.refreshAllAppSettings();
+        } catch (e) {
+            console.warn("[App] settings auto-refresh tick failed:", e);
+        }
+    }, INTERVAL_MS);
+    console.log("[App] settings auto-refresh started (every 60s)");
+}
+window.startSettingsAutoRefresh = startSettingsAutoRefresh;
+
+async function fetchAppSettings() {
+    // 1) Pull and apply every setting (including the delivery_account toggle).
+    await refreshAllAppSettings();
+
+    // 2) First-load fallback: if active_billing_month never resolved, default.
+    if (!window.ACTIVE_BILLING_MONTH || window.ACTIVE_BILLING_MONTH === 'loading...') {
+        console.warn("active_billing_month not found in app_settings, falling back to default.");
+        window.ACTIVE_BILLING_MONTH = 'feb2026';
+    }
+
+    // 3) Resolve the delivery sequence month (only on first load — don't
+    // re-resolve on each poll or we'd overwrite a value the admin just set).
+    if (!window.__DELIVERY_SEQUENCE_MONTH_RESOLVED__) {
+        window.__DELIVERY_SEQUENCE_MONTH_RESOLVED__ = true;
+        var months = window.DELIVERY_SEQUENCE_MONTHS || {};
+        var saved = window.DELIVERY_SEQUENCE_MONTH || '';
+        var active = window.ACTIVE_BILLING_MONTH || '';
+        var available = Object.keys(months);
+        if (available.indexOf(saved) < 0) {
+            if (available.indexOf(active) >= 0) {
+                window.DELIVERY_SEQUENCE_MONTH = active;
+            } else if (available.length) {
+                // Sort month keys chronologically (e.g. jan, feb, mar...)
+                var monthIdx = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+                available.sort(function(a,b){
+                    var ma = a.match(/^([a-z]+)(\d+)$/);
+                    var mb = b.match(/^([a-z]+)(\d+)$/);
+                    if (!ma || !mb) return a < b ? -1 : a > b ? 1 : 0;
+                    if (ma[2] !== mb[2]) return parseInt(ma[2],10) - parseInt(mb[2],10);
+                    return monthIdx.indexOf(ma[1]) - monthIdx.indexOf(mb[1]);
+                });
+                window.DELIVERY_SEQUENCE_MONTH = available.slice(-1)[0];
+            } else {
+                window.DELIVERY_SEQUENCE_MONTH = active || '';
+            }
+        }
+        console.log("[App] Delivery sequence month:", window.DELIVERY_SEQUENCE_MONTH);
+    }
+
+    // 4) Start the periodic poll so future settings changes propagate.
+    startSettingsAutoRefresh();
 }
 
-// Supabase Config
-const SUPABASE_URL = "https://ipegpbgcektdtbnfvhvc.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwZWdwYmdjZWt0ZHRibmZ2aHZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwOTYzNjMsImV4cCI6MjA4MDY3MjM2M30.FHe6qYLmqvvTjRbKQQqHWNpsDbCBCeT9hPMgnAyE2bE";
-window._supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Supabase Config — primary client created in 00_supabase_accounts.js.
+// We re-use the primary client (which is also window._supabase) for everything
+// except delivery_log reads/writes, which go through window.deliveryLogClient().
+const SUPABASE_URL = (typeof SUPABASE_ACCOUNTS !== 'undefined' && SUPABASE_ACCOUNTS.primary) ? SUPABASE_ACCOUNTS.primary.url : "https://ipegpbgcektdtbnfvhvc.supabase.co";
+const SUPABASE_KEY = (typeof SUPABASE_ACCOUNTS !== 'undefined' && SUPABASE_ACCOUNTS.primary) ? SUPABASE_ACCOUNTS.primary.key : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwZWdwYmdjZWt0ZHRibmZ2aHZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwOTYzNjMsImV4cCI6MjA4MDY3MjM2M30.FHe6qYLmqvvTjRbKQQqHWNpsDbCBCeT9hPMgnAyE2bE";
+if (!window._supabase) {
+    window._supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
 
 // Simple JWT Decoder
 function parseJwt(token) {
@@ -11500,7 +11847,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.09.04.1304";
+window.DATA_VERSION = "v2026.09.05.1011";
 window.DATA_CHUNKS_COUNT = 13;
 window.DELIVERY_SEQUENCE_MONTHS = {"jul2026": {"parts": 1, "houses": 80473}};
 window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
@@ -12004,7 +12351,7 @@ const App = {
             let from = 0, step = 1000;
             try {
                 while (true) {
-                    const { data } = await window._supabase
+                    const { data } = await window.deliveryLogClient()
                         .from('delivery_log')
                         .select('survey_id')
                         .ilike('bill_month', window.ACTIVE_BILLING_MONTH)
@@ -17700,7 +18047,38 @@ const LayerManager = {
                                 <span class="material-icons-round">biotech</span> Normalize Historical IDs
                             </button>
                         </div>
+                        <div style="margin-top:20px; background:#fff; border:1px solid #f1f5f9; border-radius:16px; padding:20px;">
+                            <h4 style="margin:0 0 8px 0; color:#0f172a; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">Delivery Log Account (Egress Switch)</h4>
+                            <div style="font-size:10px; color:#64748b; font-weight:600; margin-bottom:14px; line-height:1.5;">
+                                Pick which Supabase project receives <code style="background:#f1f5f9; padding:1px 5px; border-radius:4px;">delivery_log</code> writes.
+                                Only flip this after field deliveries have stopped for the day. The other project is kept in sync by the nightly script.
+                            </div>
+                            <div id="delivery-account-current" style="font-size:11px; color:#475569; font-weight:700; margin-bottom:12px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
+                                Loading current setting...
+                            </div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                                <button id="btn-set-primary" onclick="SupabaseAccounts.toggle('primary')" class="secondary-btn" style="margin:0; justify-content:center; padding:14px 10px;">
+                                    <span class="material-icons-round">storage</span> First App
+                                </button>
+                                <button id="btn-set-secondary" onclick="SupabaseAccounts.toggle('secondary')" class="secondary-btn" style="margin:0; justify-content:center; padding:14px 10px;">
+                                    <span class="material-icons-round">cloud</span> Second App
+                                </button>
+                            </div>
+                            <div id="delivery-last-sync" style="margin-top:14px; font-size:10px; color:#94a3b8; font-weight:600; text-align:right;">
+                                Last sync: —
+                            </div>
+                        </div>
                     </div>`;
+            // After the tab HTML is in the DOM, populate the toggle's current state
+            setTimeout(() => {
+                try {
+                    if (window.SupabaseAccounts && typeof window.SupabaseAccounts.renderInfo === 'function') {
+                        window.SupabaseAccounts.renderInfo();
+                    } else if (typeof Settings !== 'undefined' && Settings.renderDeliveryAccountInfo) {
+                        Settings.renderDeliveryAccountInfo();
+                    }
+                } catch (e) { console.warn('[Settings] delivery-account render failed:', e); }
+            }, 50);
         }
         else if (this.activeTab === '📈 Pin Management') {
             contentHtml += Settings.renderVerificationStats();
@@ -18396,7 +18774,7 @@ const LayerManager = {
         }
 
         function countQ(extraFilter) {
-            var q = applyFilters(window._supabase.from('delivery_log')
+            var q = applyFilters(window.deliveryLogClient().from('delivery_log')
                 .select('survey_id', { count: 'exact' }))
                 .limit(1);
             if (extraFilter) {
@@ -18410,7 +18788,7 @@ const LayerManager = {
         }
 
         try {
-            var todayQ = window._supabase.from('delivery_log')
+            var todayQ = window.deliveryLogClient().from('delivery_log')
                 .select('survey_id', { count: 'exact' })
                 .ilike('bill_month', _dlMonth)
                 .gte('delivered_at', todayStart)
@@ -18445,7 +18823,7 @@ const LayerManager = {
                 var _step = 1000;
                 var _more = true;
                 while (_more) {
-                    var _pageQ = applyFilters(window._supabase.from('delivery_log')
+                    var _pageQ = applyFilters(window.deliveryLogClient().from('delivery_log')
                         .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target'))
                         .order('delivered_at', { ascending: false })
                         .range(_offset, _offset + _step - 1);
@@ -18467,7 +18845,7 @@ const LayerManager = {
                 todayCount = _cityFiltered.filter(function(r) { return r.delivered_at && r.delivered_at >= todayStart; }).length;
                 records = _cityFiltered.slice((page - 1) * pageSize, page * pageSize);
             } else {
-                var dataQ = applyFilters(window._supabase.from('delivery_log')
+                var dataQ = applyFilters(window.deliveryLogClient().from('delivery_log')
                     .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target', { count: 'exact' }))
                     .order('delivered_at', { ascending: false })
                     .range((page - 1) * pageSize, page * pageSize - 1);
@@ -18484,7 +18862,7 @@ const LayerManager = {
             var staffStep = 1000;
             var staffHasMore = true;
             while (staffHasMore) {
-                var staffPageQuery = window._supabase.from('delivery_log')
+                var staffPageQuery = window.deliveryLogClient().from('delivery_log')
                     .select('staff_email')
                     .ilike('bill_month', _dlMonth)
                     .not('staff_email', 'is', null)
@@ -19075,7 +19453,7 @@ const LayerManager = {
 
         for (const [email, displayName] of Object.entries(this._staffNamesCache)) {
             try {
-                const { error } = await window._supabase
+                const { error } = await window.deliveryLogClient()
                     .from('delivery_log')
                     .update({ staff_name: displayName })
                     .eq('staff_email', email)
@@ -19383,7 +19761,7 @@ const LayerManager = {
                 }
 
                 function countQ(extraFilter) {
-                    var q = window._supabase.from('delivery_log')
+                    var q = window.deliveryLogClient().from('delivery_log')
                         .select('survey_id', { count: 'exact' })
                         .ilike('bill_month', self._deliveryActivityMonth)
                         .limit(1);
@@ -19395,12 +19773,12 @@ const LayerManager = {
                 var results = await Promise.all([
                     countQ(null),
                     countQ('delivered'),
-                    dayFilter(window._supabase.from('delivery_log')
+                    dayFilter(window.deliveryLogClient().from('delivery_log')
                         .select('survey_id', { count: 'exact' })
                         .ilike('bill_month', this._deliveryActivityMonth)
                         .or('status.eq.unsent,distance_to_target.gt.50')
                         .limit(1)),
-                    dayFilter(window._supabase.from('delivery_log')
+                    dayFilter(window.deliveryLogClient().from('delivery_log')
                         .select('staff_email')
                         .ilike('bill_month', this._deliveryActivityMonth))
                 ]);
@@ -19435,12 +19813,12 @@ const LayerManager = {
                 }
 
                 // PARALLEL: fetch staff rows (paginated)
-                var staffCountRes = await dayFilter(window._supabase.from('delivery_log')
+                var staffCountRes = await dayFilter(window.deliveryLogClient().from('delivery_log')
                     .select('survey_id', { count: 'exact', head: true })
                     .ilike('bill_month', self._deliveryActivityMonth));
                 var staffPages = Math.ceil((staffCountRes.count || 0) / step);
                 var allStaffRows = await fetchPagesInBatches(function(p) {
-                    return dayFilter(window._supabase.from('delivery_log')
+                    return dayFilter(window.deliveryLogClient().from('delivery_log')
                         .select('staff_email, status, survey_id, distance_to_target')
                         .ilike('bill_month', self._deliveryActivityMonth)
                         .order('delivered_at', { ascending: false })
@@ -19450,12 +19828,12 @@ const LayerManager = {
                 self._deliveryActivityData = null;
 
                 // PARALLEL: fetch main record rows (paginated)
-                var mainCountRes = await dayFilter(window._supabase.from('delivery_log')
+                var mainCountRes = await dayFilter(window.deliveryLogClient().from('delivery_log')
                     .select('survey_id', { count: 'exact', head: true })
                     .ilike('bill_month', self._deliveryActivityMonth));
                 var mainPages = Math.ceil((mainCountRes.count || 0) / step);
                 var mainData = await fetchPagesInBatches(function(p) {
-                    return dayFilter(window._supabase.from('delivery_log')
+                    return dayFilter(window.deliveryLogClient().from('delivery_log')
                         .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
                         .ilike('bill_month', self._deliveryActivityMonth)
                         .order('delivered_at', { ascending: false })
@@ -19463,7 +19841,7 @@ const LayerManager = {
                 }, mainPages);
                 self._deliveryActivityData = mainData;
             } else {
-                var q = window._supabase.from('delivery_log')
+                var q = window.deliveryLogClient().from('delivery_log')
                     .select('survey_id, consumer_name, staff_email, staff_name, status, delivered_at, target_lat, target_lng, capture_gps_lat, capture_gps_lng, distance_to_target')
                     .ilike('bill_month', this._deliveryActivityMonth)
                     .order('delivered_at', { ascending: false });
@@ -20483,7 +20861,7 @@ const LayerManager = {
             try {
                 // Delete from delivery_log in Supabase
                 var ids = Array.from(self._deliveryLogSelected);
-                var { error } = await window._supabase.from('delivery_log')
+                var { error } = await window.deliveryLogClient().from('delivery_log')
                     .delete()
                     .in('survey_id', ids)
                     .ilike('bill_month', self._deliveryLogMonth);
@@ -21561,6 +21939,80 @@ const Settings = {
         document.body.removeChild(link);
         
         App.showToast("Detailed CSV Exported ✅");
+    },
+
+    // ─── WP3: Delivery Log Account toggle ───────────────────────────────────
+    // Legacy wrapper. The Settings UI buttons now call window.SupabaseAccounts.toggle
+    // directly (defined in 00_supabase_accounts.js) to avoid Settings shadowing.
+    // This wrapper remains so any external caller still works.
+    async setDeliveryAccount(id) {
+        if (window.SupabaseAccounts && typeof window.SupabaseAccounts.toggle === 'function') {
+            return window.SupabaseAccounts.toggle(id);
+        }
+        // Fallback: do the work inline (used only if SupabaseAccounts missing).
+        if (!window.SUPABASE_ACCOUNTS || !window.SUPABASE_ACCOUNTS[id]) {
+            App.showToast("Unknown delivery account: " + id);
+            return;
+        }
+        if (id === window.DELIVERY_ACCOUNT_ID) {
+            App.showToast("Already set to " + window.SUPABASE_ACCOUNTS[id].label);
+            return;
+        }
+        const acct = window.SUPABASE_ACCOUNTS[id];
+        const other = window.deliveryLogOtherAccount();
+        const confirmed = confirm(
+            "Switch delivery_log writes to " + acct.label + "?\n\n" +
+            "Only do this AFTER field deliveries have stopped for the day, " +
+            "and AFTER running the nightly sync script (--full) to keep both accounts in sync.\n\n" +
+            "Currently active: " + window.SUPABASE_ACCOUNTS[window.DELIVERY_ACCOUNT_ID].label + "\n" +
+            "Will switch to: " + acct.label + " (meter resets ~" + acct.resetDay + "th)\n" +
+            "Other account (read-only for delivery_log): " + other.label
+        );
+        if (!confirmed) return;
+        try {
+            if (typeof window.saveDeliveryAccountSetting === 'function') {
+                await window.saveDeliveryAccountSetting(id);
+            }
+            window.setDeliveryAccount(id);
+            if (typeof this.renderDeliveryAccountInfo === 'function') this.renderDeliveryAccountInfo();
+            App.showToast("Delivery log now writes to " + acct.label + " ✅");
+        } catch (e) {
+            console.error("Failed to set delivery account:", e);
+            App.showToast("Failed to save: " + (e.message || e));
+        }
+    },
+
+    renderDeliveryAccountInfo() {
+        // Prefer the shadow-proof SupabaseAccounts.renderInfo if available.
+        if (window.SupabaseAccounts && typeof window.SupabaseAccounts.renderInfo === 'function') {
+            try { return window.SupabaseAccounts.renderInfo(); } catch (e) { /* fall through */ }
+        }
+        const el = document.getElementById('delivery-account-current');
+        const lastSyncEl = document.getElementById('delivery-last-sync');
+        if (!el) return;
+        const id = window.DELIVERY_ACCOUNT_ID || 'primary';
+        const acct = (window.SUPABASE_ACCOUNTS && window.SUPABASE_ACCOUNTS[id]) ? window.SUPABASE_ACCOUNTS[id] : null;
+        const other = window.deliveryLogOtherAccount ? window.deliveryLogOtherAccount() : null;
+        if (acct) {
+            el.innerHTML = "Currently active: <b>" + acct.label + "</b> · resets ~" + acct.resetDay + "th · other: " + (other ? other.label : '—');
+        } else {
+            el.innerText = "Currently active: " + id;
+        }
+        const btnP = document.getElementById('btn-set-primary');
+        const btnS = document.getElementById('btn-set-secondary');
+        if (btnP) btnP.style.background = id === 'primary' ? '#dbeafe' : '';
+        if (btnS) btnS.style.background = id === 'secondary' ? '#dbeafe' : '';
+        if (lastSyncEl) {
+            if (window.DELIVERY_LAST_SYNC) {
+                try {
+                    lastSyncEl.innerText = "Last sync: " + new Date(window.DELIVERY_LAST_SYNC).toLocaleString();
+                } catch (e) {
+                    lastSyncEl.innerText = "Last sync: " + window.DELIVERY_LAST_SYNC;
+                }
+            } else {
+                lastSyncEl.innerText = "Last sync: —";
+            }
+        }
     }
 };
 
@@ -25892,7 +26344,7 @@ const routeObj = {
         const markerData = [];
         const sidChunks = this._chunkArray(sids, 500);
         const promises = sidChunks.map(chunk =>
-            window._supabase
+            window.deliveryLogClient()
                 .from('delivery_log')
                 .select('survey_id, status, capture_gps_lat, capture_gps_lng, distance_to_target')
                 .ilike('bill_month', month)
@@ -26365,7 +26817,7 @@ const routeObj = {
         if (!sids.length || !route.delivery_month) return statusMap;
         const sidChunks = this._chunkArray(sids, 500);
         const promises = sidChunks.map(chunk =>
-            window._supabase
+            window.deliveryLogClient()
                 .from('delivery_log')
                 .select('survey_id, status, distance_to_target')
                 .ilike('bill_month', route.delivery_month)
@@ -27574,7 +28026,7 @@ window.DeliveryModule = {
             var from = 0;
             var step = 1000;
             while (true) {
-                var q = window._supabase
+                var q = window.deliveryLogClient()
                     .from('delivery_log')
                     .select('survey_id, status, distance_to_target, staff_email, staff_name, delivered_at')
                     .ilike('bill_month', billMonth);
@@ -27756,10 +28208,10 @@ window.DeliveryModule = {
 
         try {
             console.log("[DeliveryModule] Writing delivery log:", payload);
-            const { error } = await window._supabase.from('delivery_log').upsert(payload, { onConflict: 'survey_id,bill_month' });
+            const { error } = await window.deliveryLogClient().from('delivery_log').upsert(payload, { onConflict: 'survey_id,bill_month' });
             if (error) {
                 console.error("[DeliveryModule] DB write failed, retrying as insert:", error);
-                const { error: insertErr } = await window._supabase.from('delivery_log').insert(payload);
+                const { error: insertErr } = await window.deliveryLogClient().from('delivery_log').insert(payload);
                 if (insertErr) console.error("[DeliveryModule] Insert also failed:", insertErr);
             }
             
@@ -27799,7 +28251,7 @@ window.DeliveryModule = {
         if (!window._supabase || !fileId) return;
         const billMonth = window.ACTIVE_BILLING_MONTH || 'Unknown';
         try {
-            await window._supabase
+            await window.deliveryLogClient()
                 .from('delivery_log')
                 .update({ gdrive_file_id: fileId })
                 .eq('survey_id', sid)
@@ -27812,7 +28264,7 @@ window.DeliveryModule = {
     async fetchDeliveries(filters = {}) {
         if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return [];
         try {
-            let query = window._supabase
+            let query = window.deliveryLogClient()
                 .from('delivery_log')
                 .select('survey_id, status, delivered_at, staff_email, staff_name, consumer_name, distance_to_target, capture_gps_lat, capture_gps_lng, target_lat, target_lng')
                 .ilike('bill_month', window.ACTIVE_BILLING_MONTH)
@@ -28009,7 +28461,7 @@ window.StaffPerformanceModal = {
         for (let i = 0; i < ids.length; i += step) {
             const chunk = ids.slice(i, i + step);
             try {
-                const { data } = await window._supabase
+                const { data } = await window.deliveryLogClient()
                     .from('delivery_log')
                     .select('survey_id, capture_gps_lat, capture_gps_lng, target_lat, target_lng')
                     .ilike('bill_month', this._selectedMonth)
@@ -28062,7 +28514,7 @@ window.StaffPerformanceModal = {
         // Parallel paginated fetch (batched concurrency; same egress as before)
         const step = 1000;
         const CONCURRENCY = 10;
-        const countRes = await window._supabase
+        const countRes = await window.deliveryLogClient()
             .from('delivery_log')
             .select('survey_id', { count: 'exact', head: true })
             .ilike('bill_month', billMonth);
@@ -28083,7 +28535,7 @@ window.StaffPerformanceModal = {
             return collected;
         }
         const pageData = await fetchPages(function(p) {
-            return window._supabase
+            return window.deliveryLogClient()
                 .from('delivery_log')
                 .select('survey_id, status, delivered_at, staff_email, staff_name, distance_to_target, capture_gps_lat, capture_gps_lng, target_lat, target_lng')
                 .ilike('bill_month', billMonth)
@@ -29292,7 +29744,7 @@ window.DeliveryForensics = {
         var allData = [];
         var from = 0, step = 1000, billMonth = window.ACTIVE_BILLING_MONTH;
         while (true) {
-            var { data } = await window._supabase
+            var { data } = await window.deliveryLogClient()
                 .from('delivery_log')
                 .select('survey_id, status, delivered_at, staff_email, staff_name, distance_to_target, capture_gps_lat, capture_gps_lng')
                 .ilike('bill_month', billMonth)
