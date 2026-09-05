@@ -9819,7 +9819,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.09.05.1011</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.09.05.1300</span>
             </div>
         </div>
         
@@ -11260,6 +11260,143 @@ async function saveDeliveryLastSync(isoTs) {
 }
 window.saveDeliveryLastSync = saveDeliveryLastSync;
 
+// ─── In-browser sync engine (admin-only manual sync) ───────────────────────
+// Mirrors the logic of sync_delivery_log.py for the Settings UI buttons.
+// Runs entirely in the browser, using each account's own anon client.
+// Idempotent (uses upsert on (survey_id, bill_month), so safe to re-run).
+
+const SYNC_COLUMNS = [
+    "id", "survey_id", "psid", "consumer_name", "address", "uc_name",
+    "tehsil", "district", "bill_month", "staff_email", "staff_name",
+    "capture_gps_lat", "capture_gps_lng", "capture_gps_accuracy",
+    "target_lat", "target_lng", "distance_to_target", "status",
+    "gdrive_file_id", "photo_local_path", "delivered_at",
+    "created_at", "updated_at",
+];
+
+// localStorage keys used by the in-browser sync
+const SYNC_STATE_KEY = "deliverySyncState";
+
+function _loadSyncState() {
+    try {
+        const raw = localStorage.getItem(SYNC_STATE_KEY);
+        if (raw) return JSON.parse(raw);
+    } catch (e) { /* fall through */ }
+    return { lastRun: null, lastCopied: 0, lastMode: null, lastSource: null, lastTarget: null };
+}
+
+function _saveSyncState(s) {
+    try { localStorage.setItem(SYNC_STATE_KEY, JSON.stringify(s)); } catch (e) { /* ignore */ }
+}
+
+function _clientFor(accountId) {
+    if (accountId === "secondary") return window._supabase_secondary;
+    return window._supabase_primary;
+}
+
+async function _countRows(client) {
+    const r = await client.from("delivery_log").select("id", { count: "exact", head: true }).limit(0);
+    return r.count || 0;
+}
+
+async function _fetchPage(client, sinceIso, offset, pageSize, orderByUpdated) {
+    let q = client.from("delivery_log").select(SYNC_COLUMNS.join(","));
+    if (sinceIso) q = q.gt("updated_at", sinceIso);
+    if (orderByUpdated) {
+        q = q.order("updated_at", { ascending: true }).order("id", { ascending: true });
+    }
+    q = q.range(offset, offset + pageSize - 1);
+    const r = await q;
+    if (r.error) throw r.error;
+    return r.data || [];
+}
+
+async function _upsertBatch(target, rows, batchSize) {
+    let total = 0;
+    for (let i = 0; i < rows.length; i += batchSize) {
+        const chunk = rows.slice(i, i + batchSize);
+        const r = await target.from("delivery_log").upsert(chunk, {
+            onConflict: "survey_id,bill_month",
+        });
+        if (r.error) throw r.error;
+        total += chunk.length;
+    }
+    return total;
+}
+
+async function _syncOneWay(sourceId, targetId, mode, pageSize, batchSize) {
+    const src = _clientFor(sourceId);
+    const tgt = _clientFor(targetId);
+    const since = (mode === "delta") ? (_loadSyncState().lastRun || null) : null;
+    let total = 0;
+    let offset = 0;
+    while (true) {
+        const page = await _fetchPage(src, since, offset, pageSize, true);
+        if (!page.length) break;
+        total += await _upsertBatch(tgt, page, batchSize);
+        offset += page.length;
+        if (page.length < pageSize) break;
+    }
+    return total;
+}
+
+async function _updateLastSyncInSettings(ts) {
+    try {
+        const primary = window._supabase_primary;
+        if (!primary) return;
+        const r = await primary.from("app_settings").select("key").eq("key", "delivery_last_sync").limit(1);
+        const existing = r.data && r.data.length ? r.data[0] : null;
+        if (existing) {
+            await primary.from("app_settings").update({ value: ts, updated_at: ts }).eq("key", "delivery_last_sync");
+        } else {
+            await primary.from("app_settings").insert({ key: "delivery_last_sync", value: ts, updated_at: ts });
+        }
+        window.DELIVERY_LAST_SYNC = ts;
+    } catch (e) { /* non-fatal */ }
+}
+
+// Public entry point. Returns { copied, elapsed, source, target, mode, direction }.
+async function syncDeliveryLog(opts) {
+    opts = opts || {};
+    const mode = opts.mode || "delta";
+    const direction = opts.direction || "active-to-other";
+    const pageSize = opts.pageSize || 1000;
+    const batchSize = opts.batchSize || 500;
+
+    const t0 = Date.now();
+    // Read active account from app_settings (canonical source of truth).
+    let active = "primary";
+    try {
+        const primary = window._supabase_primary;
+        if (primary) {
+            const r = await primary.from("app_settings").select("value").eq("key", "delivery_account").limit(1);
+            if (r.data && r.data.length && r.data[0].value === "secondary") active = "secondary";
+        }
+    } catch (e) { /* default primary */ }
+    const other = active === "secondary" ? "primary" : "secondary";
+
+    let total = 0;
+    if (direction === "both") {
+        total += await _syncOneWay(active, other, mode, pageSize, batchSize);
+        total += await _syncOneWay(other, active, "full", pageSize, batchSize);
+    } else {
+        total += await _syncOneWay(active, other, mode, pageSize, batchSize);
+    }
+
+    const ts = new Date().toISOString();
+    const state = _loadSyncState();
+    state.lastRun = ts;
+    state.lastCopied = total;
+    state.lastMode = mode;
+    state.lastSource = active;
+    state.lastTarget = other;
+    _saveSyncState(state);
+    await _updateLastSyncInSettings(ts);
+
+    return { copied: total, elapsed: (Date.now() - t0) / 1000, source: active, target: other, mode, direction };
+}
+window.syncDeliveryLog = syncDeliveryLog;
+
 // ─── Public API: SupabaseAccounts ────────────────────────────────────────────
 // Single, shadow-proof entry point for the Settings UI. The buttons in the
 // ⚙️ App Config tab call SupabaseAccounts.toggle('primary' | 'secondary').
@@ -11293,8 +11430,9 @@ window.SupabaseAccounts = {
         } catch (e) {}
         console.log('[DeliveryAccount]', msg);
     },
-    // Re-paint the toggle card's text + button highlight without depending on
-    // any external Settings object. Safe to call any time.
+    // Re-paint the toggle card without depending on any external Settings
+    // object. Safe to call any time. Also toggles the admin-only sync
+    // buttons based on window.USER.email vs roles.json admins.
     renderInfo() {
         try {
             const el = document.getElementById('delivery-account-current');
@@ -11320,6 +11458,19 @@ window.SupabaseAccounts = {
             const btnS = document.getElementById('btn-set-secondary');
             if (btnP) btnP.style.background = id === 'primary' ? '#dbeafe' : '';
             if (btnS) btnS.style.background = id === 'secondary' ? '#dbeafe' : '';
+            // Show the admin-only sync buttons only to admins.
+            const isAdmin = this._isAdmin();
+            const syncNow = document.getElementById('btn-sync-now');
+            const syncFull = document.getElementById('btn-sync-full');
+            if (syncNow) syncNow.style.display = isAdmin ? 'flex' : 'none';
+            if (syncFull) syncFull.style.display = isAdmin ? 'flex' : 'none';
+            // Don't reset the inline status here — the last sync result should
+            // stay visible until the next sync overwrites it. If no sync has
+            // ever run, show "Ready."
+            const statusEl = document.getElementById('sync-status');
+            if (statusEl && (!statusEl.innerText || statusEl.innerText === 'Ready.')) {
+                this._setStatus("Ready.", 'ready');
+            }
         } catch (e) {
             console.warn('[DeliveryAccount] renderInfo failed:', e);
         }
@@ -11366,6 +11517,190 @@ window.SupabaseAccounts = {
             console.error('[DeliveryAccount] Failed to set delivery account:', e);
             this._toast("Failed to save: " + (e && e.message ? e.message : e));
         }
+    },
+
+    // ─── Admin-only manual sync buttons ─────────────────────────────────────
+    // Both call the browser-side sync (window.syncDeliveryLog below) which
+    // mirrors the same logic as the Python script. The actual fetch+upsert
+    // runs in the browser, so the admin sees progress live.
+
+    // Returns true if the current user is an admin (per roles.json which is
+    // loaded by the app at boot into window.USER_DB).
+    _isAdmin() {
+        try {
+            const email = window.USER && window.USER.email;
+            if (!email) return false;
+            const db = window.USER_DB;
+            if (!db || !db.admins) return false;
+            return db.admins.indexOf(email) >= 0;
+        } catch (e) { return false; }
+    },
+
+    // Write status to the inline status div under the sync buttons.
+    // kind: 'ready' | 'busy' | 'ok' | 'err'
+    _setStatus(msg, kind) {
+        try {
+            const el = document.getElementById('sync-status');
+            if (!el) return;
+            el.innerText = msg;
+            let bg = '#f8fafc', border = '#e2e8f0', color = '#475569';
+            if (kind === 'busy') { bg = '#fef9c3'; border = '#fde68a'; color = '#854d0e'; }
+            if (kind === 'ok')   { bg = '#dcfce7'; border = '#86efac'; color = '#166534'; }
+            if (kind === 'err')  { bg = '#fee2e2'; border = '#fca5a5'; color = '#991b1b'; }
+            el.style.background = bg;
+            el.style.borderColor = border;
+            el.style.color = color;
+        } catch (e) { /* ignore */ }
+    },
+
+    // "Sync now" — delta from active to other. Quick, daily-use button.
+    async syncNow() {
+        if (!this._isAdmin()) {
+            this._toast("Admins only.");
+            return;
+        }
+        if (typeof window.syncDeliveryLog !== 'function') {
+            this._setStatus("Sync function not loaded.", 'err');
+            return;
+        }
+        const src = this.active();
+        const dst = this.other();
+        this._setStatus("Syncing from " + src.label + " to " + dst.label + " …", 'busy');
+        this._toast("Syncing from " + src.label + " to " + dst.label + " …");
+        try {
+            const result = await window.syncDeliveryLog({ mode: 'delta', direction: 'active-to-other' });
+            const msg = "Synced " + (result.copied || 0) + " rows in " + (result.elapsed || 0).toFixed(1) + "s ✅";
+            this._setStatus(msg, 'ok');
+            this._toast(msg);
+            this.renderInfo();
+        } catch (e) {
+            console.error('[DeliveryAccount] syncNow failed:', e);
+            const msg = "Sync failed: " + (e && e.message ? e.message : e);
+            this._setStatus(msg, 'err');
+            this._toast(msg);
+        }
+    },
+
+    // "Full sync both ways" — copy every row in both directions. Use on flip
+    // nights to guarantee both accounts match exactly before a toggle flip.
+    async syncFullBoth() {
+        if (!this._isAdmin()) {
+            this._toast("Admins only.");
+            return;
+        }
+        if (typeof window.syncDeliveryLog !== 'function') {
+            this._setStatus("Sync function not loaded.", 'err');
+            return;
+        }
+        let ok = true;
+        try { if (typeof window.confirm === 'function') ok = window.confirm(
+            "Run a FULL sync in BOTH directions?\n\n" +
+            "This copies every row from First App to Second App, then from Second App to First App. " +
+            "Both accounts will be identical. Use this on flip nights before changing the toggle."
+        ); } catch (e) { ok = true; }
+        if (!ok) return;
+        this._setStatus("Running full sync in both directions (this may take a few minutes) …", 'busy');
+        this._toast("Running full sync in both directions …");
+        try {
+            const result = await window.syncDeliveryLog({ mode: 'full', direction: 'both' });
+            const msg = "Full sync done: " + (result.copied || 0) + " rows total in " + (result.elapsed || 0).toFixed(1) + "s ✅";
+            this._setStatus(msg, 'ok');
+            this._toast(msg);
+            this.renderInfo();
+        } catch (e) {
+            console.error('[DeliveryAccount] syncFullBoth failed:', e);
+            const msg = "Sync failed: " + (e && e.message ? e.message : e);
+            this._setStatus(msg, 'err');
+            this._toast(msg);
+        }
+    },
+
+    // ─── DB Health (read-only status of both DBs) ───────────────────────────
+    // Queries both DBs for row count + max(updated_at), then renders a small
+    // block in the Settings card. Called by the 60s auto-refresh tick.
+    // Read-only: never writes anything.
+
+    async _getDbStatus(client) {
+        try {
+            const [countRes, maxRes] = await Promise.all([
+                client.from("delivery_log").select("id", { count: "exact", head: true }).limit(0),
+                client.from("delivery_log").select("updated_at").order("updated_at", { ascending: false }).limit(1),
+            ]);
+            const rows = countRes.count || 0;
+            const lastWrite = (maxRes.data && maxRes.data[0]) ? maxRes.data[0].updated_at : null;
+            return { rows, lastWrite, error: null };
+        } catch (e) {
+            return { rows: null, lastWrite: null, error: e && e.message ? e.message : String(e) };
+        }
+    },
+
+    _ago(iso) {
+        if (!iso) return "—";
+        try {
+            const t = new Date(iso).getTime();
+            const sec = Math.round((Date.now() - t) / 1000);
+            if (sec < 60) return sec + "s ago";
+            const min = Math.round(sec / 60);
+            if (min < 60) return min + " min ago";
+            const hr = Math.round(min / 60);
+            if (hr < 24) return hr + " hr ago";
+            return Math.round(hr / 24) + " d ago";
+        } catch (e) { return "—"; }
+    },
+
+    async refreshDbHealth() {
+        const el = document.getElementById("db-health");
+        if (!el) return;
+        if (!window._supabase_primary || !window._supabase_secondary) {
+            el.innerHTML = "DB Health: <span style='color:#94a3b8;'>not signed in</span>";
+            return;
+        }
+        el.innerHTML = "DB Health: <span style='color:#94a3b8;'>checking…</span>";
+        const [src, mir] = await Promise.all([
+            this._getDbStatus(window._supabase_primary),
+            this._getDbStatus(window._supabase_secondary),
+        ]);
+        if (src.error || mir.error) {
+            el.innerHTML = "DB Health: <span style='color:#991b1b;'>error ("
+                + (src.error || "?") + " / " + (mir.error || "?") + ")</span>";
+            return;
+        }
+        const now = Date.now();
+        const srcSec = src.lastWrite ? Math.round((now - new Date(src.lastWrite).getTime()) / 1000) : Infinity;
+        const mirSec = mir.lastWrite ? Math.round((now - new Date(mir.lastWrite).getTime()) / 1000) : Infinity;
+        const ACTIVE_WINDOW = 120; // 2 min
+        const srcActive = srcSec <= ACTIVE_WINDOW;
+        const mirActive = mirSec <= ACTIVE_WINDOW;
+        const statusOf = (sec) => {
+            if (sec <= ACTIVE_WINDOW) return { label: "active ✅", color: "#166534" };
+            return { label: "frozen ✅",  color: "#166534" };
+        };
+        const srcStatus = statusOf(srcSec);
+        const mirStatus = statusOf(mirSec);
+        let warning = "";
+        if (srcActive && mirActive) {
+            warning = "<div style='margin-top:8px; padding:8px 10px; background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; color:#991b1b; font-weight:800;'>"
+                + "⚠️ Split-brain: both DBs are receiving writes. Some staff are still on old cached toggle. Ask admins to hard-refresh."
+                + "</div>";
+        } else if (!srcActive && !mirActive) {
+            warning = "<div style='margin-top:8px; padding:6px 10px; background:#fef9c3; border:1px solid #fde68a; border-radius:8px; color:#854d0e; font-weight:700;'>"
+                + "No deliveries in the last 2 min — staff may be idle."
+                + "</div>";
+        }
+        const gap = (src.rows != null && mir.rows != null) ? (src.rows - mir.rows) : null;
+        const gapText = gap === null ? "—" : (gap === 0
+            ? "0 (in sync ✅)"
+            : (gap > 0
+                ? (gap.toLocaleString() + " (Source ahead — click Sync now to close)")
+                : ((-gap).toLocaleString() + " (Mirror ahead — unusual)")));
+        el.innerHTML =
+            "DB Health (last 60s check):" +
+            "<div style='margin-top:6px;'>"
+            + "<div>Source DB:&nbsp; " + (src.rows != null ? src.rows.toLocaleString() : "—") + " rows · last write " + this._ago(src.lastWrite) + " · <b style='color:" + srcStatus.color + ";'>" + srcStatus.label + "</b></div>"
+            + "<div>Mirror DB:&nbsp; " + (mir.rows != null ? mir.rows.toLocaleString() : "—") + " rows · last write " + this._ago(mir.lastWrite) + " · <b style='color:" + mirStatus.color + ";'>" + mirStatus.label + "</b></div>"
+            + "<div style='margin-top:6px;'>Gap:&nbsp; <b>" + gapText + "</b></div>"
+            + "</div>"
+            + warning;
     }
 };
 
@@ -11431,23 +11766,35 @@ async function refreshAllAppSettings() {
         }
     }
 
-    // delivery_account toggle (owned by 00_supabase_accounts.js). Tolerant
-    // when the row doesn't exist yet.
-    if (typeof window.fetchDeliveryAccountSetting === 'function') {
-        try { await window.fetchDeliveryAccountSetting(); } catch (e) { /* tolerate */ }
+    // delivery_account toggle (owned by 00_supabase_accounts.js).
+    // ONLY read the toggle ONCE at boot — not on every 60s tick.
+    // The auto-refresh previously caused split-brain: staff on old cached
+    // SW would have their in-memory DELIVERY_ACCOUNT_ID flipped mid-session
+    // by the tick, so the same survey_id got written to BOTH DBs.
+    if (!window.__DELIVERY_ACCOUNT_LOADED__) {
+        window.__DELIVERY_ACCOUNT_LOADED__ = true;
+        if (typeof window.fetchDeliveryAccountSetting === 'function') {
+            try { await window.fetchDeliveryAccountSetting(); } catch (e) { /* tolerate */ }
+        }
     }
 
     // Re-paint the toggle card if Settings is open.
     if (typeof window.SupabaseAccounts !== 'undefined' && typeof window.SupabaseAccounts.renderInfo === 'function') {
         try { window.SupabaseAccounts.renderInfo(); } catch (e) { /* non-fatal */ }
     }
+    // Kick off the DB health check (queries both DBs, paints the card).
+    if (typeof window.SupabaseAccounts !== 'undefined' && typeof window.SupabaseAccounts.refreshDbHealth === 'function') {
+        try { await window.SupabaseAccounts.refreshDbHealth(); } catch (e) { /* non-fatal */ }
+    }
 }
 window.refreshAllAppSettings = refreshAllAppSettings;
 
-// Periodic poll: re-read all settings (including the delivery_account toggle)
-// every 60 seconds. This is the permanent fix for cached-toggle / cached-role
-// problems — any change the admin makes in Settings takes effect on every
-// connected device within one minute, without re-login.
+// Periodic poll: re-read settings (billing month, sequence month, etc.)
+// and refresh the DB health card every 60 seconds.
+// NOTE: the delivery_account toggle is NOT re-polled — it is read once at
+// boot only. Re-polling it caused split-brain: staff on old cached SW had
+// their in-memory toggle flipped mid-session, writing the same survey to
+// both DBs. Changing the toggle now requires logout + login on staff phones.
 function startSettingsAutoRefresh() {
     if (window.__SETTINGS_AUTOREFRESH_STARTED__) return;
     window.__SETTINGS_AUTOREFRESH_STARTED__ = true;
@@ -11457,6 +11804,13 @@ function startSettingsAutoRefresh() {
             await window.refreshAllAppSettings();
         } catch (e) {
             console.warn("[App] settings auto-refresh tick failed:", e);
+        }
+        try {
+            if (window.SupabaseAccounts && typeof window.SupabaseAccounts.refreshDbHealth === 'function') {
+                await window.SupabaseAccounts.refreshDbHealth();
+            }
+        } catch (e) {
+            console.warn("[App] db-health auto-refresh tick failed:", e);
         }
     }, INTERVAL_MS);
     console.log("[App] settings auto-refresh started (every 60s)");
@@ -11847,7 +12201,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.09.05.1011";
+window.DATA_VERSION = "v2026.09.05.1300";
 window.DATA_CHUNKS_COUNT = 13;
 window.DELIVERY_SEQUENCE_MONTHS = {"jul2026": {"parts": 1, "houses": 80473}};
 window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
@@ -18056,6 +18410,9 @@ const LayerManager = {
                             <div id="delivery-account-current" style="font-size:11px; color:#475569; font-weight:700; margin-bottom:12px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
                                 Loading current setting...
                             </div>
+                            <div id="db-health" style="font-size:10px; color:#475569; font-weight:600; margin-bottom:12px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; line-height:1.6;">
+                                DB Health: <span style="color:#94a3b8;">checking…</span>
+                            </div>
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                                 <button id="btn-set-primary" onclick="SupabaseAccounts.toggle('primary')" class="secondary-btn" style="margin:0; justify-content:center; padding:14px 10px;">
                                     <span class="material-icons-round">storage</span> First App
@@ -18066,6 +18423,17 @@ const LayerManager = {
                             </div>
                             <div id="delivery-last-sync" style="margin-top:14px; font-size:10px; color:#94a3b8; font-weight:600; text-align:right;">
                                 Last sync: —
+                            </div>
+                            <div style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                                <button id="btn-sync-now" onclick="SupabaseAccounts.syncNow()" class="secondary-btn" style="margin:0; justify-content:center; padding:12px 10px; background:#0f172a; color:white; border:none; font-weight:800; display:none;">
+                                    <span class="material-icons-round">sync</span> Sync now
+                                </button>
+                                <button id="btn-sync-full" onclick="SupabaseAccounts.syncFullBoth()" class="secondary-btn" style="margin:0; justify-content:center; padding:12px 10px; background:#7c2d12; color:white; border:none; font-weight:800; display:none;">
+                                    <span class="material-icons-round">cached</span> Full sync (both ways)
+                                </button>
+                            </div>
+                            <div id="sync-status" style="margin-top:10px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; font-size:11px; color:#475569; font-weight:700; min-height:14px;">
+                                Ready.
                             </div>
                         </div>
                     </div>`;
