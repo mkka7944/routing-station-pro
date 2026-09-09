@@ -9819,7 +9819,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.09.08.1023</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.09.09.1142</span>
             </div>
         </div>
         
@@ -12201,7 +12201,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.09.08.1023";
+window.DATA_VERSION = "v2026.09.09.1142";
 window.DATA_CHUNKS_COUNT = 13;
 window.DELIVERY_SEQUENCE_MONTHS = {"jul2026": {"parts": 1, "houses": 80473}};
 window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
@@ -16999,7 +16999,10 @@ const DriveSync = {
                 if (!parsed || !parsed.data || typeof parsed.data !== 'object') return false;
                 State.syncedData = Object.assign(State.syncedData || {}, parsed.data);
                 if (parsed.total !== undefined) State.totalDriveImages = parsed.total;
-                this._lastSync = parsed.timestamp || 0;
+                // Restore _lastSync from cache so the session memory check
+                // (step 1) skips Supabase on subsequent calls within the hour.
+                // Without this, _lastSync stays at 0 and step 1 always fails.
+                if (parsed.timestamp) this._lastSync = parsed.timestamp;
                 return true;
             } catch (e) { return false; }
         };
@@ -18474,6 +18477,25 @@ const LayerManager = {
                     this._renderSyncMonitorFromData(State.cachedSyncLogs);
                     return;
                 }
+                // EGRESS: Check IndexedDB for cached sync logs (1h TTL).
+                // Avoids pulling ~132k staff_sync_logs rows from Source DB on every tab open.
+                const SYNC_CACHE_MS = 60 * 60 * 1000; // 1 hour
+                if (typeof _dbGetCache === 'function') {
+                    try {
+                        const cached = await _dbGetCache('sync_monitor:' + days);
+                        if (cached && cached.data && cached.data.logs && Array.isArray(cached.data.logs)) {
+                            const age = cached.updated_at ? (Date.now() - new Date(cached.updated_at).getTime()) : Infinity;
+                            if (age < SYNC_CACHE_MS) {
+                                console.log("[SyncMonitor] Using cached sync logs (" + cached.data.logs.length + " logs, age " + Math.round(age / 60000) + "min)");
+                                State.cachedSyncLogs = cached.data.logs;
+                                State.cachedSyncLogs._days = days;
+                                if (cached.data.total !== undefined) State.totalDriveImages = cached.data.total;
+                                this._renderSyncMonitorFromData(State.cachedSyncLogs);
+                                return;
+                            }
+                        }
+                    } catch (e) { /* fall through to Supabase */ }
+                }
                 try {
                     // 1. Fetch Absolute Total (Unfiltered) for the header
                     const { count: absoluteTotal } = await window._supabase
@@ -18513,6 +18535,10 @@ const LayerManager = {
                     
                     State.cachedSyncLogs = allLogs;
                     State.cachedSyncLogs._days = days;
+                    // EGRESS: Persist to IndexedDB so subsequent tab opens skip Supabase.
+                    if (typeof _dbSetCache === 'function' && allLogs.length > 0) {
+                        _dbSetCache('sync_monitor:' + days, { logs: allLogs, total: State.totalDriveImages }).catch(function() {});
+                    }
                     this._renderSyncMonitorFromData(State.cachedSyncLogs);
                 } catch (e) {
                     el.innerHTML = `<div style="padding:40px; text-align:center; color:#ef4444; font-weight:800;">Failed to load data.</div>`;
@@ -19019,7 +19045,7 @@ const LayerManager = {
         var staffEmails = [];
         var from = 0, step = 1000;
         while (true) {
-            var { data } = await window._supabase
+            var { data } = await window.deliveryLogClient()
                 .from('delivery_log')
                 .select('staff_email')
                 .ilike('bill_month', window.ACTIVE_BILLING_MONTH)
@@ -19870,6 +19896,7 @@ const LayerManager = {
     _lastFilteredActivityRecords: null,
     _portalMarkerGroup: null,
     _dapDeliverySort: 'asc',
+    _dapCurrentMonthCacheReady: false,
 
     _isEffectiveUnsent: function(r) {
         return r.status === 'unsent' || (r.distance_to_target && Number(r.distance_to_target) > 50);
@@ -19935,6 +19962,10 @@ const LayerManager = {
         this._deliveryActivityMonth = sel.value;
         this._deliveryActivityMonthCached = '';
         this._deliveryActivityData = null;
+        // Reset cache-ready flag so current month does a fresh fetch on next open
+        if (sel.value === window.ACTIVE_BILLING_MONTH) {
+            this._dapCurrentMonthCacheReady = false;
+        }
         await this._fetchDeliveryActivityData(false);
     },
 
@@ -20097,15 +20128,22 @@ const LayerManager = {
         var now = new Date();
         var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
         var isCurrentMonth = this._deliveryActivityMonth === window.ACTIVE_BILLING_MONTH;
-        var dayFilter = function(q) {
-            return isCurrentMonth ? q.gte('delivered_at', todayStart) : q;
-        };
+        // EGRESS FIX: Full fetch gets ALL records for the month (no server-side date filter).
+        // The client-side date filter (_dapDateFrom/_dapDateTo, defaulting to today) handles display.
+        // Incremental refresh still uses dayFilter to only pull today's new records.
+        var dayFilter = function(q) { return q; };
+        var incDayFilter = isCurrentMonth
+            ? function(q) { return q.gte('delivered_at', todayStart); }
+            : function(q) { return q; };
         try {
             if (!incremental) {
                 // EGRESS: Restore from per-month IndexedDB cache first (skip if force=true).
                 // Older months are immutable, so cached data is always valid.
-                // Current month gets a light incremental refresh below.
-                if (!force) {
+                // Current month: skip stale cache on first open of this session (old dayFilter
+                // stored only today's data). After the first full refetch, the cache will contain
+                // the full month and subsequent opens will use it normally.
+                var skipCacheForCurrent = isCurrentMonth && !this._dapCurrentMonthCacheReady;
+                if (!force && !skipCacheForCurrent) {
                     try {
                         var cachedDap = await _dbGetCache('dap:' + this._deliveryActivityMonth);
                         if (cachedDap && cachedDap.main && Array.isArray(cachedDap.main) && cachedDap.main.length) {
@@ -20118,10 +20156,7 @@ const LayerManager = {
                             this._deliveryActivityMonthCached = this._deliveryActivityMonth;
                             this._updateDeliveryActivityPanel(this._deliveryActivityData);
                             this._updateLastUpdated();
-                            // Current month only: incremental refresh to catch today's new records
-                            if (this._deliveryActivityMonth === window.ACTIVE_BILLING_MONTH) {
-                                this._fetchDeliveryActivityData(true);
-                            }
+                            if (isCurrentMonth) this._dapCurrentMonthCacheReady = true;
                             if (dapIcon) dapIcon.classList.remove('spinning');
                             return;
                         }
@@ -20133,7 +20168,7 @@ const LayerManager = {
                         .select('survey_id', { count: 'exact' })
                         .ilike('bill_month', self._deliveryActivityMonth)
                         .limit(1);
-                    q = dayFilter(q);
+                q = incDayFilter(q);
                     if (extraFilter) q = q.eq('status', extraFilter);
                     return q;
                 }
@@ -20250,6 +20285,8 @@ const LayerManager = {
                     staffCount: this._deliveryActivityStaffCount || 0
                 }).catch(function() {});
             }
+            // Mark current month cache as ready so subsequent opens use it
+            if (isCurrentMonth) this._dapCurrentMonthCacheReady = true;
         } catch (e) { console.error('[DeliveryActivity] Fetch error:', e); }
         if (dapIcon) dapIcon.classList.remove('spinning');
     },
@@ -20257,7 +20294,14 @@ const LayerManager = {
     _updateDeliveryActivityPanel(records) {
         var isCurrentMonth = this._deliveryActivityMonth === window.ACTIVE_BILLING_MONTH;
         var totalLabel = document.getElementById('dap-total-label');
-        if (totalLabel) totalLabel.textContent = isCurrentMonth ? 'Today' : this._deliveryActivityMonth;
+        // Show month name when showing all records, "Filtered" when date filter is active
+        if (totalLabel) {
+            if (this._dapDateFrom || this._dapDateTo) {
+                totalLabel.textContent = 'Filtered';
+            } else {
+                totalLabel.textContent = this._deliveryActivityMonth || 'All';
+            }
+        }
         if (!records || !records.length) {
             document.getElementById('dap-total').textContent = this._deliveryActivityCount || '0';
             document.getElementById('dap-delivered').textContent = this._deliveryActivityDeliveredCount || '0';
@@ -20972,7 +21016,13 @@ const LayerManager = {
         var el = document.getElementById('dap-recent-list');
         if (!el) return;
         var recent = records.slice(0, 20);
-        if (!recent.length) { el.innerHTML = '<div style="padding:12px; text-align:center; color:#94a3b8; font-size:11px;">No deliveries yet today</div>'; return; }
+        if (!recent.length) {
+            var emptyMsg = (this._dapDateFrom || this._dapDateTo)
+                ? 'No deliveries found for this date range'
+                : 'No deliveries found';
+            el.innerHTML = '<div style="padding:12px; text-align:center; color:#94a3b8; font-size:11px;">' + emptyMsg + '</div>';
+            return;
+        }
         var self = this;
         var html = '<div style="display:flex; align-items:center; gap:6px; padding:5px 8px; border-bottom:1px solid #e2e8f0; font-size:9px; font-weight:800; color:#64748b; background:#f8fafc;">' +
             '<span style="flex:0 0 44px;">SID</span>' +
@@ -26282,7 +26332,7 @@ switchTab(tab) {
             this.editingDeliveryRouteId = null;
             this.editingDeliveryRouteName = null;
             this.resetCurrentRoute();
-            await this.loadDeliveryRoutes();
+            await this.loadDeliveryRoutes(true);
             this.renderDeliverySavedList();
             this.updateDeliveryModeChip();
             if (App.showToast) App.showToast(isEditing ? `Delivery route updated: ${finalName.trim()}` : `Delivery route saved: ${finalName.trim()}`);
@@ -26591,7 +26641,32 @@ const routeObj = {
 
     // ─── Delivery Route Tool ──────────────────────────────────────────────
 
-    async loadDeliveryRoutes() {
+    async loadDeliveryRoutes(force) {
+        const now = Date.now();
+        const ROUTE_CACHE_MS = 24 * 60 * 60 * 1000; // 24h
+
+        // EGRESS: Check IndexedDB first when not forced (boot / soft-refresh).
+        if (!force && typeof _dbGetCache === 'function') {
+            try {
+                const cached = await _dbGetCache('delivery_routes');
+                if (cached && cached.data && Array.isArray(cached.data) && cached.data.length > 0) {
+                    const age = cached.updated_at ? (now - new Date(cached.updated_at).getTime()) : Infinity;
+                    if (age < ROUTE_CACHE_MS) {
+                        console.log("[SpatialRouter] Using cached delivery_routes (" + cached.data.length + " routes, age " + Math.round(age / 60000) + "min)");
+                        State.deliveryRoutes = cached.data;
+                        State.deliveryRoutes.sort((a, b) => this.naturalCompare(a.route_name || '', b.route_name || ''));
+                        State.deliveryRouteCollapsedGroups = new Set(
+                            cached.data.map(r => this.cleanMCName(r.mc_uc || 'Unknown'))
+                        );
+                        this.renderDeliverySidebar();
+                        this.renderRouteManager();
+                        this.renderDeliverySavedList();
+                        if (this.deliveryContext) this.renderDeliveryRouteSilhouettes();
+                        return;
+                    }
+                }
+            } catch (e) { /* fall through to Supabase */ }
+        }
         try {
             // Paginated fetch (Supabase caps at 1000 rows per query)
             const all = [];
@@ -26609,6 +26684,11 @@ const routeObj = {
                 from += step;
             }
             State.deliveryRoutes = all;
+
+            // EGRESS: Persist to IndexedDB so subsequent boots skip Supabase.
+            if (typeof _dbSetCache === 'function' && all.length > 0) {
+                _dbSetCache('delivery_routes', all).catch(function() {});
+            }
 
             // Natural sort by route name so every renderer shows R_1, R_2, ... R_11
             // regardless of delivery_month inconsistencies.
@@ -26984,7 +27064,7 @@ const routeObj = {
             return;
         }
 
-        await this.loadDeliveryRoutes();
+        await this.loadDeliveryRoutes(true);
         if (App.showToast) App.showToast(`Delivery route saved: ${name}`);
         this.cancelDeliveryDraw();
     },
@@ -27174,7 +27254,7 @@ const routeObj = {
             if (App.showToast) App.showToast("Failed to delete.");
             return;
         }
-        await this.loadDeliveryRoutes();
+        await this.loadDeliveryRoutes(true);
         if (App.showToast) App.showToast("Delivery route deleted.");
     },
 
