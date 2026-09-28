@@ -9819,7 +9819,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.09.26.1246</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.09.28.1639</span>
             </div>
         </div>
         
@@ -12308,7 +12308,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.09.26.1246";
+window.DATA_VERSION = "v2026.09.28.1639";
 window.DATA_CHUNKS_COUNT = 13;
 window.DELIVERY_SEQUENCE_MONTHS = {"aug2026": {"parts": 1, "houses": 101949}, "jul2026": {"parts": 1, "houses": 80473}};
 window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
@@ -29932,7 +29932,8 @@ window.StaffPerformanceModal = {
         const totalDelvAll = cityList.reduce((s, c) => s + c.delivered, 0);
         const totalUnstAll = cityList.reduce((s, c) => s + c.unsent, 0);
         const totalUndelAll = cityList.reduce((s, c) => s + (c.undelivered || 0), 0);
-        const grandRate = totalHousesAll > 0 ? Math.round((totalDelvAll / totalHousesAll) * 100) : 0;
+        // Rate counts every delivery attempt: delivered + unsent over all houses.
+        const grandRate = totalHousesAll > 0 ? Math.round(((totalDelvAll + totalUnstAll) / totalHousesAll) * 100) : 0;
 
         // Auto-expand if a specific city is selected
         if (this._selectedCity !== 'all') {
@@ -29943,7 +29944,7 @@ window.StaffPerformanceModal = {
         let cityRowsHtml = cityList.map(city => {
             const cityKey = 'city_' + city.city.replace(/[^a-zA-Z0-9]/g, '_');
             const mcCount = city.mcMap.size;
-            const cityRate = city.totalHouses > 0 ? Math.round((city.delivered / city.totalHouses) * 100) : 0;
+            const cityRate = city.totalHouses > 0 ? Math.round(((city.delivered + city.unsent) / city.totalHouses) * 100) : 0;
             const cityRateColor = cityRate >= 80 ? '#16a34a' : cityRate >= 50 ? '#d97706' : '#dc2626';
             const isExpanded = this._expandedCity === cityKey;
 
@@ -29971,7 +29972,7 @@ window.StaffPerformanceModal = {
                             <tbody>
                                 ${mcList.map((mc, mcIdx) => {
                                     const mcKey = cityKey + '_m' + mcIdx;
-                                    const mcRate = mc.totalHouses > 0 ? Math.round((mc.delivered / mc.totalHouses) * 100) : 0;
+                                    const mcRate = mc.totalHouses > 0 ? Math.round(((mc.delivered + mc.unsent) / mc.totalHouses) * 100) : 0;
                                     const mcRateColor = mcRate >= 80 ? '#16a34a' : mcRate >= 50 ? '#d97706' : '#dc2626';
 
                                     // Staff detail sub-table
