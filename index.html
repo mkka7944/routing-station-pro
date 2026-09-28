@@ -9819,7 +9819,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.09.26.1032</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.09.26.1246</span>
             </div>
         </div>
         
@@ -11723,6 +11723,68 @@ window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before
 window.ACTIVE_BILLING_MONTH = 'loading...';
 window.DATA_VERSION = window.DATA_VERSION || 'v1'; // Use injected version if present
 
+// ─── GPS enforcement distance ─────────────────────────────────────────────
+// Admin-configurable distance (meters) for marking delivery. Cloud setting
+// `gps_enforce_distance`; 50 until an admin changes it in App Config.
+window.GPS_ENFORCE_M = 50;
+
+// Returns the current enforced GPS distance as a valid number (5..500).
+// Falls back to 50 when unset/invalid so behaviour never degrades silently.
+window.getGpsThreshold = function () {
+    var v = parseInt(window.GPS_ENFORCE_M, 10);
+    return (isNaN(v) || v < 5 || v > 500) ? 50 : v;
+};
+
+// ─── Marker source (staff-captured delivery spots) ────────────────────────
+// Cloud setting `marker_source_month`: '' = portal positions (default),
+// otherwise a delivery month key like 'aug2026' whose captured spots
+// (marker_override_<month>.json) replace the portal positions per house.
+window.MARKER_SOURCE_MONTH = '';
+window.MARKER_OVERRIDE_CACHE = {};
+window._PORTAL_COORDS = null;
+
+// Swap every house's position in place. Order: portal base → captured spot
+// of the chosen month (houses without one keep portal) → manual corrected
+// fix when the corrected button is on. Original portal spots are stored
+// once, before any swap. Map, list, GPS gate and routes all read the same
+// positions, so they follow automatically.
+window.applyMarkerPositions = function () {
+    if (!window.RAW_DATA || !window.RAW_DATA.length) return;
+    var month = String(window.MARKER_SOURCE_MONTH || '').toLowerCase();
+    var override = (month && window.MARKER_OVERRIDE_CACHE[month]) || null;
+    var correctedOn = (typeof State !== 'undefined' && State.showCorrectedCoords);
+    if (!window._PORTAL_COORDS) {
+        var portal = {};
+        window.RAW_DATA.forEach(function (r) { if (r && r[0]) portal[r[0]] = [r[1], r[2]]; });
+        window._PORTAL_COORDS = portal;
+    }
+    window.RAW_DATA.forEach(function (r) {
+        if (!r || !r[0]) return;
+        var pos = window._PORTAL_COORDS[r[0]];
+        if (!pos) return;
+        if (override && override[r[0]]) pos = override[r[0]];
+        if (correctedOn && window.CORRECTED_COORDS && window.CORRECTED_COORDS[r[0]]) pos = window.CORRECTED_COORDS[r[0]];
+        r[1] = pos[0];
+        r[2] = pos[1];
+    });
+};
+
+// Same, but fetches the month's spot file first when it is not cached yet
+// (used when an admin changes the setting while phones are running).
+window.applyMarkerPositionsAsync = async function () {
+    var month = String(window.MARKER_SOURCE_MONTH || '').toLowerCase();
+    if (month && !window.MARKER_OVERRIDE_CACHE[month]) {
+        try {
+            var vStr = `?v=${window.DATA_VERSION || Date.now()}`;
+            var r = await fetch(`marker_override_${month}.json${vStr}`);
+            if (r.ok) window.MARKER_OVERRIDE_CACHE[month] = await r.json();
+        } catch (e) {
+            console.warn('[App] marker override fetch failed:', e);
+        }
+    }
+    window.applyMarkerPositions();
+};
+
 // Pulls every app_setting row we care about in one round-trip and applies the
 // values to the in-memory globals. Idempotent and safe to call repeatedly
 // (used by the periodic poll below as well as the initial login).
@@ -11738,6 +11800,8 @@ async function refreshAllAppSettings() {
                 'delivery_sequence_month',
                 'delivery_account',
                 'delivery_last_sync',
+                'gps_enforce_distance',
+                'marker_source_month',
             ]);
 
         if (error) throw error;
@@ -11746,6 +11810,7 @@ async function refreshAllAppSettings() {
             const version = data.find(d => d.key === 'data_version');
             const hideZubair = data.find(d => d.key === 'hide_zubair_sids');
             const seqMonth = data.find(d => d.key === 'delivery_sequence_month');
+            const gpsDist = data.find(d => d.key === 'gps_enforce_distance');
 
             // active_billing_month: only overwrite if missing or empty, since the
             // initial resolution path (below) sets sensible fallbacks and we
@@ -11758,6 +11823,39 @@ async function refreshAllAppSettings() {
             if (version) window.DATA_VERSION = version.value;
             if (hideZubair) State.hideZubairSids = String(hideZubair.value) === 'true';
             if (seqMonth && seqMonth.value) window.DELIVERY_SEQUENCE_MONTH = seqMonth.value;
+
+            // gps_enforce_distance: apply and, when it CHANGED, rebuild the
+            // delivery badge cache so delivered/unsent labels re-judge under
+            // the new distance right away (not only on next app open).
+            if (gpsDist && gpsDist.value !== null && gpsDist.value !== undefined && gpsDist.value !== '') {
+                const prevGps = window.GPS_ENFORCE_M;
+                window.GPS_ENFORCE_M = gpsDist.value;
+                if (String(prevGps) !== String(gpsDist.value)) {
+                    try {
+                        if (window.DeliveryModule && typeof window.DeliveryModule.loadDeliveryCache === 'function') {
+                            window.DeliveryModule.loadDeliveryCache();
+                        }
+                        if (window.ListView && window.ListView.render) window.ListView.render();
+                    } catch (e) { /* non-fatal */ }
+                }
+            }
+
+            // marker_source_month: swap house positions to the chosen month's
+            // captured spots (or back to portal when cleared). Re-applies live
+            // on phones once the map data has loaded.
+            const markerSrc = data.find(d => d.key === 'marker_source_month');
+            const newMarkerMonth = markerSrc ? String(markerSrc.value || '').toLowerCase() : '';
+            const prevMarkerMonth = String(window.MARKER_SOURCE_MONTH || '').toLowerCase();
+            if (newMarkerMonth !== prevMarkerMonth) {
+                window.MARKER_SOURCE_MONTH = newMarkerMonth;
+                if (window.APP_DATA_LOADED) {
+                    try {
+                        if (newMarkerMonth) await window.applyMarkerPositionsAsync();
+                        else window.applyMarkerPositions();
+                        if (window.App && window.App.render) window.App.render();
+                    } catch (e) { /* non-fatal */ }
+                }
+            }
         }
     } catch (e) {
         // Quiet on poll failures; loud on first load via fetchAppSettings wrapper.
@@ -12040,7 +12138,8 @@ async function loadData() {
             dataPromises.push(fetchJSON(`data_part${i}.json${vStr}`, `Survey Records (Part ${i}/${chunkCount})`));
         }
 
-        const [dataChunks, paidData, hierarchyData, geoLayers, zubairData, correctedCoords, lifecycleData, availMonthsData] = await Promise.all([
+        const bootMarkerMonth = String(window.MARKER_SOURCE_MONTH || '').toLowerCase();
+        const [dataChunks, paidData, hierarchyData, geoLayers, zubairData, correctedCoords, lifecycleData, availMonthsData, markerOverride] = await Promise.all([
             Promise.all(dataPromises),
             fetchJSON(`paid_data.json${vStr}`, 'Payment Data'),
             fetchJSON(`hierarchy.json${vStr}`, 'Locations'),
@@ -12048,7 +12147,8 @@ async function loadData() {
             (async () => { const r = await fetch(`zubair_sids.json${vStr}`); return r.json(); })(),
             (async () => { try { const r = await fetch(`corrected_coords.json${vStr}`); return await r.json(); } catch (e) { return {}; } })(),
             (async () => { try { const r = await fetch(`lifecycle_bills.json${vStr}`); return await r.json(); } catch (e) { return {}; } })(),
-            (async () => { try { const r = await fetch(`available_months.json${vStr}`); return await r.json(); } catch (e) { return []; } })()
+            (async () => { try { const r = await fetch(`available_months.json${vStr}`); return await r.json(); } catch (e) { return []; } })(),
+            (bootMarkerMonth ? (async () => { try { const r = await fetch(`marker_override_${bootMarkerMonth}.json${vStr}`); return await r.json(); } catch (e) { console.warn('[App] marker override load failed:', e); return null; } })() : Promise.resolve(null))
         ]);
         const rawData = [].concat(...dataChunks);
 
@@ -12095,6 +12195,13 @@ async function loadData() {
         window.CORRECTED_COORDS = correctedCoords || {};
         window.LIFECYCLE_BILLS = lifecycleData || {};
         window.AVAILABLE_MONTHS = (availMonthsData && typeof availMonthsData === 'object') ? availMonthsData : {};
+
+        // Swap house positions to staff-captured spots (when the setting is
+        // on) before the first screen renders, so nobody sees the old spots.
+        if (markerOverride && bootMarkerMonth) {
+            window.MARKER_OVERRIDE_CACHE[bootMarkerMonth] = markerOverride;
+        }
+        try { window.applyMarkerPositions(); } catch (e) { console.warn('[App] marker apply failed:', e); }
 
         status.innerText = 'Starting Application...';
         setTimeout(() => {
@@ -12201,7 +12308,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.09.26.1032";
+window.DATA_VERSION = "v2026.09.26.1246";
 window.DATA_CHUNKS_COUNT = 13;
 window.DELIVERY_SEQUENCE_MONTHS = {"aug2026": {"parts": 1, "houses": 101949}, "jul2026": {"parts": 1, "houses": 80473}};
 window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
@@ -12832,8 +12939,6 @@ const App = {
         }
     },
 
-    _originalCoords: null,
-
     toggleCorrectedCoords() {
         const btn = document.getElementById('btn-show-corrected');
         State.showCorrectedCoords = !State.showCorrectedCoords;
@@ -12846,24 +12951,14 @@ const App = {
             return;
         }
 
-        if (!this._originalCoords) {
-            this._originalCoords = {};
-            window.RAW_DATA.forEach(function(r) {
-                if (r && r[0]) App._originalCoords[r[0]] = [r[1], r[2]];
-            });
-        }
-
+        // One shared swap: manual fix sits on top of the chosen marker
+        // source (portal or a month's captured spots).
+        window.applyMarkerPositions();
         if (State.showCorrectedCoords) {
-            window.RAW_DATA.forEach(function(r) {
-                var c = window.CORRECTED_COORDS[r[0]];
-                if (c) { r[1] = c[0]; r[2] = c[1]; }
-            });
             if (App.showToast) App.showToast('Showing corrected coordinates');
+        } else if (window.MARKER_SOURCE_MONTH) {
+            if (App.showToast) App.showToast('Showing ' + window.MARKER_SOURCE_MONTH + ' delivery spots');
         } else {
-            window.RAW_DATA.forEach(function(r) {
-                var o = App._originalCoords[r[0]];
-                if (o) { r[1] = o[0]; r[2] = o[1]; }
-            });
             if (App.showToast) App.showToast('Showing portal coordinates');
         }
 
@@ -14645,7 +14740,7 @@ const ListView = {
             var r = State.filtered.find(function(x) { return x[0] == sid; });
             if (r && r[1] && r[2]) {
                 var dist = DeliveryModule.haversine(DeliveryModule.currentGPS.lat, DeliveryModule.currentGPS.lng, r[1], r[2]);
-                if (dist > 50) status = 'unsent';
+                if (dist > getGpsThreshold()) status = 'unsent';
             }
         }
         DeliveryModule.logDelivery(sid, null, status);
@@ -15302,7 +15397,7 @@ const ListView = {
         }
 
         const dist = Math.round(DeliveryModule.haversine(gps.lat, gps.lng, targetLat, targetLng));
-        const threshold = 50;
+        const threshold = getGpsThreshold();
         let dColor, dLabel;
         if (dist <= threshold * 0.5) { dColor = '#16a34a'; dLabel = 'In Range'; }
         else if (dist <= threshold) { dColor = '#d97706'; dLabel = 'At Edge'; }
@@ -18378,6 +18473,13 @@ const LayerManager = {
                   ).join('')
                 : '<option value="">No sequence months available</option>';
 
+            // Marker source options: Portal (default) + months that have a
+            // captured-spot file (built by gen_delivery_history.py).
+            const curMarkerMonth = String(window.MARKER_SOURCE_MONTH || '').toLowerCase();
+            const markerOptions = seqKeys.map(mk =>
+                `<option value="${mk}" ${mk === curMarkerMonth ? 'selected' : ''}>${mk} delivery spots</option>`
+            ).join('');
+
             contentHtml += `
                     <div style="padding:4px;">
                         <div style="background:#fff; border:1px solid #f1f5f9; border-radius:16px; padding:20px;">
@@ -18396,6 +18498,29 @@ const LayerManager = {
                             </select>
                             <button id="btn-save-sequence" onclick="Settings.updateSequenceMonth()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#0f172a; color:white; border:none; padding:14px; border-radius:12px; font-weight:800;">
                                 <span class="material-icons-round">route</span> Apply Sequence Month
+                            </button>
+                        </div>
+                        <div style="margin-top:16px; background:#fff; border:1px solid #f1f5f9; border-radius:16px; padding:20px;">
+                            <label style="font-weight:800; font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:8px;">GPS Enforcement Distance (Mark Delivered)</label>
+                            <div style="font-size:10px; color:#64748b; font-weight:600; margin-bottom:10px; line-height:1.5;">Deliveries farther than this from the portal point are saved as Unsent. Applies to everyone within about a minute. Default 50.</div>
+                            <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+                                <input type="number" id="input-gps-threshold" value="${window.getGpsThreshold()}" min="5" max="500" step="1"
+                                    style="flex:1; padding:12px; border-radius:10px; border:1px solid #e2e8f0; font-size:15px; font-weight:700; outline:none;">
+                                <span style="font-size:13px; font-weight:800; color:#64748b;">meters</span>
+                            </div>
+                            <button id="btn-save-gps-threshold" onclick="Settings.updateGpsThreshold()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#0f172a; color:white; border:none; padding:14px; border-radius:12px; font-weight:800;">
+                                <span class="material-icons-round">my_location</span> Save GPS Distance
+                            </button>
+                        </div>
+                        <div style="margin-top:16px; background:#fff; border:1px solid #f1f5f9; border-radius:16px; padding:20px;">
+                            <label style="font-weight:800; font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:8px;">Map Marker Source</label>
+                            <div style="font-size:10px; color:#64748b; font-weight:600; margin-bottom:10px; line-height:1.5;">Show where staff actually stood during last month's deliveries instead of the portal points. Houses without a captured spot keep the portal point. Applies to everyone within about a minute.</div>
+                            <select id="select-marker-source" style="width:100%; padding:12px; border-radius:10px; border:1px solid #e2e8f0; font-size:15px; font-weight:700; margin-bottom:12px; outline:none; background:white;">
+                                <option value="" ${curMarkerMonth ? '' : 'selected'}>Portal points (default)</option>
+                                ${markerOptions}
+                            </select>
+                            <button id="btn-save-marker-source" onclick="Settings.updateMarkerSource()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#0f172a; color:white; border:none; padding:14px; border-radius:12px; font-weight:800;">
+                                <span class="material-icons-round">place</span> Save Marker Source
                             </button>
                         </div>
                         <div style="margin-top:20px; padding:20px; background:#fff1f2; border:1px solid #fecaca; border-radius:16px;">
@@ -19152,7 +19277,7 @@ const LayerManager = {
         function applyFilters(q) {
             q = q.ilike('bill_month', _dlMonth);
             if (statusFilter === 'unsent') {
-                q = q.or('status.eq.unsent,distance_to_target.gt.50');
+                q = q.or('status.eq.unsent,distance_to_target.gt.' + getGpsThreshold());
             } else if (statusFilter) {
                 q = q.eq('status', statusFilter);
             }
@@ -19173,7 +19298,7 @@ const LayerManager = {
                 .limit(1);
             if (extraFilter) {
                 if (extraFilter === 'unsent') {
-                    q = q.or('status.eq.unsent,distance_to_target.gt.50');
+                    q = q.or('status.eq.unsent,distance_to_target.gt.' + getGpsThreshold());
                 } else {
                     q = q.eq('status', extraFilter);
                 }
@@ -19188,7 +19313,7 @@ const LayerManager = {
                 .gte('delivered_at', todayStart)
                 .limit(1);
             if (statusFilter === 'unsent') {
-                todayQ = todayQ.or('status.eq.unsent,distance_to_target.gt.50');
+                todayQ = todayQ.or('status.eq.unsent,distance_to_target.gt.' + getGpsThreshold());
             } else if (statusFilter) {
                 todayQ = todayQ.eq('status', statusFilter);
             }
@@ -19234,8 +19359,8 @@ const LayerManager = {
                 totalCount = _cityFiltered.length;
                 // Recompute KPI counts from city-filtered data
                 allCount = totalCount;
-                deliveredCount = _cityFiltered.filter(function(r) { return r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50); }).length;
-                unsentCount = _cityFiltered.filter(function(r) { return r.distance_to_target && Number(r.distance_to_target) > 50 || !r.status || r.status === 'unsent'; }).length;
+                deliveredCount = _cityFiltered.filter(function(r) { return r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > getGpsThreshold()); }).length;
+                unsentCount = _cityFiltered.filter(function(r) { return r.distance_to_target && Number(r.distance_to_target) > getGpsThreshold() || !r.status || r.status === 'unsent'; }).length;
                 todayCount = _cityFiltered.filter(function(r) { return r.delivered_at && r.delivered_at >= todayStart; }).length;
                 records = _cityFiltered.slice((page - 1) * pageSize, page * pageSize);
             } else {
@@ -19899,7 +20024,7 @@ const LayerManager = {
     _dapCurrentMonthCacheReady: false,
 
     _isEffectiveUnsent: function(r) {
-        return r.status === 'unsent' || (r.distance_to_target && Number(r.distance_to_target) > 50);
+        return r.status === 'unsent' || (r.distance_to_target && Number(r.distance_to_target) > getGpsThreshold());
     },
 
     toggleDeliveryActivityPanel() {
@@ -20179,7 +20304,7 @@ const LayerManager = {
                     dayFilter(window.deliveryLogClient().from('delivery_log')
                         .select('survey_id', { count: 'exact' })
                         .ilike('bill_month', this._deliveryActivityMonth)
-                        .or('status.eq.unsent,distance_to_target.gt.50')
+                        .or('status.eq.unsent,distance_to_target.gt.' + getGpsThreshold())
                         .limit(1)),
                     dayFilter(window.deliveryLogClient().from('delivery_log')
                         .select('staff_email')
@@ -20263,7 +20388,7 @@ const LayerManager = {
                     // Sync new/updated records into delivery cache so list view badges stay current
                     if (window.DeliveryModule && window.DeliveryModule._deliveryCache) {
                         data.forEach(function(r) {
-                            var eff = r.distance_to_target && Number(r.distance_to_target) > 50 ? 'unsent' : (r.status || 'delivered');
+                            var eff = r.distance_to_target && Number(r.distance_to_target) > getGpsThreshold() ? 'unsent' : (r.status || 'delivered');
                             window.DeliveryModule._deliveryCache.set(String(r.survey_id), { status: eff, staffName: r.staff_name || r.staff_email || '', deliveredAt: r.delivered_at || '' });
                         });
                     }
@@ -20428,7 +20553,7 @@ const LayerManager = {
             if (!cityMap.has(city)) cityMap.set(city, { city: city, delv: 0, unsent: 0, total: 0, staff: new Set() });
             var c = cityMap.get(city);
             c.total++;
-            if (r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50)) c.delv++;
+            if (r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > getGpsThreshold())) c.delv++;
             else if (this._isEffectiveUnsent(r)) c.unsent++;
             if (r.staff_email) c.staff.add(r.staff_email);
         }, this);
@@ -20477,7 +20602,7 @@ const LayerManager = {
             if (!mcMap.has(mc)) mcMap.set(mc, { mc: mc, delv: 0, unsent: 0, total: 0, staff: new Set(), lastTime: null });
             var m = mcMap.get(mc);
             m.total++;
-            if (r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50)) m.delv++;
+            if (r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > getGpsThreshold())) m.delv++;
             else if (self._isEffectiveUnsent(r)) m.unsent++;
             if (r.staff_email) m.staff.add(r.staff_email);
             if (!m.lastTime || r.delivered_at > m.lastTime) m.lastTime = r.delivered_at;
@@ -20534,7 +20659,7 @@ const LayerManager = {
             if (!staffMap.has(email)) staffMap.set(email, { email: r.staff_email, name: r.staff_name || email.split('@')[0], delv: 0, unsent: 0, total: 0, firstTime: null, lastTime: null });
             var s = staffMap.get(email);
             s.total++;
-            if (r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50)) s.delv++;
+            if (r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > getGpsThreshold())) s.delv++;
             else if (self._isEffectiveUnsent(r)) s.unsent++;
             if (!s.firstTime || r.delivered_at < s.firstTime) s.firstTime = r.delivered_at;
             if (!s.lastTime || r.delivered_at > s.lastTime) s.lastTime = r.delivered_at;
@@ -20633,7 +20758,7 @@ const LayerManager = {
         var pageRecords = filtered.slice(start, start + pageSize);
         var staffRec = filtered.length > 0 ? filtered[0] : null;
         var staffName = staffRec ? (self._staffNamesCache && self._staffNamesCache[staffRec.staff_email]) || staffRec.staff_name || staffRec.staff_email.split('@')[0] : this._dapViewStaff;
-        var delvCount = filtered.filter(function(r) { return r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50); }).length;
+        var delvCount = filtered.filter(function(r) { return r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > getGpsThreshold()); }).length;
         var unsentCount = filtered.filter(function(r) { return self._isEffectiveUnsent(r); }).length;
         var html = '<div style="margin-bottom:8px;">' +
             '<span onclick="LayerManager._dapBack()" style="cursor:pointer; font-size:11px; font-weight:700; color:#8b5cf6; display:flex; align-items:center; gap:4px;">' +
@@ -20691,7 +20816,7 @@ const LayerManager = {
                 '<span style="flex:0 0 115px; text-align:right; font-size:7px;">Capture GPS</span>' +
                 '</div>';
             pageRecords.forEach(function(r, idx) {
-                var isDel = r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50);
+                var isDel = r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > getGpsThreshold());
                 var isUnsent = self._isEffectiveUnsent(r);
                 var dateStr = r.delivered_at ? String(r.delivered_at).slice(0, 10) : '-';
                 var timeStr = r.delivered_at ? new Date(r.delivered_at).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}) : '-';
@@ -20967,7 +21092,7 @@ const LayerManager = {
             if (!r.staff_email) return;
             if (!staffStats[r.staff_email]) staffStats[r.staff_email] = { delivered: 0, unsent: 0, total: 0, mcs: {} };
             staffStats[r.staff_email].total++;
-            if (r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50)) staffStats[r.staff_email].delivered++;
+            if (r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > getGpsThreshold())) staffStats[r.staff_email].delivered++;
             else if (self._isEffectiveUnsent(r)) staffStats[r.staff_email].unsent++;
             if (window.SID_MAP) {
                 var raw = window.SID_MAP.get(String(r.survey_id));
@@ -21033,7 +21158,7 @@ const LayerManager = {
             '<span style="flex:0 0 42px; text-align:right;">Time</span>' +
         '</div>';
         recent.forEach(function(r, idx) {
-            var isDel = r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > 50);
+            var isDel = r.status === 'delivered' && !(r.distance_to_target && Number(r.distance_to_target) > getGpsThreshold());
             var isUnsent = self._isEffectiveUnsent(r);
             var dateStr = r.delivered_at ? new Date(r.delivered_at).toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'}) : '-';
             var name = r.consumer_name ? r.consumer_name.substring(0, 12) : '-';
@@ -22216,6 +22341,117 @@ const Settings = {
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<span class="material-icons-round">route</span> Apply Sequence Month';
+        }
+    },
+
+    async updateGpsThreshold() {
+        // Admin-only: the App Config tab is admin-only, but guard again here.
+        if (!window.USER || window.USER.role !== 'admin') {
+            return App.showToast("Only admins can change this.");
+        }
+        if (!window._supabase) {
+            console.error("[Settings] No Supabase client!");
+            return App.showToast("Supabase not connected.");
+        }
+        const input = document.getElementById('input-gps-threshold');
+        const btn = document.getElementById('btn-save-gps-threshold');
+        if (!input || !btn) return;
+
+        const val = parseInt(String(input.value).trim(), 10);
+        if (isNaN(val) || val < 5 || val > 500) {
+            return App.showToast("Enter a distance between 5 and 500 meters.");
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons-round spinning">refresh</span> Saving...';
+
+        try {
+            const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase request timed out')), ms));
+            const { error } = await Promise.race([
+                window._supabase.from('app_settings').upsert(
+                    { key: 'gps_enforce_distance', value: val, updated_at: new Date().toISOString() },
+                    { onConflict: 'key' }
+                ),
+                timeout(15000)
+            ]);
+            if (error) throw error;
+
+            window.GPS_ENFORCE_M = val;
+
+            // Rebuild delivery badges + repaint list under the new distance.
+            try {
+                if (window.DeliveryModule && typeof window.DeliveryModule.loadDeliveryCache === 'function') {
+                    await window.DeliveryModule.loadDeliveryCache();
+                }
+            } catch (e) { /* non-fatal */ }
+
+            if (window.ListView && window.ListView.render) window.ListView.render();
+
+            if (typeof LayerManager !== 'undefined') {
+                LayerManager.showToast("GPS enforcement set to " + val + "m ✨");
+                LayerManager.renderSettingsUI();
+            }
+        } catch (e) {
+            console.error("Failed to update GPS threshold:", e);
+            const errorMsg = e.message || "Cloud rejected";
+            if (typeof LayerManager !== 'undefined') LayerManager.showToast("Error: " + errorMsg);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-icons-round">my_location</span> Save GPS Distance';
+        }
+    },
+
+    async updateMarkerSource() {
+        // Admin-only: the App Config tab is admin-only, but guard again here.
+        if (!window.USER || window.USER.role !== 'admin') {
+            return App.showToast("Only admins can change this.");
+        }
+        if (!window._supabase) {
+            console.error("[Settings] No Supabase client!");
+            return App.showToast("Supabase not connected.");
+        }
+        const input = document.getElementById('select-marker-source');
+        const btn = document.getElementById('btn-save-marker-source');
+        if (!input || !btn) return;
+
+        const val = String(input.value || '').trim().toLowerCase();
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons-round spinning">refresh</span> Saving...';
+
+        try {
+            const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase request timed out')), ms));
+            const { error } = await Promise.race([
+                window._supabase.from('app_settings').upsert(
+                    { key: 'marker_source_month', value: val, updated_at: new Date().toISOString() },
+                    { onConflict: 'key' }
+                ),
+                timeout(15000)
+            ]);
+            if (error) throw error;
+
+            // Swap positions on this phone right away (others follow within
+            // about a minute via the settings poll).
+            const prev = String(window.MARKER_SOURCE_MONTH || '').toLowerCase();
+            window.MARKER_SOURCE_MONTH = val;
+            if (val !== prev) {
+                try {
+                    await window.applyMarkerPositionsAsync();
+                    if (window.App && window.App.render) window.App.render();
+                } catch (e) { /* non-fatal */ }
+            }
+
+            if (typeof LayerManager !== 'undefined') {
+                LayerManager.showToast(val ? ("Map markers now show " + val + " delivery spots ✨") : "Map markers back to portal points ✨");
+                LayerManager.renderSettingsUI();
+            }
+        } catch (e) {
+            console.error("Failed to update marker source:", e);
+            const errorMsg = e.message || "Cloud rejected";
+            if (typeof LayerManager !== 'undefined') LayerManager.showToast("Error: " + errorMsg);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-icons-round">place</span> Save Marker Source';
         }
     },
 
@@ -26802,7 +27038,7 @@ const routeObj = {
         results.forEach(({ data }) => (data || []).forEach(d => {
             const sid = String(d.survey_id);
             if (State.hideZubairSids && window.ZUBAIR_SIDS?.has(sid)) return;
-            const status = (d.status === 'unsent' || Number(d.distance_to_target || 0) > 50) ? 'unsent' : 'delivered';
+            const status = (d.status === 'unsent' || Number(d.distance_to_target || 0) > getGpsThreshold()) ? 'unsent' : 'delivered';
             const lat = d.capture_gps_lat, lng = d.capture_gps_lng;
             if (lat && lng) markerData.push({ sid, lat, lng, status });
             if (status === 'delivered') delivered++;
@@ -27275,7 +27511,7 @@ const routeObj = {
         results.forEach(({ data }) => (data || []).forEach(d => {
             const sid = String(d.survey_id).replace(/\.0$/, '').trim();
             if (State.hideZubairSids && window.ZUBAIR_SIDS?.has(String(d.survey_id))) return;
-            const status = (d.status === 'unsent' || Number(d.distance_to_target || 0) > 50) ? 'unsent' : 'delivered';
+            const status = (d.status === 'unsent' || Number(d.distance_to_target || 0) > getGpsThreshold()) ? 'unsent' : 'delivered';
             statusMap.set(sid, status);
         }));
         sids.forEach(sid => { if (!statusMap.has(sid)) statusMap.set(sid, 'undelivered'); });
@@ -28440,7 +28676,7 @@ window.DeliveryModule = {
                     var lastSync = await _dbGetCache('delsync:' + billMonth);
                     if (lastSync && (Date.now() - Number(lastSync)) < SYNC_WINDOW_MS) {
                         this._deliveryCache = new Map(cachedData.map(d => {
-                            var eff = d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50) ? 'unsent' : 'delivered';
+                            var eff = d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > getGpsThreshold()) ? 'unsent' : 'delivered';
                             var nm = d.staff_name || (d.staff_email ? d.staff_email.split('@')[0] : '');
                             return [String(d.survey_id), { status: eff, staffName: nm, deliveredAt: d.delivered_at || '' }];
                         }));
@@ -28452,7 +28688,7 @@ window.DeliveryModule = {
 
             if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
                 this._deliveryCache = new Map(cachedData.map(d => {
-                    var effectiveStatus = d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50) ? 'unsent' : 'delivered';
+                    var effectiveStatus = d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > getGpsThreshold()) ? 'unsent' : 'delivered';
                     var staffName = '';
                     if (d.staff_name) staffName = d.staff_name;
                     else if (d.staff_email) staffName = d.staff_email.split('@')[0];
@@ -28499,7 +28735,7 @@ window.DeliveryModule = {
                 merged = Array.from(map.values());
             }
             newData.forEach(d => {
-                var effectiveStatus = d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50) ? 'unsent' : 'delivered';
+                var effectiveStatus = d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > getGpsThreshold()) ? 'unsent' : 'delivered';
                 var staffName = '';
                 if (d.staff_name) staffName = d.staff_name;
                 else if (d.staff_email) staffName = d.staff_email.split('@')[0];
@@ -28562,7 +28798,7 @@ window.DeliveryModule = {
             console.log(`[DeliveryModule] Distance: ${dist}m`);
         }
 
-        if (dist > 50) {
+        if (dist > getGpsThreshold()) {
             this.showUnsentModal(sid, Math.round(dist));
         } else {
             this.logDelivery(sid, null, 'delivered');
@@ -28583,7 +28819,7 @@ window.DeliveryModule = {
                     
                     <p style="margin:0 0 20px 0; font-size:14px; color:#475569; line-height:1.5;">
                         You are currently <strong>${dist}m</strong> away from the target coordinates.
-                        The threshold is 50m.
+                        The threshold is ${getGpsThreshold()}m.
                     </p>
                     
                     <p style="margin:0 0 20px 0; font-size:14px; color:#475569; line-height:1.5;">
@@ -28663,7 +28899,7 @@ window.DeliveryModule = {
                 if (insertErr) console.error("[DeliveryModule] Insert also failed:", insertErr);
             }
             
-            var effectiveForUI = status === 'unsent' || (dist && dist > 50) ? 'unsent' : 'delivered';
+            var effectiveForUI = status === 'unsent' || (dist && dist > getGpsThreshold()) ? 'unsent' : 'delivered';
             var staffNameForUI = '';
             if (window.LayerManager && window.LayerManager._staffNamesCache) {
                 staffNameForUI = window.LayerManager._staffNamesCache[email] || '';
@@ -28886,7 +29122,7 @@ window.StaffPerformanceModal = {
             d._city = loc.city || '—';
             d._mc = loc.mc || '—';
             d._shortMC = this._shortMC(d._mc);
-            d._effectiveStatus = (d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > 50)) ? 'unsent' : 'delivered';
+            d._effectiveStatus = (d.status === 'unsent' || (d.distance_to_target && Number(d.distance_to_target) > getGpsThreshold())) ? 'unsent' : 'delivered';
             if (d.target_lat == null && loc.portal && loc.portal.lat != null) {
                 d.target_lat = loc.portal.lat;
                 d.target_lng = loc.portal.lng;
@@ -30224,7 +30460,7 @@ window.DeliveryForensics = {
             var lat = parseFloat(d.capture_gps_lat) || 0;
             var lng = parseFloat(d.capture_gps_lng) || 0;
             var dist = parseInt(d.distance_to_target) || 0;
-            var isUnsent = d.status === 'unsent' || dist > 50;
+            var isUnsent = d.status === 'unsent' || dist > getGpsThreshold();
             if (isUnsent) {
                 unsentTotal++;
                 if (dist > 500) beyond500++;
@@ -30409,7 +30645,7 @@ window.DeliveryForensics = {
                 html += '<td style="padding:5px 8px; color:#64748b;">' + self._fmtDateShort(r.delivered_at) + '</td>';
                 html += '<td style="padding:5px 8px; text-align:right; font-weight:800; color:' + (isFar ? '#dc2626' : '#1e293b') + ';">' + r.distance + 'm</td>';
                 html += '<td style="padding:5px 8px; text-align:right; color:#94a3b8; font-size:9px;">' + r.lat.toFixed(4) + ', ' + r.lng.toFixed(4) + '</td>';
-                html += '<td style="padding:5px 8px; text-align:center; font-weight:800; color:' + (r.distance > 50 ? '#d97706' : '#16a34a') + ';">' + (r.distance > 50 ? '&gt;50m' : 'unsent') + '</td>';
+                html += '<td style="padding:5px 8px; text-align:center; font-weight:800; color:' + (r.distance > getGpsThreshold() ? '#d97706' : '#16a34a') + ';">' + (r.distance > getGpsThreshold() ? '&gt;' + getGpsThreshold() + 'm' : 'unsent') + '</td>';
                 html += '</tr>';
             });
             html += '</tbody></table>';
