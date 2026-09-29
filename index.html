@@ -9819,7 +9819,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.09.28.1639</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.09.29.1430</span>
             </div>
         </div>
         
@@ -11897,6 +11897,7 @@ function startSettingsAutoRefresh() {
     if (window.__SETTINGS_AUTOREFRESH_STARTED__) return;
     window.__SETTINGS_AUTOREFRESH_STARTED__ = true;
     const INTERVAL_MS = 60 * 1000;
+    let tickCount = 0;
     setInterval(async () => {
         try {
             await window.refreshAllAppSettings();
@@ -11909,6 +11910,20 @@ function startSettingsAutoRefresh() {
             }
         } catch (e) {
             console.warn("[App] db-health auto-refresh tick failed:", e);
+        }
+        // Quiet delivery heartbeat: every 2nd tick (~2 min) re-check delivery_log
+        // for rows this device has not seen yet (delta only — 1 small request
+        // when nothing is new) and redraw the badges now on screen. This is what
+        // makes OTHER people's deliveries appear on an already-open phone.
+        tickCount++;
+        if (tickCount % 2 === 0 && window.USER) {
+            try {
+                if (window.DeliveryModule && typeof window.DeliveryModule.loadDeliveryCache === 'function') {
+                    await window.DeliveryModule.loadDeliveryCache('periodic');
+                }
+            } catch (e) {
+                console.warn("[App] periodic delivery sync failed:", e);
+            }
         }
     }, INTERVAL_MS);
     console.log("[App] settings auto-refresh started (every 60s)");
@@ -12308,7 +12323,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.09.28.1639";
+window.DATA_VERSION = "v2026.09.29.1430";
 window.DATA_CHUNKS_COUNT = 13;
 window.DELIVERY_SEQUENCE_MONTHS = {"aug2026": {"parts": 1, "houses": 101949}, "jul2026": {"parts": 1, "houses": 80473}};
 window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
@@ -12832,26 +12847,41 @@ const App = {
         }
         // Save the pre-filter list so toggling off restores correctly
         this._undeliveredRestore = [...State.filtered];
-        // Bill-active universe: only houses that have a printed PDF bill this
-        // month (from lifecycle data). Falls back to all survey houses if the
-        // lifecycle data is not available for the billing month.
+        State.filtered = this._buildUndeliveredFiltered();
+        State.currentIdx = 0;
+        ListView.render();
+        App.render(null);
+        if (App.showToast) App.showToast(`Showing ${State.filtered.length} undelivered records`);
+    },
+
+    // Bill-active universe + already-delivered exclusion, shared by the toggle
+    // and the quiet re-apply that runs when a background sync finds new rows.
+    _buildUndeliveredFiltered() {
         let lifecycleSet = null;
         if (window.LIFECYCLE_BILLS) {
             const key = String(window.ACTIVE_BILLING_MONTH || '').toLowerCase();
             const arr = window.LIFECYCLE_BILLS[key];
             if (arr && arr.length) lifecycleSet = new Set(arr.map(String));
         }
-        State.filtered = (State.masterFiltered || window.RAW_DATA || []).filter(r => {
+        return (State.masterFiltered || window.RAW_DATA || []).filter(r => {
             // Exclude already-delivered records
             if (this._undeliveredSIDs.has(String(r[0]))) return false;
             // Exclude houses with no printed bill this month
             if (lifecycleSet && !lifecycleSet.has(String(r[0]))) return false;
             return true;
         });
-        State.currentIdx = 0;
-        ListView.render();
-        App.render(null);
-        if (App.showToast) App.showToast(`Showing ${State.filtered.length} undelivered records`);
+    },
+
+    // Called by DeliveryModule when a background sync found new deliveries:
+    // drop them from the undelivered view quietly (no toast, no index jump).
+    _refilterUndeliveredQuiet() {
+        if (!this._undeliveredActive || !this._undeliveredSIDs) return;
+        State.filtered = this._buildUndeliveredFiltered();
+        if (State.currentIdx > State.filtered.length - 1) {
+            State.currentIdx = Math.max(0, State.filtered.length - 1);
+        }
+        if (window.ListView && ListView.render) ListView.render();
+        this.render(null);
     },
 
     // Cluster Toggle - Enable/disable marker clustering
@@ -14006,7 +14036,9 @@ async function softRefresh() {
     if (App && App.showToast) App.showToast('Refreshing data...');
     try {
         if (typeof fetchAppSettings === 'function') await fetchAppSettings();
-        if (window.DeliveryModule && DeliveryModule.loadDeliveryCache) await DeliveryModule.loadDeliveryCache();
+        // Manual refresh = a REAL full re-check: bypasses the 15-min skip and
+        // rebuilds the local delivery copy from scratch (recovers stale devices).
+        if (window.DeliveryModule && DeliveryModule.loadDeliveryCache) await DeliveryModule.loadDeliveryCache(true);
         // EGRESS: non-force — honours the 5-min / IndexedDB cache so a manual
         // refresh does not re-pull the whole verified month every time.
         if (window.Settings && Settings.fetchGlobalVerifications) await Settings.fetchGlobalVerifications(false);
@@ -14251,7 +14283,11 @@ const ListView = {
 
         const isLeft = v ? v.is_right === false : false;
         const isRight = v ? v.is_right === true : false;
-        const isDeliv = v ? v.is_delivered === true : false;
+        // Delivery truth comes from the delivery cache (stale verified_houses
+        // is kept only for old months — never the source for current delivery).
+        const delivCached = (window.DeliveryModule && window.DeliveryModule._deliveryCache)
+            ? window.DeliveryModule._deliveryCache.get(sidStr) : null;
+        const isDeliv = (v && v.is_delivered === true) || !!(delivCached && delivCached.status === 'delivered');
 
         const hasPending = !!staging; // Defined solely by presence in unified state
 
@@ -15251,6 +15287,27 @@ const ListView = {
     refreshCommittedUI(sid) {
         this.checkVerificationStatus(sid);
         this.checkDeliveryStatus(sid);
+    },
+
+    // Re-check delivery/verification state for every card currently on screen.
+    // Called after each background delivery sync so cards rendered BEFORE the
+    // sync finished pick up their badge without a re-navigation.
+    refreshVisibleDeliveryBadges() {
+        const nodes = document.querySelectorAll('[id^="delivery-strip-badge-"]');
+        if (nodes.length === 0 && !(window.SpatialRouter && SpatialRouter.refreshToolbar)) return;
+        const prefix = 'delivery-strip-badge-';
+        nodes.forEach(node => {
+            const sid = node.id.substring(prefix.length);
+            if (sid) this.refreshCommittedUI(sid);
+        });
+        // Refresh the map marker card too if it is open
+        try {
+            const modal = document.getElementById('modal-marker-card');
+            if (modal && modal.classList.contains('active') && window.SpatialRouter && typeof SpatialRouter.refreshToolbar === 'function') {
+                const title = (document.getElementById('marker-card-title') || {}).innerText || '';
+                if (title.charAt(0) === '#') SpatialRouter.refreshToolbar(title.substring(1).trim());
+            }
+        } catch (e) { /* non-fatal */ }
     },
 
     syncDeliveryState(sid) {
@@ -28591,6 +28648,7 @@ window.DeliveryModule = {
     _gpsSnapshot: {},
     _deliveryCache: null,
     _gpsTimeoutId: null,
+    _syncInFlight: false,
 
     // ─── GPS ──────────────────────────────────
     startGPS() {
@@ -28657,21 +28715,28 @@ window.DeliveryModule = {
     },
 
     // ─── Delivery Cache ──────────────────────────
-    async loadDeliveryCache(force = false) {
+    // mode: 'auto'     — boot default: local copy + 15-min freshness skip + delta
+    //       'periodic' — heartbeat: same as auto but ignores the 15-min skip
+    //       'full'     — ignore local copy, re-download the whole month
+    async loadDeliveryCache(mode) {
+        if (mode === true) mode = 'full';
+        if (!mode) mode = 'auto';
         if (!window._supabase || !window.ACTIVE_BILLING_MONTH) return;
+        if (this._syncInFlight) return;
+        this._syncInFlight = true;
         const billMonth = window.ACTIVE_BILLING_MONTH;
         const SYNC_WINDOW_MS = 15 * 60 * 1000; // 15 min between network syncs
         try {
             // 1. Try IndexedDB cache first (avoids re-fetching all rows on every app open)
             var cachedData = null;
-            if (!force && typeof _dbGetCache === 'function') {
+            if (mode !== 'full' && typeof _dbGetCache === 'function') {
                 cachedData = await _dbGetCache('delivery:' + billMonth);
             }
 
-            // EGRESS: if we already have the cache AND synced recently, skip the
-            // network round-trip entirely (badge stays fresh from the local copy).
-            // Force, or a cold device with no cache, still does a full sync.
-            if (!force && cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
+            // EGRESS: in auto mode, if we already have the cache AND synced recently,
+            // skip the network round-trip entirely (badge stays fresh from the local copy).
+            // 'periodic' and 'full' always reach the network; a cold device does a full sync.
+            if (mode === 'auto' && cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
                 try {
                     var lastSync = await _dbGetCache('delsync:' + billMonth);
                     if (lastSync && (Date.now() - Number(lastSync)) < SYNC_WINDOW_MS) {
@@ -28700,7 +28765,7 @@ window.DeliveryModule = {
             }
 
             // 2. DELTA SYNC: fetch only records newer than the cached max delivered_at.
-            //    Falls back to a full fetch when there is no cache (cold start / force).
+            //    Falls back to a full fetch when there is no local copy (cold start / full mode).
             var latestTime = "2000-01-01T00:00:00Z";
             if (cachedData && cachedData.length > 0) {
                 var times = cachedData.filter(d => d.delivered_at).map(d => d.delivered_at);
@@ -28710,14 +28775,36 @@ window.DeliveryModule = {
             var from = 0;
             var step = 1000;
             while (true) {
-                var q = window.deliveryLogClient()
-                    .from('delivery_log')
-                    .select('survey_id, status, distance_to_target, staff_email, staff_name, delivered_at')
-                    .ilike('bill_month', billMonth);
-                if (cachedData && cachedData.length > 0) {
-                    q = q.gt('delivered_at', latestTime);
+                var data = null;
+                var error = null;
+                // The server cuts off slow page downloads after ~8 seconds
+                // (its own limit) — especially when many queries run at app
+                // start. Try the SAME page up to 3 times before giving up
+                // on this sync run; the heartbeat will try again later.
+                for (var attempt = 1; attempt <= 3; attempt++) {
+                    if (attempt > 1) {
+                        await new Promise(r => setTimeout(r, 1200 * (attempt - 1)));
+                        console.warn('[DeliveryModule] Retrying download page (' + attempt + '/3)...');
+                    }
+                    var q = window.deliveryLogClient()
+                        .from('delivery_log')
+                        .select('survey_id, status, distance_to_target, staff_email, staff_name, delivered_at')
+                        .ilike('bill_month', billMonth);
+                    if (cachedData && cachedData.length > 0) {
+                        q = q.gt('delivered_at', latestTime);
+                    }
+                    var result = await q.order('delivered_at', { ascending: false }).range(from, from + step - 1);
+                    data = result.data;
+                    error = result.error;
+                    if (!error) break;
+                    console.error('[DeliveryModule] Page download failed:', error.message || error);
                 }
-                var { data } = await q.order('delivered_at', { ascending: false }).range(from, from + step - 1);
+                if (error) {
+                    // NEVER mark a failed check as done — the sync stamp is left
+                    // untouched so the next boot/heartbeat retries the same query.
+                    console.error('[DeliveryModule] Sync query failed (will retry):', error.message || error);
+                    return;
+                }
                 if (!data || data.length === 0) break;
                 newData = newData.concat(data);
                 from += step;
@@ -28762,10 +28849,39 @@ window.DeliveryModule = {
                     await _dbSetCache('delsync:' + billMonth, String(Date.now()));
                 } catch (e) { /* non-fatal */ }
             }
+
+            // Newly discovered deliveries keep the "undelivered only" list honest
+            // without re-downloading the whole month's delivery set.
+            if (newData.length > 0) {
+                this._applyNewDeliveriesToUndelivered(newData);
+            }
             console.log(`[DeliveryModule] Delivery cache synced: ${this._deliveryCache.size} records (delta ${newData.length})`);
         } catch (e) {
             console.warn("[DeliveryModule] Failed to load delivery cache:", e);
+        } finally {
+            this._syncInFlight = false;
+            this._redrawDeliveryBadges();
         }
+    },
+
+    // Redraw the delivery badges of cards currently on screen (and the open map
+    // card) so a sync that finished AFTER the card rendered still shows up.
+    _redrawDeliveryBadges() {
+        try {
+            if (window.ListView && typeof ListView.refreshVisibleDeliveryBadges === 'function') {
+                ListView.refreshVisibleDeliveryBadges();
+            }
+        } catch (e) { /* non-fatal */ }
+    },
+
+    _applyNewDeliveriesToUndelivered(rows) {
+        try {
+            if (!window.App || !App._undeliveredSIDs) return;
+            rows.forEach(d => App._undeliveredSIDs.add(String(d.survey_id)));
+            if (App._undeliveredActive && typeof App._refilterUndeliveredQuiet === 'function') {
+                App._refilterUndeliveredQuiet();
+            }
+        } catch (e) { /* non-fatal */ }
     },
 
     // ─── Enforcement ──────────────────────────
