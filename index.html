@@ -3748,7 +3748,9 @@ body {
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
         min-width: 180px;
         z-index: 1001;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
+        max-height: 70vh;
         animation: slideIn 0.2s ease-out;
 }
 
@@ -3781,6 +3783,45 @@ body {
 .lv-sort-item:hover {
         background: #f8fafc;
         color: var(--primary);
+}
+
+.lv-sort-group {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 16px;
+        font-size: 12px;
+        font-weight: 800;
+        color: #334155;
+        cursor: pointer;
+        background: #f8fafc;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background 0.15s;
+}
+
+.lv-sort-group:active {
+        background: #eef2f7;
+}
+
+.lv-group-arrow {
+        color: #94a3b8;
+        font-weight: 900;
+        transition: transform 0.15s;
+}
+
+.lv-sort-group.open .lv-group-arrow {
+        transform: rotate(90deg);
+}
+
+.lv-sort-submenu {
+        display: none;
+        background: #fcfdff;
+}
+
+.lv-sort-submenu .lv-sort-item {
+        padding-left: 30px;
+        font-size: 11.5px;
 }
 
 /* ListView History Popup */
@@ -9819,7 +9860,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.09.29.1430</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.10.08.1433</span>
             </div>
         </div>
         
@@ -12323,9 +12364,9 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.09.29.1430";
+window.DATA_VERSION = "v2026.10.08.1433";
 window.DATA_CHUNKS_COUNT = 13;
-window.DELIVERY_SEQUENCE_MONTHS = {"aug2026": {"parts": 1, "houses": 101949}, "jul2026": {"parts": 1, "houses": 80473}};
+window.DELIVERY_SEQUENCE_MONTHS = {"aug2026": {"parts": 1, "houses": 101949}, "jul2026": {"parts": 1, "houses": 80473}, "test926": {"parts": 1, "houses": 6159}};
 window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
 window.__VERIFIED_CACHE_TIME = 0; // EGRESS GUARD: Track when verifications were last fetched
@@ -13339,6 +13380,7 @@ closeNearbyMarkersPopup() {
             const div = document.createElement('div');
             div.className = 'multi-option';
             div.setAttribute('data-value', item.v);
+            div.setAttribute('data-short', item.short || '');
             if (item.selected) div.classList.add('selected');
 
             const checkbox = document.createElement('input');
@@ -13469,6 +13511,39 @@ closeNearbyMarkersPopup() {
             row.querySelector('input').checked = checked;
             row.classList.toggle('selected', checked);
         });
+    },
+
+    // Tick only the given MC/UC short codes (e.g. "MC-8") in the sidebar filter
+    // and apply. Widens district/tehsil first if the MC is hidden by them.
+    setSelectionForMcCodes(shortCodes) {
+        const container = document.getElementById('f-mc');
+        if (!container || !shortCodes || shortCodes.length === 0) return false;
+        const want = shortCodes.map(c => String(c).toUpperCase());
+
+        const matchFull = () => {
+            const found = [];
+            container.querySelectorAll('.multi-option').forEach(row => {
+                const full = row.getAttribute('data-value') || '';
+                const shortAttr = row.getAttribute('data-short') || '';
+                const m = shortAttr.match(/(MC|UC)[-\s]*(\d+)/i) || full.match(/(MC|UC)[-\s]*(\d+)/i);
+                const code = m ? (m[1].toUpperCase() + '-' + m[2]) : shortAttr.toUpperCase();
+                if (want.indexOf(code) >= 0) found.push(full);
+            });
+            return found;
+        };
+
+        let fullValues = matchFull();
+        if (fullValues.length === 0) {
+            // The MC is hidden behind district/tehsil filters — widen them, then retry
+            this.toggleAll('f-dist', true);
+            this.toggleAll('f-tehsil', true);
+            fullValues = matchFull();
+        }
+        if (fullValues.length === 0) return false;
+
+        this.setSelected('f-mc', fullValues);
+        this.apply(false);
+        return true;
     },
 
     onDistChange() {
@@ -13777,6 +13852,21 @@ closeNearbyMarkersPopup() {
         // Refresh staff boundary polygons when filter changes
         if (window.LayerManager && typeof LayerManager._refreshActiveStaffBoundaries === 'function') {
             LayerManager._refreshActiveStaffBoundaries();
+        }
+
+        // SESSION SORT MEMORY: re-apply the user's last sort choice after a
+        // refilter. In-memory only — resets when the app closes; picking any
+        // sort replaces it. Keeps the current record when the sort is a
+        // plain (synchronous) one.
+        if (!isInitial && window.ListView && ListView._lastCriteria && State.filtered.length > 0 && document.getElementById('lv-sort-dropdown')) {
+            const keepSid = State.filtered[State.currentIdx] ? String(State.filtered[State.currentIdx][0]) : null;
+            ListView._staffSortActive = false;
+            ListView._staffSnapshot = null;
+            ListView.sort(ListView._lastCriteria);
+            if (keepSid && !String(ListView._lastCriteria).startsWith('seq-')) {
+                const reIdx = State.filtered.findIndex(r => String(r[0]) === keepSid);
+                if (reIdx >= 0) State.currentIdx = reIdx;
+            }
         }
 
         // Session persistence disabled per user request to prioritize stability
@@ -14881,10 +14971,38 @@ const ListView = {
         const buildSeq = () => {
             const mcCodes = window._activeMcCodes();
             const staff = window._filterStaffByMc(window._staffArray(), mcCodes);
+            const allStaff = window._staffArray();
+            const months = Object.keys(window.DELIVERY_SEQUENCE_MONTHS || {}).sort();
+            const curMonth = window.DELIVERY_SEQUENCE_MONTH;
+
+            // Areas: top 2 MCs by delivery count (unfiltered — tapping one switches the sidebar filter)
+            const mcTotals = {};
+            allStaff.forEach(s => {
+                Object.keys(s.mcucs || {}).forEach(mc => {
+                    mcTotals[mc] = (mcTotals[mc] || 0) + ((s.mcucs[mc] && s.mcucs[mc].count) || 0);
+                });
+            });
+            const topAreas = Object.keys(mcTotals)
+                .sort((a, b) => mcTotals[b] - mcTotals[a])
+                .slice(0, 2)
+                .map(mc => ({ mc: mc, count: mcTotals[mc] }));
+
             const seqHtml = staff.length > 0 ? `
                 <div style="padding:8px 16px 4px; font-size:9px; font-weight:800; color:#94a3b8; letter-spacing:0.5px;">── DELIVERY SEQUENCE ──</div>
+                <div class="lv-sort-group" onclick="ListView.toggleSeqGroup(event, this, 'lv-sub-month')"><span>Month: <b>${curMonth || '-'}</b></span><span class="lv-group-arrow">›</span></div>
+                <div class="lv-sort-submenu" id="lv-sub-month">
+                    ${months.map(m => `<div onclick="ListView.pickSequenceMonth('${m}')" class="lv-sort-item">${m}${m === curMonth ? ' ✓' : ''}</div>`).join('')}
+                </div>
+                ${topAreas.length ? `
+                <div class="lv-sort-group" onclick="ListView.toggleSeqGroup(event, this, 'lv-sub-areas')"><span>Areas</span><span class="lv-group-arrow">›</span></div>
+                <div class="lv-sort-submenu" id="lv-sub-areas">
+                    ${topAreas.map(a => `<div onclick="ListView.pickArea('${a.mc}')" class="lv-sort-item">${a.mc} (${Number(a.count).toLocaleString()})</div>`).join('')}
+                </div>` : ''}
                 <div onclick="ListView.sort('seq-all'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Seq: All Staff</div>
-                ${staff.map(s => `<div onclick="ListView.sort('seq-${s.name}'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Seq: ${s.name}</div>`).join('')}
+                <div class="lv-sort-group" onclick="ListView.toggleSeqGroup(event, this, 'lv-sub-staff')"><span>Staff (${staff.length})</span><span class="lv-group-arrow">›</span></div>
+                <div class="lv-sort-submenu" id="lv-sub-staff">
+                    ${staff.map(s => `<div onclick="ListView.sort('seq-${s.name}'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Seq: ${s.name}</div>`).join('')}
+                </div>
             ` : '<div style="padding:8px 16px; font-size:10px; color:#94a3b8; font-weight:700;">No staff in delivery sheet</div>';
             const existing = dd.querySelector('.lv-seq-section');
             if (existing) existing.remove();
@@ -14910,7 +15028,66 @@ const ListView = {
         }
     },
 
+    // ─── Sort menu groups (month / areas / staff submenus) ────────
+    toggleSeqGroup(evt, groupEl, submenuId) {
+        if (evt && evt.stopPropagation) evt.stopPropagation();
+        const sub = document.getElementById(submenuId);
+        if (!sub) return;
+        const isOpen = sub.style.display === 'block';
+        this._closeSeqSubmenus();
+        sub.style.display = isOpen ? 'none' : 'block';
+        if (groupEl) groupEl.classList.toggle('open', !isOpen);
+    },
+
+    _closeSeqSubmenus() {
+        const dd = document.getElementById('lv-sort-dropdown');
+        if (!dd) return;
+        dd.querySelectorAll('.lv-sort-submenu').forEach(s => { s.style.display = 'none'; });
+        dd.querySelectorAll('.lv-sort-group.open').forEach(g => { g.classList.remove('open'); });
+    },
+
+    // Pick a delivery sequence month from the sort menu. Persists to cloud so
+    // the settings poll does not revert it, then immediately applies order.
+    async pickSequenceMonth(month) {
+        if (!month) return;
+        this.toggleSortDropdown(false);
+        this._closeSeqSubmenus();
+        try {
+            if (month !== window.DELIVERY_SEQUENCE_MONTH) {
+                if (window.Settings && typeof Settings.setSequenceMonth === 'function') {
+                    await Settings.setSequenceMonth(month);
+                } else {
+                    await this.switchSequenceMonth(month);
+                }
+            }
+        } catch (e) {
+            console.warn('[ListView] Failed to switch sequence month:', e);
+        }
+        this.sort('seq-all');
+    },
+
+    // Pick an Areas shortcut: set the sidebar MC filter to that MC (widening
+    // district/tehsil if needed), apply, then apply sequence order.
+    pickArea(mcCode) {
+        if (!mcCode) return;
+        this.toggleSortDropdown(false);
+        this._closeSeqSubmenus();
+        const ok = window.App && typeof App.setSelectionForMcCodes === 'function'
+            ? App.setSelectionForMcCodes([mcCode])
+            : false;
+        if (!ok) {
+            if (window.LayerManager && LayerManager.showToast) {
+                LayerManager.showToast(mcCode + ' not in current data');
+            }
+            return;
+        }
+        // The last-sort memory inside App.apply already re-applied seq-all in
+        // this case — only sort again when it did not.
+        if (this._lastCriteria !== 'seq-all') this.sort('seq-all');
+    },
+
     sort(criteria) {
+        this._lastCriteria = criteria;
         // If a per-staff filter was active, restore the full list before re-sorting
         this._restorePreStaffFilter();
 
@@ -14998,6 +15175,7 @@ const ListView = {
 
     _staffSnapshot: null,
     _staffSortActive: false,
+    _lastCriteria: null,
 
     _restorePreStaffFilter() {
         if (this._staffSortActive && this._staffSnapshot) {
@@ -22333,6 +22511,56 @@ const Settings = {
         }
     },
 
+    // Saves the delivery sequence month to cloud (best effort) and applies it
+    // locally. Used by BOTH the settings page and the list view sort menu, so
+    // the periodic settings poll never reverts a menu pick. Returns true only
+    // when the cloud save succeeded.
+    async setSequenceMonth(newMonth) {
+        if (!newMonth) return false;
+        let saved = false;
+
+        if (window._supabase) {
+            const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase request timed out')), ms));
+            try {
+                console.log("[Settings] Querying app_settings for delivery_sequence_month...");
+                const { data: rows, error: selErr } = await Promise.race([
+                    window._supabase.from('app_settings').select('key').eq('key', 'delivery_sequence_month').limit(1),
+                    timeout(15000)
+                ]);
+                if (selErr) console.warn("[Settings] Select app_settings failed:", selErr);
+
+                const existing = rows && rows.length > 0 ? rows[0] : null;
+                let error;
+                if (existing) {
+                    const result = await Promise.race([
+                        window._supabase.from('app_settings').update({ value: newMonth, updated_at: new Date().toISOString() }).eq('key', 'delivery_sequence_month'),
+                        timeout(15000)
+                    ]);
+                    error = result.error;
+                    if (error) console.error("[Settings] Update failed:", error);
+                } else {
+                    const result = await Promise.race([
+                        window._supabase.from('app_settings').insert({ key: 'delivery_sequence_month', value: newMonth, updated_at: new Date().toISOString() }),
+                        timeout(15000)
+                    ]);
+                    error = result.error;
+                    if (error) console.error("[Settings] Insert failed:", error);
+                }
+                saved = !error;
+            } catch (e) {
+                console.error("[Settings] sequence month save failed:", e);
+            }
+        }
+
+        // Apply locally even if the cloud save failed (works offline; the
+        // periodic settings poll may revert it later if it was not saved).
+        window.DELIVERY_SEQUENCE_MONTH = newMonth;
+        if (window.ListView && typeof ListView.switchSequenceMonth === 'function') {
+            await ListView.switchSequenceMonth(newMonth);
+        }
+        return saved;
+    },
+
     async updateSequenceMonth() {
         if (!window._supabase) {
             console.error("[Settings] No Supabase client!");
@@ -22348,47 +22576,13 @@ const Settings = {
         btn.innerHTML = '<span class="material-icons-round spinning">refresh</span> Applying...';
 
         try {
-            const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase request timed out')), ms));
-
-            console.log("[Settings] Querying app_settings for delivery_sequence_month...");
-            const { data: rows, error: selErr } = await Promise.race([
-                window._supabase.from('app_settings').select('key').eq('key', 'delivery_sequence_month').limit(1),
-                timeout(15000)
-            ]);
-
-            if (selErr) {
-                console.warn("[Settings] Select app_settings failed:", selErr);
-            }
-
-            const existing = rows && rows.length > 0 ? rows[0] : null;
-
-            let error;
-            if (existing) {
-                const result = await Promise.race([
-                    window._supabase.from('app_settings').update({ value: newMonth, updated_at: new Date().toISOString() }).eq('key', 'delivery_sequence_month'),
-                    timeout(15000)
-                ]);
-                error = result.error;
-                if (error) console.error("[Settings] Update failed:", error);
-            } else {
-                const result = await Promise.race([
-                    window._supabase.from('app_settings').insert({ key: 'delivery_sequence_month', value: newMonth, updated_at: new Date().toISOString() }),
-                    timeout(15000)
-                ]);
-                error = result.error;
-                if (error) console.error("[Settings] Insert failed:", error);
-            }
-
-            if (error) throw error;
-
-            window.DELIVERY_SEQUENCE_MONTH = newMonth;
-
-            if (window.ListView && typeof ListView.switchSequenceMonth === 'function') {
-                await ListView.switchSequenceMonth(newMonth);
-            }
-
+            const saved = await this.setSequenceMonth(newMonth);
             if (typeof LayerManager !== 'undefined') {
-                LayerManager.showToast("Delivery sequence month set to " + newMonth + " ✨");
+                if (saved) {
+                    LayerManager.showToast("Delivery sequence month set to " + newMonth + " ✨");
+                } else {
+                    LayerManager.showToast("Cloud save failed — applied on this device only");
+                }
                 LayerManager.renderSettingsUI();
             }
         } catch (e) {
