@@ -9860,7 +9860,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.10.08.1433</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.10.09.1250</span>
             </div>
         </div>
         
@@ -11863,7 +11863,12 @@ async function refreshAllAppSettings() {
             }
             if (version) window.DATA_VERSION = version.value;
             if (hideZubair) State.hideZubairSids = String(hideZubair.value) === 'true';
-            if (seqMonth && seqMonth.value) window.DELIVERY_SEQUENCE_MONTH = seqMonth.value;
+            if (seqMonth && seqMonth.value) {
+                // Remember the shared admin default separately — a staff
+                // member's list view pick must not hide it from Settings.
+                window.SHARED_SEQ_MONTH = seqMonth.value;
+                window.DELIVERY_SEQUENCE_MONTH = seqMonth.value;
+            }
 
             // gps_enforce_distance: apply and, when it CHANGED, rebuild the
             // delivery badge cache so delivered/unsent labels re-judge under
@@ -11898,6 +11903,20 @@ async function refreshAllAppSettings() {
                 }
             }
         }
+
+        // Staff pick from the list view sort menu: personal, session-only
+        // (clears when the app closes) and it wins over the shared admin
+        // default for as long as the app is open. Drop it if the month is no
+        // longer in the build.
+        try {
+            var localSeq = sessionStorage.getItem('bs_seq_month') || '';
+            var availSeq = Object.keys(window.DELIVERY_SEQUENCE_MONTHS || {});
+            if (localSeq && availSeq.indexOf(localSeq) >= 0) {
+                window.DELIVERY_SEQUENCE_MONTH = localSeq;
+            } else if (localSeq) {
+                sessionStorage.removeItem('bs_seq_month');
+            }
+        } catch (e) { /* ignore */ }
     } catch (e) {
         // Quiet on poll failures; loud on first load via fetchAppSettings wrapper.
         if (!window.__APP_SETTINGS_REFRESH_QUIET__) {
@@ -12364,7 +12383,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.10.08.1433";
+window.DATA_VERSION = "v2026.10.09.1250";
 window.DATA_CHUNKS_COUNT = 13;
 window.DELIVERY_SEQUENCE_MONTHS = {"aug2026": {"parts": 1, "houses": 101949}, "jul2026": {"parts": 1, "houses": 80473}, "test926": {"parts": 1, "houses": 6159}};
 window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
@@ -13380,7 +13399,6 @@ closeNearbyMarkersPopup() {
             const div = document.createElement('div');
             div.className = 'multi-option';
             div.setAttribute('data-value', item.v);
-            div.setAttribute('data-short', item.short || '');
             if (item.selected) div.classList.add('selected');
 
             const checkbox = document.createElement('input');
@@ -13512,40 +13530,6 @@ closeNearbyMarkersPopup() {
             row.classList.toggle('selected', checked);
         });
     },
-
-    // Tick only the given MC/UC short codes (e.g. "MC-8") in the sidebar filter
-    // and apply. Widens district/tehsil first if the MC is hidden by them.
-    setSelectionForMcCodes(shortCodes) {
-        const container = document.getElementById('f-mc');
-        if (!container || !shortCodes || shortCodes.length === 0) return false;
-        const want = shortCodes.map(c => String(c).toUpperCase());
-
-        const matchFull = () => {
-            const found = [];
-            container.querySelectorAll('.multi-option').forEach(row => {
-                const full = row.getAttribute('data-value') || '';
-                const shortAttr = row.getAttribute('data-short') || '';
-                const m = shortAttr.match(/(MC|UC)[-\s]*(\d+)/i) || full.match(/(MC|UC)[-\s]*(\d+)/i);
-                const code = m ? (m[1].toUpperCase() + '-' + m[2]) : shortAttr.toUpperCase();
-                if (want.indexOf(code) >= 0) found.push(full);
-            });
-            return found;
-        };
-
-        let fullValues = matchFull();
-        if (fullValues.length === 0) {
-            // The MC is hidden behind district/tehsil filters — widen them, then retry
-            this.toggleAll('f-dist', true);
-            this.toggleAll('f-tehsil', true);
-            fullValues = matchFull();
-        }
-        if (fullValues.length === 0) return false;
-
-        this.setSelected('f-mc', fullValues);
-        this.apply(false);
-        return true;
-    },
-
     onDistChange() {
         const selectedDists = this.getSelected('f-dist');
         let items = [];
@@ -14273,7 +14257,19 @@ const ListView = {
         }
         const r = State.filtered[State.currentIdx];
         if (!r) {
-            document.getElementById('lv-content').innerHTML = `
+            // With no MC/UC ticked the app intentionally shows nothing —
+            // tell the user exactly what to do instead of a dead end.
+            const noMcPicked = !window.App || !App.getSelected || App.getSelected('f-mc').length === 0;
+            if (noMcPicked) {
+                document.getElementById('lv-content').innerHTML = `
+                    <div style="text-align:center; padding:100px 20px; color:#94a3b8;">
+                        <span class="material-icons-round" style="font-size:64px; opacity:0.2; display:block; margin-bottom:16px;">touch_app</span>
+                        <div style="font-weight:700; font-size:18px;">No MC/UC Selected</div>
+                        <div style="font-size:14px; margin-top:8px;">Pick an MC/UC in the sidebar, then press Apply.</div>
+                    </div>
+                `;
+            } else {
+                document.getElementById('lv-content').innerHTML = `
                     <div style="text-align:center; padding:100px 20px; color:#94a3b8;">
                         <span class="material-icons-round" style="font-size:64px; opacity:0.2; display:block; margin-bottom:16px;">search_off</span>
                         <div style="font-weight:700; font-size:18px;">No Records Found</div>
@@ -14281,6 +14277,7 @@ const ListView = {
                         <button onclick="UniversalSearch.open()" style="margin-top:24px; background:var(--primary); color:white; border:none; padding:12px 24px; border-radius:12px; font-weight:700; cursor:pointer;">Open Global Search</button>
                     </div>
                 `;
+            }
             return;
         }
 
@@ -14971,39 +14968,33 @@ const ListView = {
         const buildSeq = () => {
             const mcCodes = window._activeMcCodes();
             const staff = window._filterStaffByMc(window._staffArray(), mcCodes);
-            const allStaff = window._staffArray();
             const months = Object.keys(window.DELIVERY_SEQUENCE_MONTHS || {}).sort();
             const curMonth = window.DELIVERY_SEQUENCE_MONTH;
+            const sharedSeq = window.SHARED_SEQ_MONTH || window.DELIVERY_SEQUENCE_MONTH || '';
+            let sessionPick = '';
+            try { sessionPick = sessionStorage.getItem('bs_seq_month') || ''; } catch (e) { /* private mode */ }
+            const adminActive = !sessionPick || sessionPick === sharedSeq;
+            const monthList = months.filter(m => m !== sharedSeq);
 
-            // Areas: top 2 MCs by delivery count (unfiltered — tapping one switches the sidebar filter)
-            const mcTotals = {};
-            allStaff.forEach(s => {
-                Object.keys(s.mcucs || {}).forEach(mc => {
-                    mcTotals[mc] = (mcTotals[mc] || 0) + ((s.mcucs[mc] && s.mcucs[mc].count) || 0);
-                });
-            });
-            const topAreas = Object.keys(mcTotals)
-                .sort((a, b) => mcTotals[b] - mcTotals[a])
-                .slice(0, 2)
-                .map(mc => ({ mc: mc, count: mcTotals[mc] }));
-
-            const seqHtml = staff.length > 0 ? `
+            // Month group + Seq: All Staff ALWAYS show (even when the MC has
+            // no staff) so staff can pick a month / return to the admin
+            // default at any time. Only the Staff group hides.
+            const monthGroup = `
                 <div style="padding:8px 16px 4px; font-size:9px; font-weight:800; color:#94a3b8; letter-spacing:0.5px;">── DELIVERY SEQUENCE ──</div>
                 <div class="lv-sort-group" onclick="ListView.toggleSeqGroup(event, this, 'lv-sub-month')"><span>Month: <b>${curMonth || '-'}</b></span><span class="lv-group-arrow">›</span></div>
                 <div class="lv-sort-submenu" id="lv-sub-month">
-                    ${months.map(m => `<div onclick="ListView.pickSequenceMonth('${m}')" class="lv-sort-item">${m}${m === curMonth ? ' ✓' : ''}</div>`).join('')}
+                    ${sharedSeq ? `<div onclick="ListView.pickSequenceMonth('${sharedSeq}')" class="lv-sort-item">Admin default (${sharedSeq})${adminActive ? ' ✓' : ''}</div>` : ''}
+                    ${monthList.map(m => `<div onclick="ListView.pickSequenceMonth('${m}')" class="lv-sort-item">${m}${m === curMonth ? ' ✓' : ''}</div>`).join('')}
                 </div>
-                ${topAreas.length ? `
-                <div class="lv-sort-group" onclick="ListView.toggleSeqGroup(event, this, 'lv-sub-areas')"><span>Areas</span><span class="lv-group-arrow">›</span></div>
-                <div class="lv-sort-submenu" id="lv-sub-areas">
-                    ${topAreas.map(a => `<div onclick="ListView.pickArea('${a.mc}')" class="lv-sort-item">${a.mc} (${Number(a.count).toLocaleString()})</div>`).join('')}
-                </div>` : ''}
                 <div onclick="ListView.sort('seq-all'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Seq: All Staff</div>
+            `;
+            const staffGroup = staff.length > 0 ? `
                 <div class="lv-sort-group" onclick="ListView.toggleSeqGroup(event, this, 'lv-sub-staff')"><span>Staff (${staff.length})</span><span class="lv-group-arrow">›</span></div>
                 <div class="lv-sort-submenu" id="lv-sub-staff">
                     ${staff.map(s => `<div onclick="ListView.sort('seq-${s.name}'); ListView.toggleSortDropdown(false)" class="lv-sort-item">Seq: ${s.name}</div>`).join('')}
                 </div>
-            ` : '<div style="padding:8px 16px; font-size:10px; color:#94a3b8; font-weight:700;">No staff in delivery sheet</div>';
+            ` : '<div style="padding:6px 16px 8px; font-size:10px; color:#94a3b8; font-weight:700;">No staff for this MC</div>';
+            const seqHtml = monthGroup + staffGroup;
             const existing = dd.querySelector('.lv-seq-section');
             if (existing) existing.remove();
             const section = document.createElement('div');
@@ -15028,7 +15019,7 @@ const ListView = {
         }
     },
 
-    // ─── Sort menu groups (month / areas / staff submenus) ────────
+    // ─── Sort menu groups (month / staff submenus) ────────
     toggleSeqGroup(evt, groupEl, submenuId) {
         if (evt && evt.stopPropagation) evt.stopPropagation();
         const sub = document.getElementById(submenuId);
@@ -15046,44 +15037,27 @@ const ListView = {
         dd.querySelectorAll('.lv-sort-group.open').forEach(g => { g.classList.remove('open'); });
     },
 
-    // Pick a delivery sequence month from the sort menu. Persists to cloud so
-    // the settings poll does not revert it, then immediately applies order.
+    // Pick a delivery sequence month from the sort menu. Personal and
+    // session-only (resets when the app closes) — never touches the shared
+    // cloud setting, which stays the admin default for everyone else.
+    // Picking the admin default month clears the personal pick entirely.
     async pickSequenceMonth(month) {
         if (!month) return;
         this.toggleSortDropdown(false);
         this._closeSeqSubmenus();
         try {
+            const sharedSeq = window.SHARED_SEQ_MONTH || window.DELIVERY_SEQUENCE_MONTH || '';
+            try {
+                if (month === sharedSeq) sessionStorage.removeItem('bs_seq_month');
+                else sessionStorage.setItem('bs_seq_month', month);
+            } catch (e) { /* private mode */ }
             if (month !== window.DELIVERY_SEQUENCE_MONTH) {
-                if (window.Settings && typeof Settings.setSequenceMonth === 'function') {
-                    await Settings.setSequenceMonth(month);
-                } else {
-                    await this.switchSequenceMonth(month);
-                }
+                await this.switchSequenceMonth(month);
             }
         } catch (e) {
             console.warn('[ListView] Failed to switch sequence month:', e);
         }
         this.sort('seq-all');
-    },
-
-    // Pick an Areas shortcut: set the sidebar MC filter to that MC (widening
-    // district/tehsil if needed), apply, then apply sequence order.
-    pickArea(mcCode) {
-        if (!mcCode) return;
-        this.toggleSortDropdown(false);
-        this._closeSeqSubmenus();
-        const ok = window.App && typeof App.setSelectionForMcCodes === 'function'
-            ? App.setSelectionForMcCodes([mcCode])
-            : false;
-        if (!ok) {
-            if (window.LayerManager && LayerManager.showToast) {
-                LayerManager.showToast(mcCode + ' not in current data');
-            }
-            return;
-        }
-        // The last-sort memory inside App.apply already re-applied seq-all in
-        // this case — only sort again when it did not.
-        if (this._lastCriteria !== 'seq-all') this.sort('seq-all');
     },
 
     sort(criteria) {
@@ -15151,7 +15125,13 @@ const ListView = {
             const staffName = criteria.slice(4);
             const self = this;
             this._ensureDeliveryHistory().then(() => {
-                self._applyStaffFilter(staffName);
+                const matched = self._applyStaffFilter(staffName);
+                if (!matched) {
+                    // This staff has no rows in the current view — fall back
+                    // to the all-staff order instead of an empty list.
+                    self.sort('seq-all');
+                    return;
+                }
                 State.currentIdx = 0;
                 self.render();
                 const dd = document.getElementById('lv-sort-dropdown');
@@ -15186,17 +15166,23 @@ const ListView = {
     },
 
     _applyStaffFilter(staffName) {
+        const staffLower = String(staffName).toLowerCase();
+        const self = this;
+        // Compute first — never assign an empty result to the list.
+        const rows = State.filtered.filter(r => {
+            const rec = self._getDeliveryRecord(String(r[0]).replace(/\.0$/, '').trim());
+            return rec && String(rec.s).toLowerCase() === staffLower;
+        });
+        if (rows.length === 0) {
+            if (window.App && App.showToast) App.showToast('No rows for this staff here — showing all staff order');
+            return false;
+        }
         // Snapshot the full filtered list once (restore when leaving staff mode)
         if (!this._staffSortActive) {
             this._staffSnapshot = State.filtered.length <= 10000 ? [...State.filtered] : null;
         }
         this._staffSortActive = true;
-        const staffLower = String(staffName).toLowerCase();
-        const self = this;
-        State.filtered = State.filtered.filter(r => {
-            const rec = self._getDeliveryRecord(String(r[0]).replace(/\.0$/, '').trim());
-            return rec && String(rec.s).toLowerCase() === staffLower;
-        });
+        State.filtered = rows;
         // Sort by per-staff S.No (sn)
         State.filtered.sort((a, b) => {
             const snA = self._getDeliveryRecord(String(a[0]).replace(/\.0$/, '').trim());
@@ -15205,6 +15191,7 @@ const ListView = {
             const bNum = snB && snB.sn != null ? Number(snB.sn) : Number.MAX_SAFE_INTEGER;
             return aNum - bNum;
         });
+        return true;
     },
 
     filterUndelivered() {
@@ -15978,10 +15965,8 @@ window._activeMcCodes = function() {
     if (!window.App || !App.getSelected) return null;
     var selected = App.getSelected('f-mc');
     if (!selected || selected.length === 0) return null;
-    return selected.map(function(full) {
-        var m = String(full).match(/(MC|UC)[-\s]*(\d+)/i);
-        return m ? m[1].toUpperCase() + '-' + m[2] : String(full);
-    });
+    // Full unique MC names (city-safe) — same keys the staff sheets use.
+    return selected;
 };
 
 window._staffArray = function() {
@@ -18702,11 +18687,18 @@ const LayerManager = {
             // Build Delivery Sequence Month dropdown options from available months
             const seqMonths = window.DELIVERY_SEQUENCE_MONTHS || {};
             const seqKeys = Object.keys(seqMonths);
+            // Show the SHARED admin default in the dropdown; a personal list
+            // view pick (this phone only) is shown as a note underneath.
+            const sharedSeq = window.SHARED_SEQ_MONTH || window.DELIVERY_SEQUENCE_MONTH;
             const seqOptions = seqKeys.length
                 ? seqKeys.map(mk =>
-                    `<option value="${mk}" ${mk === window.DELIVERY_SEQUENCE_MONTH ? 'selected' : ''}>${mk}</option>`
+                    `<option value="${mk}" ${mk === sharedSeq ? 'selected' : ''}>${mk}</option>`
                   ).join('')
                 : '<option value="">No sequence months available</option>';
+            const phoneSeq = window.DELIVERY_SEQUENCE_MONTH;
+            const seqPhoneNote = (phoneSeq && phoneSeq !== sharedSeq)
+                ? `<div style="font-size:10px; color:#b45309; font-weight:700; margin:-4px 0 10px; line-height:1.5;">This phone is showing <b>${phoneSeq}</b> (your list view pick) until the app closes. Shared for everyone: <b>${sharedSeq}</b>.</div>`
+                : '';
 
             // Marker source options: Portal (default) + months that have a
             // captured-spot file (built by gen_delivery_history.py).
@@ -18731,6 +18723,7 @@ const LayerManager = {
                             <select id="select-sequence-month" style="width:100%; padding:12px; border-radius:10px; border:1px solid #e2e8f0; font-size:15px; font-weight:700; margin-bottom:12px; outline:none; background:white;">
                                 ${seqOptions}
                             </select>
+                            ${seqPhoneNote}
                             <button id="btn-save-sequence" onclick="Settings.updateSequenceMonth()" class="secondary-btn" style="width:100%; margin:0; justify-content:center; background:#0f172a; color:white; border:none; padding:14px; border-radius:12px; font-weight:800;">
                                 <span class="material-icons-round">route</span> Apply Sequence Month
                             </button>
@@ -19229,13 +19222,16 @@ const LayerManager = {
             const anyActive = mcList.some(mc => this._staffBoundaryActive[s.name] && this._staffBoundaryActive[s.name][mc]);
 
             const subHtml = mcList.length > 0 ? mcList.map(mc => {
+                const mcData = s.mcucs[mc] || {};
                 const mcActive = this._staffBoundaryActive[s.name] && this._staffBoundaryActive[s.name][mc];
-                const mcCount = s.mcucs[mc] ? s.mcucs[mc].count : 0;
+                const mcCount = mcData.count || 0;
                 const escName = s.name.replace(/'/g, "\\'");
-                return `<div onclick="LayerManager.toggleStaffBoundary('${escName}','${mc}')"
+                const escMc = String(mc).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const mcLabel = (mcData.short || mc) + (mcData.city ? ' · ' + mcData.city : '');
+                return `<div onclick="LayerManager.toggleStaffBoundary('${escName}','${escMc}')"
                      style="margin:0; padding:6px 10px 6px 28px; background:${mcActive ? '#f0fdf4' : '#f8fafc'}; border:1px solid ${mcActive ? '#86efac' : '#e2e8f0'}; border-radius:8px; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:11px;">
                     <input type="checkbox" ${mcActive ? 'checked' : ''} style="pointer-events:none; width:13px; height:13px;">
-                    <span style="font-weight:700; color:#334155; flex:1;">${mc}</span>
+                    <span style="font-weight:700; color:#334155; flex:1;">${mcLabel}</span>
                     <span style="font-weight:700; color:#94a3b8; font-size:10px;">${mcCount}</span>
                 </div>`;
             }).join('') : '';
@@ -22552,9 +22548,18 @@ const Settings = {
             }
         }
 
-        // Apply locally even if the cloud save failed (works offline; the
-        // periodic settings poll may revert it later if it was not saved).
+        // Keep this phone in sync with what just happened: when the shared
+        // save worked, drop any session pick so the phone follows the shared
+        // default; when it failed, remember the choice for this session only
+        // so the next settings poll does not revert it.
+        try {
+            if (saved) sessionStorage.removeItem('bs_seq_month');
+            else sessionStorage.setItem('bs_seq_month', newMonth);
+        } catch (e) { /* private mode */ }
+
+        // Apply on this device (works offline too).
         window.DELIVERY_SEQUENCE_MONTH = newMonth;
+        if (saved) window.SHARED_SEQ_MONTH = newMonth;
         if (window.ListView && typeof ListView.switchSequenceMonth === 'function') {
             await ListView.switchSequenceMonth(newMonth);
         }
