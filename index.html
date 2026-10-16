@@ -9860,7 +9860,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.10.15.1017</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.10.16.0922</span>
             </div>
         </div>
         
@@ -11753,6 +11753,7 @@ window.SupabaseAccounts = {
 // Global Data Placeholders
 window.RAW_DATA = [];
 window.DATA_CHUNKS_COUNT = (typeof window.DATA_CHUNKS_COUNT === 'number') ? window.DATA_CHUNKS_COUNT : 10;
+window.PAID_CHUNKS_COUNT = (typeof window.PAID_CHUNKS_COUNT === 'number') ? window.PAID_CHUNKS_COUNT : 1;
 window.PAID_DATA = [];
 window.HIERARCHY = {};
 window.GEO_LAYERS = {};
@@ -12214,9 +12215,17 @@ async function loadData() {
         }
 
         const bootMarkerMonth = String(window.MARKER_SOURCE_MONTH || '').toLowerCase();
-        const [dataChunks, paidData, hierarchyData, geoLayers, zubairData, correctedCoords, lifecycleData, availMonthsData, markerOverride] = await Promise.all([
+        // Payment history ships as paid_data_part*.json so no single file nears
+        // GitHub's 100MB per-file block. Parts are re-joined into one flat array
+        // below, so everything downstream is unaffected by the split.
+        const paidChunkCount = window.PAID_CHUNKS_COUNT || 1;
+        const paidPromises = [];
+        for (let i = 1; i <= paidChunkCount; i++) {
+            paidPromises.push(fetchJSON(`paid_data_part${i}.json${vStr}`, `Payment Data (Part ${i}/${paidChunkCount})`));
+        }
+        const [dataChunks, paidChunks, hierarchyData, geoLayers, zubairData, correctedCoords, lifecycleData, availMonthsData, markerOverride] = await Promise.all([
             Promise.all(dataPromises),
-            fetchJSON(`paid_data.json${vStr}`, 'Payment Data'),
+            Promise.all(paidPromises),
             fetchJSON(`hierarchy.json${vStr}`, 'Locations'),
             fetchJSON(`geo_layers.json${vStr}`, 'Map Layers'),
             (async () => { const r = await fetch(`zubair_sids.json${vStr}`); return r.json(); })(),
@@ -12226,6 +12235,7 @@ async function loadData() {
             (bootMarkerMonth ? (async () => { try { const r = await fetch(`marker_override_${bootMarkerMonth}.json${vStr}`); return await r.json(); } catch (e) { console.warn('[App] marker override load failed:', e); return null; } })() : Promise.resolve(null))
         ]);
         const rawData = [].concat(...dataChunks);
+        const paidData = [].concat(...paidChunks);
 
         // NON-BLOCKING: Process records in background batches to prevent UI freeze
         status.innerText = 'Optimizing Search Engine...';
@@ -12383,8 +12393,9 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.10.15.1017";
+window.DATA_VERSION = "v2026.10.16.0922";
 window.DATA_CHUNKS_COUNT = 13;
+window.PAID_CHUNKS_COUNT = 7;
 window.DELIVERY_SEQUENCE_MONTHS = {"aug2026": {"parts": 1, "houses": 101949}, "jul2026": {"parts": 1, "houses": 80473}, "test926": {"parts": 1, "houses": 6159}};
 window.DELIVERY_SEQUENCE_MONTH = ''; // set by fetchAppSettings or defaults to latest month
 window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before fetch
