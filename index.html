@@ -9860,7 +9860,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.10.28.1636</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.10.30.1600</span>
             </div>
         </div>
         
@@ -10287,6 +10287,9 @@ input[type=number] {
                 </button>
                 <button class="float-btn admin-only" onclick="Settings.open()" title="Settings">
                     <span class="material-icons-round" style="color:#10b981">settings</span>
+                </button>
+                <button class="float-btn no-staff" onclick="Register.open()" title="Delivery Register">
+                    <span class="material-icons-round" style="color:#0ea5e9">menu_book</span>
                 </button>
                 <button class="float-btn" onclick="QRScanner.open()" title="Scan QR Code">
                     <span class="material-icons-round" style="color:#6366f1">qr_code_scanner</span>
@@ -11763,6 +11766,11 @@ window.ALL_VERIFIED_DATA = []; // Initialized as empty to prevent crashes before
 
 // Global Billing Tracker (Dynamic)
 window.ACTIVE_BILLING_MONTH = 'loading...';
+
+// Read-only viewer (e.g. an external reviewer). No write paths for this role.
+window.isViewer = function () {
+    return !!(window.USER && window.USER.role === 'viewer');
+};
 window.DATA_VERSION = window.DATA_VERSION || 'v1'; // Use injected version if present
 
 // ─── GPS enforcement distance ─────────────────────────────────────────────
@@ -12078,10 +12086,12 @@ async function handleCredentialResponse(response) {
         // Store for global use (e.g. Sync Monitor dropdown)
         window.USER_DB = roles;
 
-        const isAuthorized = roles.admins.includes(payload.email) || roles.field_staff.includes(payload.email);
+        const isAuthorized = roles.admins.includes(payload.email) || roles.field_staff.includes(payload.email)
+            || (roles.viewers || []).includes(payload.email);
         if (!isAuthorized) throw new Error("Unauthorized User Email.");
 
-        const role = roles.admins.includes(payload.email) ? 'admin' : 'staff';
+        const role = roles.admins.includes(payload.email) ? 'admin'
+            : ((roles.viewers || []).includes(payload.email) ? 'viewer' : 'staff');
 
         // Success!
         window.USER = {
@@ -12158,7 +12168,7 @@ const Auth = {
         }
 
         // Apply Role-Based Gating
-        if (window.USER.role === 'staff') {
+        if (window.USER.role !== 'admin') {
             document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
             // Hide routing overlay for non-admins - use visibility to not fight CSS class toggles
             const overlay = document.getElementById('routing-station-overlay');
@@ -12175,6 +12185,11 @@ const Auth = {
                 overlay.style.visibility = '';
                 overlay.style.pointerEvents = '';
             }
+        }
+
+        // Staff see neither the register button nor admin tools.
+        if (window.USER.role === 'staff') {
+            document.querySelectorAll('.no-staff').forEach(el => el.style.display = 'none');
         }
 
         // Device Gating (Desktop Only)
@@ -12393,7 +12408,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.10.28.1636";
+window.DATA_VERSION = "v2026.10.30.1600";
 window.DATA_CHUNKS_COUNT = 14;
 window.PAID_CHUNKS_COUNT = 7;
 window.DELIVERY_SEQUENCE_MONTHS = {"aug2026": {"parts": 1, "houses": 101949}, "jul2026": {"parts": 1, "houses": 80473}, "sep2026": {"parts": 1, "houses": 101605}, "test926": {"parts": 1, "houses": 6159}};
@@ -15274,6 +15289,10 @@ const ListView = {
     },
 
     toggleActionPanel(sid, forceState = null) {
+        if (window.isViewer && window.isViewer()) {
+            if (window.App && App.showToast) App.showToast('Viewer access — records cannot be changed');
+            return;
+        }
         const panel = document.getElementById(`action-panel-${sid}`);
         if (!panel) return;
         const btn = document.getElementById(`btn-intel-${sid}`);
@@ -24452,7 +24471,7 @@ const SpatialRouter = {
             });
 
             // AUTOMATION: Automatically mark as delivered for the current month
-            if (typeof ListView !== 'undefined' && ListView.markDelivered) {
+            if (!(window.isViewer && window.isViewer()) && typeof ListView !== 'undefined' && ListView.markDelivered) {
                 await ListView.markDelivered(sid, { silent: true, forceStatus: 'delivered' });
             }
 
@@ -29172,6 +29191,10 @@ window.DeliveryModule = {
 
     async logDelivery(sid, fileId, explicitStatus) {
         if (!window._supabase) return;
+        if (window.isViewer && window.isViewer()) {
+            if (window.App && App.showToast) App.showToast('Viewer access — records cannot be changed');
+            return;
+        }
 
         const r = State.filtered.find(x => x[0] == sid);
         if (!r) return;
@@ -31051,6 +31074,48 @@ window.DeliveryForensics = {
     _escapeHtml: function(text) {
         if (!text) return '';
         return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+};
+
+
+// === 41_register.js ===
+// 41_register.js
+// Delivery Register — opens the read-only register page (separate HTML).
+// The page can sit beside the app, on a USB stick, or at a hosted address;
+// set window.REGISTER_URL to point somewhere else before this file loads.
+
+window.REGISTER_URL = window.REGISTER_URL || 'register.html';
+
+window.Register = {
+    async available() {
+        try {
+            const r = await fetch(window.REGISTER_URL, { method: 'HEAD', cache: 'no-store' });
+            return r.ok;
+        } catch (e) {
+            return false;
+        }
+    },
+
+    async open() {
+        try {
+            const qs = new URLSearchParams();
+            const month = String(window.DELIVERY_SEQUENCE_MONTH || window.ACTIVE_BILLING_MONTH || '')
+                .toLowerCase();
+            if (month && month !== 'loading...') qs.set('month', month);
+            if (window.USER && window.USER.email) qs.set('who', window.USER.email);
+            const url = window.REGISTER_URL + (qs.toString() ? ('?' + qs.toString()) : '');
+
+            if (!(await this.available())) {
+                const msg = 'Delivery Register is not published here — open it from the USB copy';
+                if (window.App && App.showToast) App.showToast(msg);
+                else alert(msg);
+                return;
+            }
+            window.open(url, '_blank', 'noopener');
+        } catch (e) {
+            console.error('[Register] open failed:', e);
+            if (window.App && App.showToast) App.showToast('Could not open the register');
+        }
     }
 };
 
