@@ -9860,7 +9860,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.11.11.0934</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.11.11.0950</span>
             </div>
         </div>
         
@@ -12408,7 +12408,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.11.11.0934";
+window.DATA_VERSION = "v2026.11.11.0950";
 window.DATA_CHUNKS_COUNT = 14;
 window.PAID_CHUNKS_COUNT = 7;
 window.DELIVERY_SEQUENCE_MONTHS = {"aug2026": {"parts": 1, "houses": 101949}, "jul2026": {"parts": 1, "houses": 80473}, "sep2026": {"parts": 1, "houses": 101605}, "test926": {"parts": 1, "houses": 6159}};
@@ -29612,6 +29612,13 @@ window.StaffPerformanceModal = {
                 const city = String(r[11] || '');
                 if (city !== this._selectedCity) return false;
             }
+            if (this._selectedStaff !== 'all') {
+                const opt = this._staffOpts.find(o => o.email === this._selectedStaff);
+                const wanted = new Set();
+                if (opt && opt.name) wanted.add(this._normStaffName(opt.name));
+                wanted.add(this._normStaffName(String(this._selectedStaff).split('@')[0]));
+                if (!wanted.has(this._normStaffName(s))) return false;
+            }
             return true;
         }).map(r => ({
             surveyor: String(r[6] || 'Unknown'),
@@ -30707,21 +30714,8 @@ window.StaffPerformanceModal = {
                 }
             });
         } else {
-            const headers = ['Surveyor', 'Date', 'City', 'MC', 'Surveys Done', 'First Scan', 'Last Scan', 'Duration'];
-            rows = [headers];
-            const grouped = {};
-            data.forEach(r => {
-                const key = `${r.surveyor}|${r.date}|${r.mc}`;
-                if (!grouped[key]) grouped[key] = { surveyor: r.surveyor, date: r.date, city: r.city, mc: r.mc, count: 0, times: [] };
-                grouped[key].count++;
-                grouped[key].times.push(r.time);
-            });
-            Object.values(grouped).sort((a, b) => a.surveyor.localeCompare(b.surveyor) || a.date.localeCompare(b.date)).forEach(g => {
-                const sortedTimes = g.times.slice().sort();
-                const firstScan = sortedTimes[0];
-                const lastScan = sortedTimes[sortedTimes.length - 1];
-                rows.push([g.surveyor, g.date, g.city, g.mc, g.count, firstScan, lastScan, this._timeDiff(firstScan, lastScan)]);
-            });
+            this._exportSurveyCSVs(data);
+            return;
         }
 
         const csvContent = '\uFEFF' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -30736,6 +30730,130 @@ window.StaffPerformanceModal = {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         if (window.App && App.showToast) App.showToast('CSV exported ✅');
+    },
+
+    // ─── Survey export: two CSV files (detail + daily city summary) ───
+    _normStaffName(s) {
+        return String(s || '').toLowerCase().replace(/[.\s]+/g, ' ').trim();
+    },
+
+    _timeDiffMins(t1, t2) {
+        if (!t1 || !t2) return 0;
+        const p1 = String(t1).split(':'), p2 = String(t2).split(':');
+        const m1 = parseInt(p1[0], 10) * 60 + parseInt(p1[1] || 0, 10);
+        const m2 = parseInt(p2[0], 10) * 60 + parseInt(p2[1] || 0, 10);
+        if (isNaN(m1) || isNaN(m2)) return 0;
+        return m2 > m1 ? m2 - m1 : 0;
+    },
+
+    _fmtMins(mins) {
+        if (!mins || mins <= 0) return '0m';
+        const h = Math.floor(mins / 60), m = mins % 60;
+        return h > 0 ? `${h}h${m}m` : `${m}m`;
+    },
+
+    _csvText(rows) {
+        return '\uFEFF' + rows.map(r => r.map(v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    },
+
+    _downloadCSV(rows, filename) {
+        const blob = new Blob([this._csvText(rows)], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+    },
+
+    _exportSurveyCSVs(data) {
+        if (!data || data.length === 0) {
+            if (window.App && App.showToast) App.showToast('No data to export.');
+            return;
+        }
+        const stamp = `${this._startDate || 'all'}_${this._endDate || 'all'}`;
+
+        // File 1 — detail: one line per surveyor per day, all areas added together
+        const surveyors = new Map();
+        data.forEach(r => {
+            const name = r.surveyor || 'Unknown';
+            if (!surveyors.has(name)) surveyors.set(name, new Map());
+            const days = surveyors.get(name);
+            if (!days.has(r.date)) days.set(r.date, { cities: new Set(), mcs: new Set(), times: [] });
+            const day = days.get(r.date);
+            if (r.city) day.cities.add(r.city);
+            if (r.mc && r.mc !== '—') day.mcs.add(r.mc);
+            day.times.push(r.time || '00:00');
+        });
+
+        const detail = [['Surveyor', 'Date', 'Cities', 'Areas (MC)', 'Surveys Done', 'First Scan', 'Last Scan', 'Duration']];
+        [...surveyors.entries()].sort((a, b) => a[0].localeCompare(b[0])).forEach(([name, days]) => {
+            let totalCount = 0, totalMins = 0;
+            const allTimes = [];
+            const allCities = new Set(), allMcs = new Set();
+
+            [...days.entries()].sort((a, b) => a[0].localeCompare(b[0])).forEach(([date, day]) => {
+                const times = day.times.slice().sort();
+                const first = times[0], last = times[times.length - 1];
+                const mins = this._timeDiffMins(first, last);
+                totalCount += times.length;
+                totalMins += mins;
+                times.forEach(t => allTimes.push(t));
+                day.cities.forEach(c => allCities.add(c));
+                day.mcs.forEach(m => allMcs.add(m));
+                detail.push([
+                    name, date,
+                    [...day.cities].sort().join(', ') || '—',
+                    [...day.mcs].sort().join(', ') || '—',
+                    times.length, first, last, this._fmtMins(mins)
+                ]);
+            });
+
+            const sortedAll = allTimes.slice().sort();
+            detail.push([
+                name, 'TOTAL',
+                [...allCities].sort().join(', ') || '—',
+                [...allMcs].sort().join(', ') || '—',
+                totalCount,
+                sortedAll[0] || '—',
+                sortedAll[sortedAll.length - 1] || '—',
+                this._fmtMins(totalMins)
+            ]);
+        });
+
+        // File 2 — daily city summary: cities across the top, grand total at the bottom
+        const citySet = new Set();
+        const dayMap = new Map();
+        data.forEach(r => {
+            const city = (r.city || 'Unknown').trim() || 'Unknown';
+            citySet.add(city);
+            if (!dayMap.has(r.date)) dayMap.set(r.date, new Map());
+            const row = dayMap.get(r.date);
+            row.set(city, (row.get(city) || 0) + 1);
+        });
+
+        const cities = [...citySet].sort();
+        const summary = [['Date', ...cities, 'Total']];
+        const colTotals = {};
+        cities.forEach(c => { colTotals[c] = 0; });
+        let grand = 0;
+
+        [...dayMap.keys()].sort().forEach(date => {
+            const row = dayMap.get(date);
+            const counts = cities.map(c => row.get(c) || 0);
+            const rowTotal = counts.reduce((a, b) => a + b, 0);
+            grand += rowTotal;
+            cities.forEach((c, i) => { colTotals[c] += counts[i]; });
+            summary.push([date, ...counts, rowTotal]);
+        });
+        summary.push(['GRAND TOTAL', ...cities.map(c => colTotals[c]), grand]);
+
+        this._downloadCSV(detail, `StaffPerformance_Survey_Detail_${stamp}.csv`);
+        setTimeout(() => this._downloadCSV(summary, `StaffPerformance_Survey_DailySummary_${stamp}.csv`), 700);
+
+        if (window.App && App.showToast) App.showToast('Survey CSV exported ✅ (2 files)');
     },
 };
 
