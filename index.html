@@ -7802,6 +7802,42 @@ details summary::-webkit-details-marker {
         text-transform: uppercase;
 }
 
+/* Area type switch (All / Rural / Urban) */
+.area-type-switch {
+        display: flex;
+        gap: 4px;
+        margin: 2px var(--spacer) 10px var(--spacer);
+        padding: 4px;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        flex-shrink: 0;
+}
+
+.area-type-btn {
+        flex: 1;
+        padding: 7px 4px;
+        border: none;
+        border-radius: 7px;
+        background: transparent;
+        color: #64748b;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.area-type-btn:hover {
+        color: #334155;
+}
+
+.area-type-btn.active {
+        background: #ffffff;
+        color: var(--primary);
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+}
+
 /* === 02_sidebar.css === */
 :root {
         --primary: #2563eb;
@@ -9860,7 +9896,7 @@ input[type=number] {
             <div style="font-weight: 700; font-size: 16px;">TMT Billing Dept</div>
             <div style="font-size: 10px; color: #64748b; font-weight: 600; margin-top:2px;">
                 Updated: {{ LAST_UPDATED }} 
-                <span style="color:var(--primary); margin-left:4px;">v2026.11.12.1511</span>
+                <span style="color:var(--primary); margin-left:4px;">v2026.11.13.1506</span>
             </div>
         </div>
         
@@ -9882,6 +9918,13 @@ input[type=number] {
         <span class="material-icons-round" style="font-size: 18px; opacity: 0.7;">chevron_right</span>
     </div>
     
+    <!-- Area Type Switch: All / Rural / Urban -->
+    <div class="area-type-switch" id="area-type-switch">
+        <button type="button" class="area-type-btn active" data-type="all" onclick="App.setAreaType('all')">All</button>
+        <button type="button" class="area-type-btn" data-type="rural" onclick="App.setAreaType('rural')">Rural</button>
+        <button type="button" class="area-type-btn" data-type="urban" onclick="App.setAreaType('urban')">Urban</button>
+    </div>
+
     <div id="sidebar-scroll" style="flex:1; overflow-y:auto; overflow-x: hidden; padding-bottom: 20px;">
         <div class="filters" style="padding: 8px var(--spacer) 80px var(--spacer);">
             <!-- Tools: Saved Routes -->
@@ -12364,6 +12407,7 @@ const State = {
     driveOnlyFilter: false,
     originView: 'map', // Track origin for navigation (map, dashboard)
     quickFilters: { domestic: true, commercial: true },
+    areaType: 'all', // 'all' | 'rural' | 'urban' — sidebar area type switch
     lastHighlightedSurveyor: null,
     history: [], // [{ filtered, idx, label }] for back navigation
     searchLocalOnly: false, // Toggle for searching within current filters
@@ -12408,7 +12452,7 @@ const State = {
 };
 
 window.KML_META = {};
-window.DATA_VERSION = "v2026.11.12.1511";
+window.DATA_VERSION = "v2026.11.13.1506";
 window.DATA_CHUNKS_COUNT = 15;
 window.PAID_CHUNKS_COUNT = 7;
 window.DELIVERY_SEQUENCE_MONTHS = {"aug2026": {"parts": 1, "houses": 101949}, "jul2026": {"parts": 1, "houses": 80473}, "sep2026": {"parts": 1, "houses": 101605}, "test926": {"parts": 1, "houses": 6159}};
@@ -12735,6 +12779,8 @@ const App = {
 
     resetFilters() {
         State.surveyorFilter = [];
+        State.areaType = 'all';
+        this._syncAreaTypeButtons();
         if (State.fpStart) State.fpStart.clear();
         if (State.fpEnd) State.fpEnd.clear();
 
@@ -13382,11 +13428,47 @@ closeNearbyMarkersPopup() {
         }
     },
 
+    // ─── Area type switch (All / Rural / Urban) ───
+    _areaTypeMap: null,
+    _areaTypeSourceLen: -1,
+
+    // Build MC/UC -> urban|rural lookup from RAW_DATA (column 14 = UC Type).
+    // Rebuilt only when the dataset length changes.
+    _buildAreaTypeMap() {
+        if (typeof RAW_DATA === 'undefined' || !RAW_DATA || !RAW_DATA.length) return;
+        if (this._areaTypeMap && this._areaTypeSourceLen === RAW_DATA.length) return;
+        const map = new Map();
+        for (let i = 0; i < RAW_DATA.length; i++) {
+            const mc = RAW_DATA[i][12];
+            if (!mc || map.has(mc)) continue;
+            const t = String(RAW_DATA[i][14] || '').trim().toLowerCase();
+            map.set(mc, t === 'rural' ? 'rural' : (t === 'urban' ? 'urban' : 'unknown'));
+        }
+        this._areaTypeMap = map;
+        this._areaTypeSourceLen = RAW_DATA.length;
+    },
+
+    _syncAreaTypeButtons() {
+        const current = State.areaType || 'all';
+        document.querySelectorAll('.area-type-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-type') === current);
+        });
+    },
+
+    setAreaType(type) {
+        State.areaType = type;
+        this._syncAreaTypeButtons();
+        // Rebuild the MC/UC list for the chosen type; ticks that no longer match are dropped
+        this.onTehsilChange();
+        this.apply();
+    },
+
     initFilters() {
         const dists = Object.keys(HIERARCHY).sort();
         this.renderMultiSelect('f-dist', dists.map(d => ({ v: d, l: d })), 'onDistChange');
 
         // Default: All Unchecked (No more SARGODHA/MC-1 defaults to prevent lag)
+        this._syncAreaTypeButtons();
         this.onDistChange();
         this.onTehsilChange();
 
@@ -13583,6 +13665,8 @@ closeNearbyMarkersPopup() {
     getAvailableMCUCs() {
         const selectedDists = this.getSelected('f-dist');
         const selectedTehsils = this.getSelected('f-tehsil');
+        const typeFilter = State.areaType || 'all';
+        this._buildAreaTypeMap();
         let items = [];
 
         selectedDists.forEach(d => {
@@ -13598,6 +13682,12 @@ closeNearbyMarkersPopup() {
                 }
             });
         });
+
+        // Area type switch: keep only the chosen type. Areas with no type in the
+        // data ('unknown') stay under All only.
+        if (typeFilter !== 'all' && this._areaTypeMap && this._areaTypeMap.size) {
+            items = items.filter(it => (this._areaTypeMap.get(it.v) || 'unknown') === typeFilter);
+        }
 
         items.sort((a, b) => {
             const aShort = a.short.toUpperCase();
